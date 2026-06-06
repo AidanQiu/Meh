@@ -1016,7 +1016,7 @@ p {
   --dock-indicator-w: 0px;
   position: fixed;
   left: 50%;
-  bottom: calc(42px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   z-index: 6;
   display: grid;
   width: min(calc(100vw - 28px), 448px);
@@ -1025,7 +1025,7 @@ p {
   border: 1px solid rgba(127, 116, 124, 0.18);
   border-radius: 999px;
   background: var(--dock-bg);
-  padding: 8px;
+  padding: 6px;
   box-shadow: 0 16px 36px rgba(29, 27, 32, 0.22);
   backdrop-filter: blur(18px);
   transform: translateX(-50%);
@@ -1139,6 +1139,13 @@ p {
   -webkit-overflow-scrolling: touch;
 }
 /* 修改结束 */
+
+.settings-sheet {
+  max-height: min(85vh, 740px);
+  overflow-y: auto;
+  padding-bottom: max(28px, calc(env(safe-area-inset-bottom, 0px) + 24px)) !important;
+  -webkit-overflow-scrolling: touch;
+}
 
 .settings-sheet.is-open,
 .editor-sheet.is-open {
@@ -1916,4 +1923,45 @@ p {
   100% {
     transform: rotateX(720deg) rotateY(720deg) rotateZ(0deg) scale(1);
   }
+}
+/* ===== 底部弹窗高度：设置和转盘同高，随机数单独矮高度 ===== */
+
+/* 基础：所有底部弹窗只保留普通上滑/下滑样式，不做两段式 */
+.settings-sheet,
+.editor-sheet {
+  height: auto !important;
+  overflow-y: auto !important;
+  transition: transform 260ms var(--ease) !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 设置界面：和转盘编辑界面同高 */
+#settingsSheet {
+  max-height: min(82dvh, 720px) !important;
+  padding-bottom: max(28px, calc(env(safe-area-inset-bottom, 0px) + 24px)) !important;
+}
+
+/* 转盘二级菜单：和设置界面同高 */
+#wheelEditorSheet {
+  max-height: min(82dvh, 720px) !important;
+  padding-bottom: max(28px, calc(env(safe-area-inset-bottom, 0px) + 24px)) !important;
+}
+
+/* 随机数菜单：单独矮一点 */
+#numberSettingsSheet {
+  max-height: min(64dvh, 560px) !important;
+  padding-bottom: max(20px, calc(env(safe-area-inset-bottom, 0px) + 16px)) !important;
+}
+
+/* 如果之前 JS 留下了 is-expanded，也强制不改变高度 */
+#settingsSheet.is-expanded {
+  max-height: min(82dvh, 720px) !important;
+}
+
+#wheelEditorSheet.is-expanded {
+  max-height: min(82dvh, 720px) !important;
+}
+
+#numberSettingsSheet.is-expanded {
+  max-height: min(58dvh, 500px) !important;
 }

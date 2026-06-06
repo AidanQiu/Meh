@@ -548,7 +548,11 @@ function bindSheetHandleGestures() {
     const finishDrag = (event) => {
       if (!isDragging) return;
       isDragging = false;
-      if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+
+      if (handle.hasPointerCapture(event.pointerId)) {
+        handle.releasePointerCapture(event.pointerId);
+      }
+
       sheet.classList.remove("is-dragging");
       sheet.style.transform = "";
 
