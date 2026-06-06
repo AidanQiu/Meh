@@ -522,6 +522,21 @@ function bindEvents() {
   els.saveWheelPresetButton.addEventListener("click", saveCurrentWheelPreset);
   els.saveNumberSettingsButton.addEventListener("click", saveNumberSettingsFromPanel);
   window.addEventListener("resize", updateDockIndicator);
+  document.addEventListener(
+  "touchmove",
+  (event) => {
+    if (!document.body.classList.contains("sheet-open")) return;
+
+    const isInsideOpenSheet = event.target.closest(
+      ".settings-sheet.is-open, .editor-sheet.is-open"
+    );
+
+    if (!isInsideOpenSheet) {
+      event.preventDefault();
+    }
+  },
+  { passive: false }
+);
 }
 
 function bindSheetHandleGestures() {
@@ -2339,6 +2354,8 @@ function closeSettings() {
 
 function openSheet(sheet) {
   els.scrim.hidden = false;
+  document.body.classList.add("sheet-open");
+
   sheet.classList.add("is-open");
   sheet.setAttribute("aria-hidden", "false");
 }
@@ -2347,19 +2364,21 @@ function closeAllSheets() {
   closeLanguageMenu();
 
   [els.settingsSheet, els.wheelEditorSheet, els.numberSettingsSheet].forEach((sheet) => {
-    sheet.classList.remove("is-open");
+    sheet.classList.remove("is-open", "is-expanded");
     sheet.setAttribute("aria-hidden", "true");
   });
+
+  document.body.classList.remove("sheet-open");
 
   window.setTimeout(() => {
     const hasOpenSheet =
       els.settingsSheet.classList.contains("is-open") ||
       els.wheelEditorSheet.classList.contains("is-open") ||
       els.numberSettingsSheet.classList.contains("is-open");
+
     if (!hasOpenSheet) els.scrim.hidden = true;
   }, 240);
 }
-
 function closeLanguageMenu() {
   if (!els.languageMenu || !els.languageMenuButton) return;
   els.languageMenu.hidden = true;

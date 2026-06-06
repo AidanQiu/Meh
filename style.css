@@ -1965,3 +1965,85 @@ p {
 #numberSettingsSheet.is-expanded {
   max-height: min(58dvh, 500px) !important;
 }
+
+/* ===== 手机端底部导航栏：再降低一点 ===== */
+.floating-dock {
+  bottom: max(4px, calc(env(safe-area-inset-bottom, 0px) - 14px)) !important;
+  padding: 5px !important;
+}
+
+.dock-item {
+  min-height: calc(48px * var(--ui-scale)) !important;
+  gap: 3px !important;
+}
+
+.dock-indicator {
+  top: 5px !important;
+  bottom: 5px !important;
+}
+
+/* 下面两个按钮跟着下移一点，避免和导航栏距离太夸张 */
+.page-actions {
+  bottom: calc(118px * var(--ui-scale) + max(4px, calc(env(safe-area-inset-bottom, 0px) - 14px))) !important;
+}
+
+/* ===== 弹窗打开时禁止背景跟着滚动 ===== */
+body.sheet-open {
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+  touch-action: none;
+}
+
+/* 弹窗自己允许上下滑 */
+.settings-sheet,
+.editor-sheet {
+  overscroll-behavior: contain !important;
+  touch-action: pan-y !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+/* 弹窗里的按钮、输入框仍然正常点击 */
+.settings-sheet button,
+.editor-sheet button,
+.settings-sheet input,
+.editor-sheet input,
+.settings-sheet select,
+.editor-sheet select,
+.settings-sheet textarea,
+.editor-sheet textarea {
+  touch-action: manipulation;
+}
+
+/* 拾色器这种需要拖动的区域，保留原来的特殊触控 */
+.picker-field,
+.picker-hue-range,
+.range-input {
+  touch-action: none !important;
+}
+
+/* ===== 小白条：视觉不变，触摸区域变大 ===== */
+.sheet-handle {
+  position: relative !important;
+  width: 132px !important;
+  height: 48px !important;
+  margin: -10px auto 0 !important;
+  background: transparent !important;
+  cursor: grab;
+  touch-action: none !important;
+}
+
+/* 这是真正看见的小白条，尺寸仍然小 */
+.sheet-handle::before {
+  position: absolute !important;
+  left: 50% !important;
+  top: 22px !important;
+  display: block !important;
+  width: 42px !important;
+  height: 4px !important;
+  margin: 0 !important;
+  border-radius: 999px !important;
+  background: var(--outline) !important;
+  content: "" !important;
+  opacity: 0.38 !important;
+  transform: translateX(-50%) !important;
+}
