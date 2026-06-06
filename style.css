@@ -1019,7 +1019,7 @@ p {
   bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   z-index: 6;
   display: grid;
-  width: min(calc(100vw - 28px), 448px);
+  width: min(calc(100vw - 56px), 448px);
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 4px;
   border: 1px solid rgba(127, 116, 124, 0.18);
