@@ -1973,7 +1973,7 @@ p {
 }
 
 .dock-item {
-  min-height: calc(48px * var(--ui-scale)) !important;
+  min-height: calc(55px * var(--ui-scale)) !important;
   gap: 3px !important;
 }
 
