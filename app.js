@@ -353,9 +353,9 @@ const defaultAppSettings = {
   secondaryThemeColor: "#6750a4",
   uiScale: 1,
   topHeight: 16,
-  dockThickness: 50,
-  dockSideGap: 20,
-  dockBottomGap: 0,
+  dockThickness: 58,
+  dockSideGap: 28,
+  dockBottomGap: 10,
   darkMode: "auto",
   backgroundImage: "",
   activeWallpaperId: "",
@@ -607,21 +607,24 @@ function bindSheetHandleGestures() {
     let currentY = 0;
     let isDragging = false;
     let shouldTrack = false;
+    let startedFromHandle = false;
     let startScrollTop = 0;
 
-    const isNoDragTarget = (target) => {
+    const isInteractiveTarget = (target) => {
       return Boolean(
         target.closest(
-          "input, select, textarea, .picker-field, .picker-hue-range, .range-input, .language-menu, .dark-mode-menu"
+          "button, input, select, textarea, label, .picker-field, .picker-hue-range, .range-input, .language-menu"
         )
       );
     };
 
     const startDrag = (event) => {
       if (event.touches.length !== 1) return;
-      if (isNoDragTarget(event.target)) return;
 
-      shouldTrack = true;
+      startedFromHandle = Boolean(event.target.closest(".sheet-handle"));
+      shouldTrack = startedFromHandle || !isInteractiveTarget(event.target);
+      if (!shouldTrack) return;
+
       startY = event.touches[0].clientY;
       startScrollTop = sheet.scrollTop;
       currentY = 0;
@@ -632,20 +635,18 @@ function bindSheetHandleGestures() {
       if (!shouldTrack || event.touches.length !== 1) return;
 
       const deltaY = event.touches[0].clientY - startY;
-      const isPullingDown = deltaY > 0;
-      const isAtTop = startScrollTop <= 0 || sheet.scrollTop <= 0;
-      const startedFromHandle = Boolean(event.target.closest(".sheet-handle"));
+      const isAtTop = sheet.scrollTop <= 0 || startScrollTop <= 0;
+      const shouldPullDown = startedFromHandle || isDragging || (isAtTop && deltaY > 0);
 
-      if (!isPullingDown || (!isAtTop && !startedFromHandle)) return;
+      if (!shouldPullDown) return;
 
-      event.preventDefault();
-
-      currentY = Math.min(180, deltaY);
-      if (currentY < 4) return;
+      currentY = Math.max(0, deltaY);
+      if (currentY < 2) return;
 
       isDragging = true;
+      event.preventDefault();
       sheet.classList.add("is-dragging");
-      sheet.style.transform = `translate3d(50%, ${currentY}px, 0)`;
+      sheet.style.transform = `translate(50%, ${currentY}px)`;
     };
 
     const finishDrag = () => {
@@ -653,22 +654,12 @@ function bindSheetHandleGestures() {
 
       shouldTrack = false;
 
-      if (!isDragging) {
-        currentY = 0;
-        return;
-      }
-
-      const shouldClose = currentY > 72;
-
+      if (!isDragging) return;
       isDragging = false;
       sheet.classList.remove("is-dragging");
+      sheet.style.transform = "";
 
-      if (shouldClose) {
-        closeAllSheets();
-      } else {
-        sheet.style.transform = "";
-      }
-
+      if (currentY > 72) closeAllSheets();
       currentY = 0;
     };
 
@@ -895,7 +886,7 @@ function updateFeatureButton() {
   const isUseful = isWheel || isNumber;
   els.featureButton.hidden = !isUseful;
   els.topBar.classList.toggle("no-feature", !isUseful);
-  icon.textContent = isWheel || isNumber ? "edit" : "more_horiz";
+  icon.textContent = isWheel ? "edit" : isNumber ? "tune" : "more_horiz";
   els.featureButton.classList.toggle("is-feature-active", isUseful);
   els.featureButton.setAttribute("aria-label", isWheel ? t("editWheel") : isNumber ? t("tuneNumber") : "");
 }

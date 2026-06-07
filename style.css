@@ -27,12 +27,12 @@
   --dock-thickness: 58px;
   --dock-side-gap: 28px;
   --dock-bottom-gap: 10px;
-  --gesture-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --gesture-safe-bottom: max(env(safe-area-inset-bottom, 0px), 10px);
 }
-
 * {
   box-sizing: border-box;
 }
+
 html {
   min-height: 100%;
   background: var(--surface-container);
@@ -2037,6 +2037,7 @@ p {
 body.sheet-open {
   overflow: hidden !important;
   overscroll-behavior: none !important;
+  touch-action: none;
 }
 
 /* 弹窗自己允许上下滑 */
@@ -2352,28 +2353,6 @@ body.sheet-open {
     inset 0 1px rgba(255, 255, 255, 0.06),
     inset 0 -8px 18px rgba(0, 0, 0, 0.22);
 }
-
-/* ===== iOS 底部安全区颜色统一：避免 Home Indicator 附近露出不同底色 ===== */
-html,
-body {
-  background: var(--app-background);
-  background-size: var(--app-background-size);
-  background-position: var(--app-background-position);
-}
-
-body,
-.phone-frame,
-.app {
-  min-height: 100svh;
-  min-height: 100dvh;
-}
-
-.phone-frame {
-  background: var(--app-background);
-  background-size: var(--app-background-size);
-  background-position: var(--app-background-position);
-}
-
 /* ===== iOS final override：弹窗、底部颜色、导航栏 ===== */
 
 html,
