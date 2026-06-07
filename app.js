@@ -4,7 +4,7 @@ const STORAGE_KEY = "meh-shell-state-v1";
 const WHEEL_PRESETS_KEY = "meh-wheel-presets-v1";
 const NUMBER_SETTINGS_KEY = "meh-number-settings-v1";
 const APP_SETTINGS_KEY = "meh-app-settings-v2";
-const DEBUG_REVISION_LABEL = "第2次修改";
+const DEBUG_REVISION_LABEL = "第4次修改";
 
 const i18n = {
   zh: {
@@ -628,11 +628,10 @@ function bindDocumentScrollLock() {
 function bindSheetHandleGestures() {
   document.querySelectorAll(".settings-sheet, .editor-sheet").forEach((sheet) => {
     let startY = 0;
-    let currentY = 0;
-    let isDragging = false;
     let shouldTrack = false;
     let startedFromHandle = false;
     let startScrollTop = 0;
+    let closeRequested = false;
 
     const isInteractiveTarget = (target) => {
       return Boolean(
@@ -651,8 +650,7 @@ function bindSheetHandleGestures() {
 
       startY = event.touches[0].clientY;
       startScrollTop = sheet.scrollTop;
-      currentY = 0;
-      isDragging = false;
+      closeRequested = false;
     };
 
     const moveDrag = (event) => {
@@ -664,40 +662,23 @@ function bindSheetHandleGestures() {
         event.preventDefault();
       }
 
-      const shouldPullDown = startedFromHandle || isDragging || (isAtTop && deltaY > 0);
+      const shouldCloseFromTop = (startedFromHandle || isAtTop) && deltaY > 10;
+      if (!shouldCloseFromTop || closeRequested) return;
 
-      if (!shouldPullDown) return;
-
-      currentY = Math.max(0, deltaY);
-      if (currentY < 2) return;
-
-      isDragging = true;
-      if (event.cancelable) event.preventDefault();
-      sheet.classList.add("is-dragging");
-      sheet.style.transform = `translate3d(50%, ${currentY}px, 0)`;
+      closeRequested = true;
+      shouldTrack = false;
+      sheet.scrollTop = 0;
+      sheet.classList.remove("is-dragging");
+      sheet.style.transform = "";
+      closeAllSheets();
     };
 
     const finishDrag = () => {
       if (!shouldTrack) return;
 
       shouldTrack = false;
-
-      if (!isDragging) return;
-      isDragging = false;
-
-      if (currentY > 72) {
-        sheet.classList.remove("is-dragging");
-        sheet.getBoundingClientRect();
-        sheet.style.transform = "translate3d(50%, 105%, 0)";
-        window.clearTimeout(sheetCloseTimer);
-        sheetCloseTimer = window.setTimeout(closeAllSheets, 180);
-        currentY = 0;
-        return;
-      }
-
       sheet.classList.remove("is-dragging");
       sheet.style.transform = "";
-      currentY = 0;
     };
 
     sheet.addEventListener("touchstart", startDrag, { passive: true });

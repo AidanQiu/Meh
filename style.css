@@ -2448,7 +2448,7 @@ body {
   position: fixed !important;
   left: var(--dock-side-gap) !important;
   right: var(--dock-side-gap) !important;
-  bottom: calc(var(--dock-bottom-gap) + 22px - env(safe-area-inset-bottom, 0px)) !important;
+  bottom: calc(var(--dock-bottom-gap) + 34px - env(safe-area-inset-bottom, 0px)) !important;
   width: auto !important;
   transform: none !important;
   padding: 6px !important;
@@ -2462,9 +2462,26 @@ body {
   position: fixed !important;
   bottom: calc(
     var(--dock-bottom-gap)
-    + 22px
+    + 34px
     - env(safe-area-inset-bottom, 0px)
     + calc(var(--dock-thickness) * var(--ui-scale))
     + 44px
   ) !important;
+}
+
+.settings-sheet,
+.editor-sheet {
+  overscroll-behavior-y: none !important;
+  touch-action: pan-y !important;
+  transform: translate3d(50%, 105%, 0) !important;
+}
+
+.settings-sheet.is-open,
+.editor-sheet.is-open {
+  transform: translate3d(50%, 0, 0) !important;
+}
+
+.settings-sheet.is-dragging,
+.editor-sheet.is-dragging {
+  transition: none !important;
 }
