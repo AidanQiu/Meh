@@ -503,9 +503,37 @@ const els = {
 
 init();
 
+function updateViewportMetrics() {
+  const viewport = window.visualViewport;
+  const height = Math.max(320, Math.round(viewport?.height || window.innerHeight || document.documentElement.clientHeight || 0));
+  els.root.style.setProperty("--app-viewport-height", `${height}px`);
+}
+
+function bindViewportMetrics() {
+  updateViewportMetrics();
+  window.addEventListener("resize", updateViewportMetrics);
+  window.addEventListener("orientationchange", updateViewportMetrics);
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", updateViewportMetrics);
+    window.visualViewport.addEventListener("scroll", updateViewportMetrics);
+  }
+}
+
+function setSheetOffset(sheet, value) {
+  if (!sheet) return;
+  sheet.style.setProperty("--sheet-y", value);
+}
+
+function clearSheetOffset(sheet) {
+  if (!sheet) return;
+  sheet.style.removeProperty("--sheet-y");
+}
+
 async function init() {
   registerServiceWorker();
   requestPersistentStorage();
+  bindViewportMetrics();
 
   numberState.settings = loadNumberSettings();
   wheelState.presets = loadWheelPresets();
@@ -609,6 +637,8 @@ function bindSheetHandleGestures() {
     let isTracking = false;
     let isDragging = false;
     let closeTimer = null;
+    let cleanupTimer = null;
+    let dragTarget = null;
 
     const shouldIgnoreTarget = (target) => {
       return Boolean(
@@ -618,17 +648,27 @@ function bindSheetHandleGestures() {
       );
     };
 
-    const startDrag = (event) => {
-      if (event.touches.length !== 1) return;
-      if (shouldIgnoreTarget(event.target)) return;
-
+    const clearTimers = () => {
       if (closeTimer) {
         window.clearTimeout(closeTimer);
         closeTimer = null;
       }
+      if (cleanupTimer) {
+        window.clearTimeout(cleanupTimer);
+        cleanupTimer = null;
+      }
+    };
+
+    const startDrag = (event) => {
+      if (event.touches.length !== 1) return;
+      if (!sheet.classList.contains("is-open")) return;
+      if (shouldIgnoreTarget(event.target)) return;
+
+      clearTimers();
 
       isTracking = true;
       isDragging = false;
+      dragTarget = event.target;
       startY = event.touches[0].clientY;
       currentY = 0;
       startScrollTop = sheet.scrollTop;
@@ -639,37 +679,45 @@ function bindSheetHandleGestures() {
 
       const y = event.touches[0].clientY;
       const deltaY = y - startY;
+      const absDeltaY = Math.abs(deltaY);
       const isPullingDown = deltaY > 0;
+      const startedFromHandle = Boolean(dragTarget?.closest(".sheet-handle"));
+      const startedFromHeader = Boolean(dragTarget?.closest(".sheet-header"));
       const isAtTop = sheet.scrollTop <= 0 || startScrollTop <= 0;
-      const startedFromHandle = Boolean(event.target.closest(".sheet-handle"));
-      const startedFromHeader = Boolean(event.target.closest(".sheet-header"));
 
       if (!isDragging) {
-        if (Math.abs(deltaY) < 6) return;
+        if (absDeltaY < 4) return;
 
         if (!isPullingDown) {
           isTracking = false;
+          dragTarget = null;
           return;
         }
 
-        if (!isAtTop && !startedFromHandle && !startedFromHeader) {
+        if (!startedFromHandle && !startedFromHeader && !isAtTop) {
           return;
         }
 
         isDragging = true;
         sheet.classList.add("is-dragging");
+        setSheetOffset(sheet, "0px");
       }
 
       event.preventDefault();
 
-      currentY = Math.min(260, Math.max(0, deltaY * 0.86));
-      sheet.style.transform = `translate3d(50%, ${currentY}px, 0)`;
+      // 阻尼曲线：前段几乎 1:1，越往下阻尼越强；iOS 上手感比固定 0.86 更像原生 sheet。
+      currentY = Math.min(360, Math.max(0, deltaY * (deltaY < 140 ? 0.98 : 0.82)));
+      setSheetOffset(sheet, `${currentY}px`);
     };
 
-    const finishDrag = () => {
+    const finishDrag = (event) => {
       if (!isTracking) return;
 
+      const endY = event?.changedTouches?.[0]?.clientY ?? startY;
+      const totalDeltaY = Math.max(0, endY - startY);
+
       isTracking = false;
+      dragTarget = null;
 
       if (!isDragging) {
         currentY = 0;
@@ -679,13 +727,13 @@ function bindSheetHandleGestures() {
       isDragging = false;
       sheet.classList.remove("is-dragging");
 
-      const shouldClose = currentY > 82;
+      const shouldClose = currentY > 88 || totalDeltaY > Math.min(180, sheet.clientHeight * 0.28);
 
       if (shouldClose) {
-        sheet.style.transform = `translate3d(50%, ${currentY}px, 0)`;
+        setSheetOffset(sheet, `${currentY}px`);
 
         requestAnimationFrame(() => {
-          sheet.style.transform = "translate3d(50%, calc(100% + 24px), 0)";
+          setSheetOffset(sheet, "calc(100% + 28px)");
         });
 
         closeTimer = window.setTimeout(() => {
@@ -693,11 +741,16 @@ function bindSheetHandleGestures() {
           closeTimer = null;
         }, 260);
       } else {
-        sheet.style.transform = `translate3d(50%, ${currentY}px, 0)`;
+        setSheetOffset(sheet, `${currentY}px`);
 
         requestAnimationFrame(() => {
-          sheet.style.transform = "";
+          setSheetOffset(sheet, "0px");
         });
+
+        cleanupTimer = window.setTimeout(() => {
+          clearSheetOffset(sheet);
+          cleanupTimer = null;
+        }, 260);
       }
 
       currentY = 0;
@@ -2134,6 +2187,8 @@ function applyUiScale(scale) {
   els.root.style.setProperty("--ui-scale", safeScale);
   els.uiScaleRange.value = safeScale;
   els.uiScaleValue.textContent = safeScale.toFixed(2);
+  updateViewportMetrics();
+  updateDockIndicator();
 }
 function bindLayoutRange(input, valueNode, key) {
   if (!input || !valueNode) return;
@@ -2185,6 +2240,8 @@ function applyLayoutSettings() {
   els.root.style.setProperty("--dock-thickness", `${dockThickness}px`);
   els.root.style.setProperty("--dock-side-gap", `${dockSideGap}px`);
   els.root.style.setProperty("--dock-bottom-gap", `${dockBottomGap}px`);
+  els.root.style.setProperty("--dock-real-height", `${dockThickness + 8}px`);
+  els.root.style.setProperty("--dock-content-height", `${dockThickness}px`);
 
   if (els.topHeightRange) els.topHeightRange.value = topHeight;
   if (els.topHeightValue) els.topHeightValue.textContent = topHeight;
@@ -2198,6 +2255,7 @@ function applyLayoutSettings() {
   if (els.dockBottomGapRange) els.dockBottomGapRange.value = dockBottomGap;
   if (els.dockBottomGapValue) els.dockBottomGapValue.textContent = dockBottomGap;
 
+  updateViewportMetrics();
   updateDockIndicator();
 }
 
@@ -2651,11 +2709,17 @@ function closeSettings() {
 }
 
 function openSheet(sheet) {
+  if (!sheet) return;
+
+  updateViewportMetrics();
+  clearSheetOffset(sheet);
   els.scrim.hidden = false;
   document.body.classList.add("sheet-open");
 
-  sheet.classList.add("is-open");
-  sheet.setAttribute("aria-hidden", "false");
+  requestAnimationFrame(() => {
+    sheet.classList.add("is-open");
+    sheet.setAttribute("aria-hidden", "false");
+  });
 }
 
 function closeAllSheets() {
@@ -2670,6 +2734,7 @@ function closeAllSheets() {
     sheet.classList.remove("is-open", "is-expanded", "is-dragging");
     sheet.setAttribute("aria-hidden", "true");
     sheet.style.transform = "";
+    clearSheetOffset(sheet);
   });
 
   if (els.scrim) {

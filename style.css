@@ -2412,3 +2412,173 @@ body.sheet-open {
   transform: translateX(-50%) !important;
   content: "" !important;
 }
+/* ===== bottom dock stable fix：底部导航不跟显示大小漂移 ===== */
+
+:root {
+  --dock-real-height: 56px;
+  --dock-real-bottom: 0px;
+}
+
+.floating-dock {
+  position: fixed !important;
+  left: 50% !important;
+  right: auto !important;
+  bottom: var(--dock-real-bottom) !important;
+  width: min(calc(100vw - 36px), 448px) !important;
+  height: var(--dock-real-height) !important;
+  padding: 4px !important;
+  transform: translateX(-50%) !important;
+}
+
+.dock-item {
+  min-height: 48px !important;
+  gap: 2px !important;
+}
+
+.dock-indicator {
+  top: 4px !important;
+  bottom: 4px !important;
+}
+
+.page-actions {
+  bottom: calc(var(--dock-real-bottom) + var(--dock-real-height) + 34px) !important;
+}
+
+/* ===== final iOS viewport + sheet gesture fix =====
+   放在文件最后，统一覆盖前面几段临时 fix，避免 100svh / 100dvh / !important 互相打架。 */
+:root {
+  --app-viewport-height: 100dvh;
+  --dock-content-height: var(--dock-thickness);
+  --dock-real-height: calc(var(--dock-content-height) + 8px);
+  --dock-real-bottom: max(var(--dock-bottom-gap), env(safe-area-inset-bottom, 0px));
+  --page-bottom-reserve: calc(var(--dock-real-bottom) + var(--dock-real-height) + 92px);
+  --sheet-hidden-y: calc(100% + 28px);
+}
+
+html,
+body {
+  width: 100%;
+  height: var(--app-viewport-height) !important;
+  min-height: var(--app-viewport-height) !important;
+  overflow: hidden !important;
+  background: var(--app-background) !important;
+  background-size: var(--app-background-size) !important;
+  background-position: var(--app-background-position) !important;
+}
+
+body::after {
+  height: max(28px, env(safe-area-inset-bottom, 0px)) !important;
+  background: var(--app-background) !important;
+  background-size: var(--app-background-size) !important;
+  background-position: var(--app-background-position) !important;
+}
+
+.phone-frame {
+  width: min(100vw, 480px);
+  height: var(--app-viewport-height) !important;
+  min-height: var(--app-viewport-height) !important;
+  background: var(--app-background) !important;
+  background-size: var(--app-background-size) !important;
+  background-position: var(--app-background-position) !important;
+  overflow: hidden !important;
+}
+
+.app {
+  height: var(--app-viewport-height) !important;
+  min-height: var(--app-viewport-height) !important;
+  padding-bottom: var(--page-bottom-reserve) !important;
+  overflow: hidden !important;
+}
+
+#customBgLayer {
+  height: var(--app-viewport-height) !important;
+}
+
+.floating-dock {
+  position: fixed !important;
+  left: 50% !important;
+  right: auto !important;
+  bottom: var(--dock-real-bottom) !important;
+  width: min(calc(100vw - (var(--dock-side-gap) * 2)), 448px) !important;
+  height: var(--dock-real-height) !important;
+  padding: 4px !important;
+  transform: translate3d(-50%, 0, 0) !important;
+}
+
+.dock-item {
+  min-height: var(--dock-content-height) !important;
+}
+
+.dock-indicator {
+  top: 4px !important;
+  bottom: 4px !important;
+}
+
+.page-actions {
+  bottom: calc(var(--dock-real-bottom) + var(--dock-real-height) + 34px) !important;
+}
+
+.settings-sheet,
+.editor-sheet {
+  --sheet-y: var(--sheet-hidden-y);
+  position: fixed !important;
+  right: 50% !important;
+  bottom: 0 !important;
+  width: min(100vw, 480px) !important;
+  max-height: calc(var(--app-viewport-height) - max(14px, env(safe-area-inset-top, 0px) + 8px)) !important;
+  overflow-y: auto !important;
+  overscroll-behavior-y: contain !important;
+  -webkit-overflow-scrolling: touch !important;
+  transform: translate3d(50%, var(--sheet-y), 0) !important;
+  transition: transform 260ms var(--ease) !important;
+  will-change: transform;
+  contain: layout paint;
+}
+
+.settings-sheet.is-open,
+.editor-sheet.is-open {
+  --sheet-y: 0px;
+}
+
+.settings-sheet.is-dragging,
+.editor-sheet.is-dragging {
+  transition: none !important;
+  overflow-y: hidden !important;
+}
+
+.settings-sheet::after,
+.editor-sheet::after {
+  height: max(12px, env(safe-area-inset-bottom, 0px)) !important;
+}
+
+body.sheet-open {
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+  touch-action: auto !important;
+}
+
+/* ID 选择器也放到最后：覆盖前面 #settingsSheet/#wheelEditorSheet 的 82dvh !important。 */
+#settingsSheet,
+#wheelEditorSheet {
+  max-height: min(calc(var(--app-viewport-height) - max(14px, env(safe-area-inset-top, 0px) + 8px)), 720px) !important;
+  padding-bottom: max(24px, calc(env(safe-area-inset-bottom, 0px) + 16px)) !important;
+}
+
+#numberSettingsSheet {
+  max-height: min(calc(var(--app-viewport-height) - max(18px, env(safe-area-inset-top, 0px) + 12px)), 640px) !important;
+  padding-bottom: max(22px, calc(env(safe-area-inset-bottom, 0px) + 14px)) !important;
+}
+
+@media (min-width: 481px) {
+  body {
+    height: auto !important;
+    min-height: 100vh !important;
+    overflow: auto !important;
+  }
+
+  .phone-frame,
+  .app {
+    height: calc(100vh - 36px) !important;
+    min-height: calc(100vh - 36px) !important;
+  }
+}
