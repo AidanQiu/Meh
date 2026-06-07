@@ -353,9 +353,9 @@ const defaultAppSettings = {
   secondaryThemeColor: "#6750a4",
   uiScale: 1,
   topHeight: 16,
-  dockThickness: 58,
-  dockSideGap: 28,
-  dockBottomGap: 10,
+  dockThickness: 50,
+  dockSideGap: 20,
+  dockBottomGap: 0,
   darkMode: "auto",
   backgroundImage: "",
   activeWallpaperId: "",
@@ -607,16 +607,23 @@ function bindSheetHandleGestures() {
     let currentY = 0;
     let isDragging = false;
     let shouldTrack = false;
+    let startScrollTop = 0;
+
+    const isNoDragTarget = (target) => {
+      return Boolean(
+        target.closest(
+          "input, select, textarea, .picker-field, .picker-hue-range, .range-input, .language-menu, .dark-mode-menu"
+        )
+      );
+    };
 
     const startDrag = (event) => {
       if (event.touches.length !== 1) return;
-
-      // 只允许从顶部小白条下拉关闭。
-      // 不再从主题色、色块、滑杆等内容区域接管手势，避免 iOS 滚动回弹和弹窗 transform 打架。
-      if (!event.target.closest(".sheet-handle")) return;
+      if (isNoDragTarget(event.target)) return;
 
       shouldTrack = true;
       startY = event.touches[0].clientY;
+      startScrollTop = sheet.scrollTop;
       currentY = 0;
       isDragging = false;
     };
@@ -625,14 +632,20 @@ function bindSheetHandleGestures() {
       if (!shouldTrack || event.touches.length !== 1) return;
 
       const deltaY = event.touches[0].clientY - startY;
-      currentY = Math.max(0, deltaY);
+      const isPullingDown = deltaY > 0;
+      const isAtTop = startScrollTop <= 0 || sheet.scrollTop <= 0;
+      const startedFromHandle = Boolean(event.target.closest(".sheet-handle"));
 
-      if (currentY < 2) return;
+      if (!isPullingDown || (!isAtTop && !startedFromHandle)) return;
+
+      event.preventDefault();
+
+      currentY = Math.min(180, deltaY);
+      if (currentY < 4) return;
 
       isDragging = true;
-      event.preventDefault();
       sheet.classList.add("is-dragging");
-      sheet.style.transform = `translate(50%, ${currentY}px)`;
+      sheet.style.transform = `translate3d(50%, ${currentY}px, 0)`;
     };
 
     const finishDrag = () => {
@@ -645,11 +658,17 @@ function bindSheetHandleGestures() {
         return;
       }
 
+      const shouldClose = currentY > 72;
+
       isDragging = false;
       sheet.classList.remove("is-dragging");
-      sheet.style.transform = "";
 
-      if (currentY > 72) closeAllSheets();
+      if (shouldClose) {
+        closeAllSheets();
+      } else {
+        sheet.style.transform = "";
+      }
+
       currentY = 0;
     };
 
