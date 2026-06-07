@@ -23,12 +23,16 @@
     linear-gradient(180deg, var(--surface) 0%, var(--surface-container) 100%);
   --app-background-size: auto;
   --app-background-position: center;
-}
+  --top-extra: 16px;
+  --dock-thickness: 58px;
+  --dock-side-gap: 28px;
+  --dock-bottom-gap: 10px;
+  --gesture-safe-bottom: max(env(safe-area-inset-bottom, 0px), 10px);
 
 * {
   box-sizing: border-box;
 }
-
+}
 html {
   min-height: 100%;
   background: var(--surface-container);
@@ -92,13 +96,21 @@ p {
 /* 使用gemini修改 */
 .app {
   min-height: 100dvh;
-  /* 使用 max() 动态匹配系统安全区，并设立 28px 的高标准保底冗余，保证任凭灵动岛再大也绝不遮挡顶部按钮 */
-  padding-top: max(calc(36px * var(--ui-scale)), calc(env(safe-area-inset-top, 0px) + 16px));
-  padding-left: calc(18px * var(--ui-scale));
-  padding-right: calc(18px * var(--ui-scale));
+  padding-top: calc(env(safe-area-inset-top, 0px) + var(--top-extra));
+
+  padding-left: max(
+    calc(18px * var(--ui-scale)),
+    env(safe-area-inset-left, 0px)
+  );
+
+  padding-right: max(
+    calc(18px * var(--ui-scale)),
+    env(safe-area-inset-right, 0px)
+  );
+
   padding-bottom: calc(188px * var(--ui-scale));
   position: relative;
-  z-index: 2; /* 确保内容层级高于背景图层 */
+  z-index: 2;
 }
  /* 修改结束 */
 
@@ -819,7 +831,7 @@ p {
 /* 转盘指针：只保留向下箭头 */
 .wheel-pointer {
   position: absolute;
-  top: calc(-22px * var(--ui-scale));
+  top: calc(-16px * var(--ui-scale));
   left: 50%;
   z-index: 3;
   display: grid;
@@ -1627,8 +1639,30 @@ p {
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 14%, transparent);
 }
 
-.language-picker {
+.language-menu-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+}
+
+.language-menu[hidden],
+.native-language-select {
+  display: none;
+}
+
+
+
+.language-menu button.is-active {
+  background: var(--primary-container);
+  color: var(--primary);
+}
+
+.language-picker,
+.dark-mode-picker {
   position: relative;
+  display: grid;
+  gap: 8px;
 }
 
 .language-label {
@@ -1643,35 +1677,46 @@ p {
 }
 
 .language-menu-button {
-  display: flex;
+  display: flex !important;
+  width: 100%;
+  min-height: calc(46px * var(--ui-scale));
   align-items: center;
   justify-content: space-between;
   text-align: left;
 }
 
+.menu-arrow {
+  flex: 0 0 auto;
+  margin-left: 10px;
+  color: var(--on-surface-variant);
+  transition: transform 180ms var(--ease);
+}
+
+.language-menu-button[aria-expanded="true"] .menu-arrow {
+  transform: rotate(180deg);
+}
+
 .language-menu {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 10px);
-  left: 0;
-  z-index: 12;
   display: grid;
   gap: 6px;
+  margin-top: 2px;
   border: 1px solid color-mix(in srgb, var(--outline) 45%, transparent);
   border-radius: 22px;
   background: color-mix(in srgb, var(--surface-container-high) 96%, #ffffff);
   padding: 8px;
-  box-shadow: 0 14px 34px rgba(29, 27, 32, 0.22);
+  box-shadow: 0 14px 34px rgba(29, 27, 32, 0.18);
 }
 
 .language-menu[hidden],
-.native-language-select {
-  display: none;
+.native-language-select,
+.native-dark-mode-select {
+  display: none !important;
 }
 
 .language-menu button {
   min-height: calc(46px * var(--ui-scale));
   border-radius: 16px;
+  background: transparent;
   color: var(--on-surface);
   font: inherit;
   font-weight: 700;
@@ -1801,15 +1846,6 @@ p {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    scroll-behavior: auto !important;
-    transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
-  }
-}
 
 /* 使用gemini修改 */
 /* 独立的自定义背景图图层 */
@@ -1949,8 +1985,8 @@ p {
 
 /* 随机数菜单：单独矮一点 */
 #numberSettingsSheet {
-  max-height: min(64dvh, 560px) !important;
-  padding-bottom: max(20px, calc(env(safe-area-inset-bottom, 0px) + 16px)) !important;
+  max-height: min(72dvh, 640px) !important;
+  padding-bottom: max(22px, calc(env(safe-area-inset-bottom, 0px) + 22px)) !important;
 }
 
 /* 如果之前 JS 留下了 is-expanded，也强制不改变高度 */
@@ -1963,17 +1999,22 @@ p {
 }
 
 #numberSettingsSheet.is-expanded {
-  max-height: min(58dvh, 500px) !important;
+  max-height: min(72dvh, 640px) !important;
 }
 
 /* ===== 手机端底部导航栏：再降低一点 ===== */
 .floating-dock {
-  bottom: max(4px, calc(env(safe-area-inset-bottom, 0px) - 14px)) !important;
+  position: absolute !important;
+  left: var(--dock-side-gap) !important;
+  right: var(--dock-side-gap) !important;
+  bottom: calc(var(--gesture-safe-bottom) + var(--dock-bottom-gap)) !important;
+  width: auto !important;
+  transform: none !important;
   padding: 5px !important;
 }
 
 .dock-item {
-  min-height: calc(58px * var(--ui-scale)) !important;
+  min-height: calc(var(--dock-thickness) * var(--ui-scale)) !important;
   gap: 3px !important;
 }
 
@@ -1982,10 +2023,15 @@ p {
   bottom: 5px !important;
 }
 
-/* 下面两个按钮跟着下移一点，避免和导航栏距离太夸张 */
 .page-actions {
-  bottom: calc(118px * var(--ui-scale) + max(4px, calc(env(safe-area-inset-bottom, 0px) - 14px))) !important;
+  bottom: calc(
+    var(--gesture-safe-bottom)
+    + var(--dock-bottom-gap)
+    + calc(var(--dock-thickness) * var(--ui-scale))
+    + 44px
+  ) !important;
 }
+
 
 /* ===== 弹窗打开时禁止背景跟着滚动 ===== */
 body.sheet-open {
@@ -2046,4 +2092,264 @@ body.sheet-open {
   content: "" !important;
   opacity: 0.38 !important;
   transform: translateX(-50%) !important;
+}
+
+/* ===== Final PWA/mobile interaction fixes ===== */
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+}
+
+body {
+  min-height: 100dvh;
+}
+
+.phone-frame {
+  position: relative;
+  z-index: 1;
+  width: min(100vw, 480px);
+  min-height: 100dvh;
+  margin: 0 auto;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: 0 0 0 1px rgba(127, 116, 124, 0.14), var(--shadow-2);
+  overflow: hidden;
+}
+
+.app {
+  height: 100dvh !important;
+  min-height: 100dvh !important;
+  overflow: hidden !important;
+}
+
+.top-stats.is-empty {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+body.sheet-open {
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+  touch-action: auto !important;
+}
+
+.settings-sheet,
+.editor-sheet {
+  overscroll-behavior-y: contain !important;
+  touch-action: pan-y !important;
+  will-change: transform;
+}
+
+.settings-sheet.is-dragging,
+.editor-sheet.is-dragging {
+  overflow-y: hidden !important;
+}
+
+.sheet-handle {
+  touch-action: none !important;
+}
+
+.dark-mode-picker {
+  position: relative;
+  display: grid;
+  gap: 10px;
+}
+
+.dark-mode-menu-button {
+  position: relative;
+  display: flex !important;
+  width: 100%;
+  min-height: calc(46px * var(--ui-scale));
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 18px;
+  background: var(--surface-container);
+  color: var(--on-surface);
+  padding: 0 calc(14px * var(--ui-scale)) 0 calc(16px * var(--ui-scale));
+  font-size: calc(15px * var(--ui-scale));
+  font-weight: 700;
+  text-align: left;
+}
+
+.dark-mode-arrow {
+  flex: 0 0 auto;
+  margin-left: 10px;
+  color: var(--on-surface-variant);
+  transition: transform 180ms var(--ease);
+}
+
+.dark-mode-menu-button.is-open .dark-mode-arrow {
+  transform: rotate(180deg);
+}
+
+.dark-mode-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  left: 0;
+  z-index: 30;
+  display: grid;
+  gap: 6px;
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--outline) 24%, transparent);
+}
+
+.dark-mode-menu[hidden] {
+  display: none;
+}
+
+.dark-mode-menu button {
+  display: flex;
+  width: 100%;
+  min-height: calc(42px * var(--ui-scale));
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--on-surface);
+  padding: 0 12px;
+  font-size: calc(14px * var(--ui-scale));
+  font-weight: 700;
+  text-align: left;
+}
+
+.dark-mode-menu button.is-active {
+  background: var(--primary-container);
+  color: var(--primary);
+}
+
+.dark-mode-menu button.is-active::after {
+  font-family: "Material Symbols Rounded";
+  content: "check";
+  font-size: calc(20px * var(--ui-scale));
+  line-height: 1;
+}
+
+.native-dark-mode-select {
+  display: none !important;
+}
+
+.coin.is-flipping {
+  animation-duration: 1350ms !important;
+}
+
+.dice.is-rolling {
+  animation-duration: 2000ms !important;
+}
+
+.number-display.is-pop {
+  animation-duration: 420ms !important;
+}
+
+/* ===== 深色模式：硬币 / 骰子 / 随机数质感修复 ===== */
+
+.theme-dark .coin-content {
+  filter: drop-shadow(0 24px 42px rgba(0, 0, 0, 0.46));
+}
+
+.theme-dark .coin {
+  background:
+    radial-gradient(
+      circle at 30% 22%,
+      rgba(255, 255, 255, 0.16),
+      rgba(255, 255, 255, 0.04) 18%,
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 72% 78%,
+      rgba(0, 0, 0, 0.34),
+      transparent 42%
+    ),
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--primary-container) 68%, #050507),
+      color-mix(in srgb, var(--primary) 34%, #111014)
+    );
+
+  box-shadow:
+    inset 0 10px 18px rgba(255, 255, 255, 0.055),
+    inset 0 -18px 34px rgba(0, 0, 0, 0.42),
+    inset 0 0 0 9px rgba(0, 0, 0, 0.18);
+}
+
+.theme-dark .coin::after {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.theme-dark .coin-meh-face {
+  filter: drop-shadow(0 3px 7px rgba(0, 0, 0, 0.42));
+}
+
+
+/* 骰子深色质感 */
+.theme-dark .dice {
+  background:
+    radial-gradient(
+      circle at 28% 22%,
+      rgba(255, 255, 255, 0.14),
+      rgba(255, 255, 255, 0.035) 20%,
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 76% 82%,
+      rgba(0, 0, 0, 0.36),
+      transparent 46%
+    ),
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--surface-container-high) 72%, #050507),
+      color-mix(in srgb, var(--primary-container) 42%, #111014)
+    );
+
+  box-shadow:
+    inset 0 10px 18px rgba(255, 255, 255, 0.05),
+    inset 0 -18px 32px rgba(0, 0, 0, 0.42),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 24px 38px rgba(0, 0, 0, 0.42);
+}
+
+.theme-dark .dice-dot {
+  background: color-mix(in srgb, var(--primary) 82%, #ffffff);
+  box-shadow:
+    inset 0 -3px 8px rgba(0, 0, 0, 0.32),
+    0 1px 6px rgba(255, 255, 255, 0.08);
+}
+
+
+/* 随机数方块深色质感 */
+.theme-dark .number-display {
+  background:
+    radial-gradient(
+      circle at 30% 22%,
+      rgba(255, 255, 255, 0.13),
+      rgba(255, 255, 255, 0.035) 20%,
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 76% 82%,
+      rgba(0, 0, 0, 0.34),
+      transparent 46%
+    ),
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--primary-container) 52%, #08080b),
+      color-mix(in srgb, var(--surface-container-high) 70%, #111014)
+    );
+
+  box-shadow:
+    inset 0 10px 18px rgba(255, 255, 255, 0.05),
+    inset 0 -18px 34px rgba(0, 0, 0, 0.42),
+    0 24px 38px rgba(0, 0, 0, 0.42);
+}
+
+.theme-dark .number-result-chip {
+  background: color-mix(in srgb, var(--surface-container-high) 72%, #050507);
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.06),
+    inset 0 -8px 18px rgba(0, 0, 0, 0.22);
 }

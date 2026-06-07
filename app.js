@@ -26,6 +26,15 @@ const i18n = {
     themeColor: "主题颜色",
     primaryThemeColor: "首选主题色（背景）",
     secondaryThemeColor: "次选主题色（字体/按钮）",
+    darkMode: "深色模式",
+    lightMode: "浅色",
+    darkModeOnly: "深色",
+    autoMode: "自动",
+    personalization: "个性化",
+    topHeight: "顶部高度",
+    dockThickness: "竖向厚度",
+    dockSideGap: "左右边距",
+    dockBottomGap: "离底部距离",
     backgroundImage: "自定义背景图",
     backgroundOpacity: "背景图透明度",
     clear: "清除",
@@ -338,17 +347,22 @@ const defaultNumberSettings = {
 const defaultState = {
   page: "coin",
 };
-
+ // 新增加设置项与控件绑定
 const defaultAppSettings = {
   primaryThemeColor: "#6b9c94",
   secondaryThemeColor: "#6750a4",
   uiScale: 1,
+  topHeight: 16,
+  dockThickness: 58,
+  dockSideGap: 28,
+  dockBottomGap: 10,
+  darkMode: "auto",
   backgroundImage: "",
   activeWallpaperId: "",
   backgroundOpacity: 0.5,
   language: "zh",
 };
-
+// 新增加设置项与控件绑定
 const primarySwatches = ["#e8e3e8", "#c9b0f6", "#94e8bd", "#87c7f4", "#f9aaa5", "#55beb4", "#ffbd4a",  "#ffffff", "#2d7434"];
 const secondarySwatches = ["#4f6670", "#6750a4", "#0b7f86", "#0b6ecb", "#bf4d00", "#2d7434", "#ad1f4f", "#000000",  "#6b9c94"];
 const languageNames = {
@@ -357,6 +371,11 @@ const languageNames = {
   ja: "日本語",
   kk: "Қазақша",
 };
+function getDarkModeName(mode) {
+  if (mode === "light") return t("lightMode");
+  if (mode === "dark") return t("darkModeOnly");
+  return t("autoMode");
+}
 const WALLPAPER_DB_NAME = "meh-wallpapers-db";
 const WALLPAPER_STORE_NAME = "wallpapers";
 const MAX_WALLPAPERS = 16;
@@ -439,6 +458,16 @@ const els = {
   secondarySwatches: document.querySelector("#secondarySwatches"),
   uiScaleRange: document.querySelector("#uiScaleRange"),
   uiScaleValue: document.querySelector("#uiScaleValue"),
+  // 新增加设置项与控件绑定
+  topHeightRange: document.querySelector("#topHeightRange"),
+  topHeightValue: document.querySelector("#topHeightValue"),
+  dockThicknessRange: document.querySelector("#dockThicknessRange"),
+  dockThicknessValue: document.querySelector("#dockThicknessValue"),
+  dockSideGapRange: document.querySelector("#dockSideGapRange"),
+  dockSideGapValue: document.querySelector("#dockSideGapValue"),
+  dockBottomGapRange: document.querySelector("#dockBottomGapRange"),
+  dockBottomGapValue: document.querySelector("#dockBottomGapValue"),
+// 新增加设置项与控件绑定
   presetWallpaperGrid: document.querySelector("#presetWallpaperGrid"),
   backgroundImageInput: document.querySelector("#backgroundImageInput"),
   clearBackgroundButton: document.querySelector("#clearBackgroundButton"),
@@ -447,6 +476,10 @@ const els = {
   languageMenuButton: document.querySelector("#languageMenuButton"),
   languageMenuText: document.querySelector("#languageMenuText"),
   languageMenu: document.querySelector("#languageMenu"),
+  darkModeSelect: document.querySelector("#darkModeSelect"),
+  darkModeMenuButton: document.querySelector("#darkModeMenuButton"),
+  darkModeMenuText: document.querySelector("#darkModeMenuText"),
+  darkModeMenu: document.querySelector("#darkModeMenu"),
   // 使用gemini修改
   bgOpacityRange: document.querySelector("#bgOpacityRange"),
   bgOpacityValue: document.querySelector("#bgOpacityValue"),
@@ -471,6 +504,9 @@ const els = {
 init();
 
 async function init() {
+  registerServiceWorker();
+  requestPersistentStorage();
+
   numberState.settings = loadNumberSettings();
   wheelState.presets = loadWheelPresets();
   if (wheelState.presets.length) {
@@ -522,60 +558,115 @@ function bindEvents() {
   els.saveWheelPresetButton.addEventListener("click", saveCurrentWheelPreset);
   els.saveNumberSettingsButton.addEventListener("click", saveNumberSettingsFromPanel);
   window.addEventListener("resize", updateDockIndicator);
+  bindDocumentScrollLock();
+}
+
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator) || window.location.protocol === "file:") return;
+
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js").catch((error) => {
+      console.warn("Service worker registration failed:", error);
+    });
+  });
+}
+
+async function requestPersistentStorage() {
+  if (!navigator.storage || !navigator.storage.persist) return;
+
+  try {
+    const alreadyPersisted = navigator.storage.persisted ? await navigator.storage.persisted() : false;
+    if (!alreadyPersisted) await navigator.storage.persist();
+  } catch (error) {
+    console.warn("Persistent storage request failed:", error);
+  }
+}
+
+function bindDocumentScrollLock() {
   document.addEventListener(
-  "touchmove",
-  (event) => {
-    if (!document.body.classList.contains("sheet-open")) return;
+    "touchmove",
+    (event) => {
+      if (document.body.classList.contains("sheet-open")) {
+        const isInsideOpenSheet = event.target.closest(".settings-sheet.is-open, .editor-sheet.is-open");
+        if (!isInsideOpenSheet) event.preventDefault();
+        return;
+      }
 
-    const isInsideOpenSheet = event.target.closest(
-      ".settings-sheet.is-open, .editor-sheet.is-open"
-    );
-
-    if (!isInsideOpenSheet) {
-      event.preventDefault();
-    }
-  },
-  { passive: false }
-);
+      // 主页面不应该被上下拖动。输入控件、底部弹窗不在这里处理。
+      if (!event.target.closest(".settings-sheet.is-open, .editor-sheet.is-open")) {
+        event.preventDefault();
+      }
+    },
+    { passive: false }
+  );
 }
 
 function bindSheetHandleGestures() {
-  document.querySelectorAll(".sheet-handle").forEach((handle) => {
-    const sheet = handle.closest(".settings-sheet, .editor-sheet");
+  document.querySelectorAll(".settings-sheet, .editor-sheet").forEach((sheet) => {
     let startY = 0;
     let currentY = 0;
     let isDragging = false;
+    let shouldTrack = false;
+    let startedFromHandle = false;
+    let startScrollTop = 0;
 
-    handle.addEventListener("pointerdown", (event) => {
-      startY = event.clientY;
+    const isInteractiveTarget = (target) => {
+      return Boolean(
+        target.closest(
+          "button, input, select, textarea, label, .picker-field, .picker-hue-range, .range-input, .language-menu"
+        )
+      );
+    };
+
+    const startDrag = (event) => {
+      if (event.touches.length !== 1) return;
+
+      startedFromHandle = Boolean(event.target.closest(".sheet-handle"));
+      shouldTrack = startedFromHandle || !isInteractiveTarget(event.target);
+      if (!shouldTrack) return;
+
+      startY = event.touches[0].clientY;
+      startScrollTop = sheet.scrollTop;
       currentY = 0;
+      isDragging = false;
+    };
+
+    const moveDrag = (event) => {
+      if (!shouldTrack || event.touches.length !== 1) return;
+
+      const deltaY = event.touches[0].clientY - startY;
+      const isAtTop = sheet.scrollTop <= 0 || startScrollTop <= 0;
+      const shouldPullDown = startedFromHandle || isDragging || (isAtTop && deltaY > 0);
+
+      if (!shouldPullDown) return;
+
+      currentY = Math.max(0, deltaY);
+      if (currentY < 2) return;
+
       isDragging = true;
-      handle.setPointerCapture(event.pointerId);
+      event.preventDefault();
       sheet.classList.add("is-dragging");
-    });
-
-    handle.addEventListener("pointermove", (event) => {
-      if (!isDragging) return;
-      currentY = Math.max(0, event.clientY - startY);
       sheet.style.transform = `translate(50%, ${currentY}px)`;
-    });
+    };
 
-    const finishDrag = (event) => {
+    const finishDrag = () => {
+      if (!shouldTrack) return;
+
+      shouldTrack = false;
+
       if (!isDragging) return;
       isDragging = false;
-
-      if (handle.hasPointerCapture(event.pointerId)) {
-        handle.releasePointerCapture(event.pointerId);
-      }
-
       sheet.classList.remove("is-dragging");
       sheet.style.transform = "";
 
       if (currentY > 72) closeAllSheets();
+      currentY = 0;
     };
 
-    handle.addEventListener("pointerup", finishDrag);
-    handle.addEventListener("pointercancel", finishDrag);
+    sheet.addEventListener("touchstart", startDrag, { passive: true });
+    sheet.addEventListener("touchmove", moveDrag, { passive: false });
+    sheet.addEventListener("touchend", finishDrag);
+    sheet.addEventListener("touchcancel", finishDrag);
   });
 }
 
@@ -757,8 +848,16 @@ function renderDefaultTopStats() {
   `;
 }
 
+function hideTopStats() {
+  resetTopStatsClasses();
+  els.topStats.classList.add("is-empty");
+  els.topStats.setAttribute("aria-hidden", "true");
+  els.topStats.innerHTML = "";
+}
+
 function resetTopStatsClasses() {
-  els.topStats.classList.remove("is-coin", "is-dice", "is-wheel", "is-number-single", "is-number-group", "is-expanded");
+  els.topStats.classList.remove("is-coin", "is-dice", "is-wheel", "is-number-single", "is-number-group", "is-expanded", "is-empty");
+  els.topStats.removeAttribute("aria-hidden");
 }
 
 function handleReset() {
@@ -968,7 +1067,7 @@ function updateDiceHistoryBar() {
   els.topStats.classList.add("is-dice");
 
   if (!diceState.history.length) {
-    els.topStats.innerHTML = `<span class="dice-history-empty">${t("latestResult")}</span>`;
+    hideTopStats();
     return;
   }
 
@@ -1188,7 +1287,7 @@ function calculateWheelRotation(centerAngle) {
 }
 
 function updateWheelStats() {
-  els.topStats.classList.remove("is-coin", "is-dice", "is-number-single", "is-number-group");
+  resetTopStatsClasses();
   els.topStats.classList.add("is-wheel");
   els.topStats.classList.toggle("is-expanded", wheelState.historyExpanded);
 
@@ -1552,57 +1651,42 @@ function createRandomNumberResult() {
 }
 
 function updateNumberHistoryStats() {
-  if (numberState.settings.count === 1) {
-    updateSingleNumberHistoryBar();
-  } else {
-    updateNumberGroupHistoryMenu();
-  }
-}
-
-function updateSingleNumberHistoryBar() {
-  els.topStats.classList.remove("is-coin", "is-dice", "is-wheel", "is-number-group", "is-expanded");
-  els.topStats.classList.add("is-number-single");
-
-  if (!numberState.history.length) {
-    els.topStats.innerHTML = `<span class="dice-history-empty">${t("latestResult")}</span>`;
-    return;
-  }
-
-  els.topStats.innerHTML = numberState.history
-    .slice()
-    .reverse()
-    .map((group) => `<span class="number-history-chip">${group[0]}</span>`)
-    .join("");
-}
-
-function updateNumberGroupHistoryMenu() {
-  els.topStats.classList.remove("is-coin", "is-dice", "is-wheel", "is-number-single");
+  resetTopStatsClasses();
   els.topStats.classList.add("is-number-group");
   els.topStats.classList.toggle("is-expanded", numberState.historyExpanded);
 
   const total = numberState.history.length;
-  const latest = numberState.history.at(-1);
-  const latestLabel = latest ? formatRandomGroupHistoryItem(0, total, latest) : t("noResult");
-  const items = numberState.history
-    .slice()
-    .reverse()
-    .map((group, index) => `<div class="wheel-history-item">${escapeHtml(formatRandomGroupHistoryItem(index, total, group))}</div>`)
-    .join("");
+  const latest = total
+    ? formatRandomGroupHistoryItem(0, total, numberState.history.at(-1))
+    : t("noResult");
+
+  const items = total
+    ? numberState.history
+        .slice()
+        .reverse()
+        .map((group, index) => {
+          return `<div class="wheel-history-item">${escapeHtml(formatRandomGroupHistoryItem(index, total, group))}</div>`;
+        })
+        .join("")
+    : `<div class="wheel-history-item">${t("noHistory")}</div>`;
 
   els.topStats.innerHTML = `
     <button class="wheel-last-button" id="numberHistoryButton" type="button">
       <span class="material-symbols-rounded" aria-hidden="true">history</span>
-      <span>${escapeHtml(latestLabel)}</span>
+      <span>${escapeHtml(latest)}</span>
     </button>
     <div class="wheel-history-menu">
-      ${items || `<div class="wheel-history-item">${t("noHistory")}</div>`}
+      ${items}
     </div>
   `;
 
-  document.querySelector("#numberHistoryButton").addEventListener("click", () => {
-    numberState.historyExpanded = !numberState.historyExpanded;
-    updateNumberGroupHistoryMenu();
-  });
+  const button = document.querySelector("#numberHistoryButton");
+  if (button) {
+    button.addEventListener("click", () => {
+      numberState.historyExpanded = !numberState.historyExpanded;
+      updateNumberHistoryStats();
+    });
+  }
 }
 
 function resetNumberHistory() {
@@ -1685,7 +1769,8 @@ async function initSettings() {
   els.secondaryThemeColorInput.value = appSettings.secondaryThemeColor;
   els.uiScaleRange.value = appSettings.uiScale;
   els.languageSelect.value = appSettings.language;
-  
+  if (els.darkModeSelect) els.darkModeSelect.value = appSettings.darkMode;
+  applyLayoutSettings();
   if (els.bgOpacityRange && els.bgOpacityValue) {
     els.bgOpacityRange.value = appSettings.backgroundOpacity ?? 0.5;
     els.bgOpacityValue.textContent = Number(appSettings.backgroundOpacity ?? 0.5).toFixed(2);
@@ -1711,6 +1796,11 @@ async function initSettings() {
     saveAppSettings();
   });
 
+  bindLayoutRange(els.topHeightRange, els.topHeightValue, "topHeight");
+  bindLayoutRange(els.dockThicknessRange, els.dockThicknessValue, "dockThickness");
+  bindLayoutRange(els.dockSideGapRange, els.dockSideGapValue, "dockSideGap");
+  bindLayoutRange(els.dockBottomGapRange, els.dockBottomGapValue, "dockBottomGap");
+  
   if (els.presetWallpaperGrid) {
     els.presetWallpaperGrid.addEventListener("click", handleWallpaperGridClick);
     els.presetWallpaperGrid.addEventListener("keydown", handleWallpaperGridKeydown);
@@ -1734,6 +1824,9 @@ async function initSettings() {
 
   els.languageMenuButton.addEventListener("click", () => {
     const willOpen = els.languageMenu.hidden;
+
+    closeDarkModeMenu();
+
     els.languageMenu.hidden = !willOpen;
     els.languageMenuButton.setAttribute("aria-expanded", String(willOpen));
   });
@@ -1744,6 +1837,7 @@ async function initSettings() {
       closeLanguageMenu();
     });
   });
+  bindDarkModeMenu();
 }
 
 function renderColorSwatches() {
@@ -1938,24 +2032,60 @@ function setThemeColor(kind, color, isFinal = true) {
 function applyThemeColor(primaryColor, secondaryColor) {
   const background = normalizeHexColor(primaryColor, defaultAppSettings.primaryThemeColor);
   const accent = normalizeHexColor(secondaryColor, defaultAppSettings.secondaryThemeColor);
-  const primaryContainer = mixHex(accent, "#ffffff", 0.78);
-  const surface = mixHex(background, "#ffffff", 0.72);
-  const surfaceContainer = mixHex(background, "#ffffff", 0.58);
-  const surfaceContainerHigh = mixHex(background, "#ffffff", 0.48);
+  const isDark = getResolvedDarkMode();
+
+  const primaryContainer = isDark
+    ? mixHex(accent, "#1d1b20", 0.62)
+    : mixHex(accent, "#ffffff", 0.78);
+
+  const surface = isDark
+    ? mixHex(background, "#111014", 0.82)
+    : mixHex(background, "#ffffff", 0.72);
+
+  const surfaceContainer = isDark
+    ? mixHex(background, "#1d1b20", 0.72)
+    : mixHex(background, "#ffffff", 0.58);
+
+  const surfaceContainerHigh = isDark
+    ? mixHex(background, "#24212a", 0.66)
+    : mixHex(background, "#ffffff", 0.48);
+
+  els.root.classList.toggle("theme-dark", isDark);
+  els.root.style.colorScheme = isDark ? "dark" : "light";
 
   els.root.style.setProperty("--primary", accent);
   els.root.style.setProperty("--on-primary", getReadableTextColor(accent));
   els.root.style.setProperty("--primary-container", primaryContainer);
-  els.root.style.setProperty("--on-primary-container", getReadableTextColor(primaryContainer));
+  els.root.style.setProperty("--on-primary-container", isDark ? "#f7eef7" : getReadableTextColor(primaryContainer));
   els.root.style.setProperty("--secondary", background);
   els.root.style.setProperty("--surface", surface);
   els.root.style.setProperty("--surface-container", surfaceContainer);
   els.root.style.setProperty("--surface-container-high", surfaceContainerHigh);
-  els.root.style.setProperty("--on-surface", "#1d1b20");
-  els.root.style.setProperty("--on-surface-variant", "#4d444c");
-  els.root.style.setProperty("--outline", mixHex(accent, "#6f6770", 0.72));
-  els.root.style.setProperty("--dock-bg", mixHex(background, "#ffffff", 0.56));
-  document.querySelector("meta[name='theme-color']").setAttribute("content", background);
+  els.root.style.setProperty("--on-surface", isDark ? "#f2edf4" : "#1d1b20");
+  els.root.style.setProperty("--on-surface-variant", isDark ? "#d0c4cf" : "#4d444c");
+  els.root.style.setProperty("--outline", isDark ? mixHex(accent, "#d0c4cf", 0.62) : mixHex(accent, "#6f6770", 0.72));
+  els.root.style.setProperty("--dock-bg", isDark ? "rgba(28, 27, 31, 0.88)" : mixHex(background, "#ffffff", 0.56));
+
+  const statusColor = surface;
+  document.querySelectorAll("meta[name='theme-color']").forEach((meta) => {
+    meta.setAttribute("content", statusColor);
+  });
+
+  document.body.style.backgroundColor = surfaceContainer;
+}
+
+function getResolvedDarkMode() {
+  if (appSettings.darkMode === "dark") return true;
+  if (appSettings.darkMode === "light") return false;
+  return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+if (window.matchMedia) {
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    if (appSettings.darkMode === "auto") {
+      applyThemeColor(appSettings.primaryThemeColor, appSettings.secondaryThemeColor);
+    }
+  });
 }
 
 function applyUiScale(scale) {
@@ -1965,6 +2095,78 @@ function applyUiScale(scale) {
   els.uiScaleRange.value = safeScale;
   els.uiScaleValue.textContent = safeScale.toFixed(2);
 }
+function bindLayoutRange(input, valueNode, key) {
+  if (!input || !valueNode) return;
+
+  input.value = appSettings[key];
+  valueNode.textContent = appSettings[key];
+
+  input.addEventListener("input", () => {
+    appSettings[key] = Number(input.value);
+    valueNode.textContent = appSettings[key];
+    applyLayoutSettings();
+    saveAppSettings();
+  });
+}
+
+function renderDarkModeMenu() {
+  if (!els.darkModeSelect || !els.darkModeMenuText || !els.darkModeMenu) return;
+
+  const mode = appSettings.darkMode || "auto";
+  els.darkModeSelect.value = mode;
+
+  const textMap = {
+    light: t("lightMode"),
+    dark: t("darkModeOnly"),
+    auto: t("autoMode"),
+  };
+
+  els.darkModeMenuText.textContent = textMap[mode] || textMap.auto;
+
+  els.darkModeMenu.querySelectorAll("[data-dark-option]").forEach((button) => {
+    const isActive = button.dataset.darkOption === mode;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-selected", String(isActive));
+  });
+}
+
+function applyLayoutSettings() {
+  const topHeight = clampNumber(appSettings.topHeight, 0, 56, defaultAppSettings.topHeight);
+  const dockThickness = clampNumber(appSettings.dockThickness, 46, 76, defaultAppSettings.dockThickness);
+  const dockSideGap = clampNumber(appSettings.dockSideGap, 12, 64, defaultAppSettings.dockSideGap);
+  const dockBottomGap = clampNumber(appSettings.dockBottomGap, 0, 36, defaultAppSettings.dockBottomGap);
+
+  appSettings.topHeight = topHeight;
+  appSettings.dockThickness = dockThickness;
+  appSettings.dockSideGap = dockSideGap;
+  appSettings.dockBottomGap = dockBottomGap;
+
+  els.root.style.setProperty("--top-extra", `${topHeight}px`);
+  els.root.style.setProperty("--dock-thickness", `${dockThickness}px`);
+  els.root.style.setProperty("--dock-side-gap", `${dockSideGap}px`);
+  els.root.style.setProperty("--dock-bottom-gap", `${dockBottomGap}px`);
+
+  if (els.topHeightRange) els.topHeightRange.value = topHeight;
+  if (els.topHeightValue) els.topHeightValue.textContent = topHeight;
+
+  if (els.dockThicknessRange) els.dockThicknessRange.value = dockThickness;
+  if (els.dockThicknessValue) els.dockThicknessValue.textContent = dockThickness;
+
+  if (els.dockSideGapRange) els.dockSideGapRange.value = dockSideGap;
+  if (els.dockSideGapValue) els.dockSideGapValue.textContent = dockSideGap;
+
+  if (els.dockBottomGapRange) els.dockBottomGapRange.value = dockBottomGap;
+  if (els.dockBottomGapValue) els.dockBottomGapValue.textContent = dockBottomGap;
+
+  updateDockIndicator();
+}
+
+function clampNumber(value, min, max, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.max(min, Math.min(max, number));
+}
+
 function applyBackgroundImage(dataUrl, opacity = defaultAppSettings.backgroundOpacity) {
   const parsedOpacity = Number(opacity);
   const safeOpacity = Number.isFinite(parsedOpacity) ? Math.max(0, Math.min(1, parsedOpacity)) : defaultAppSettings.backgroundOpacity;
@@ -1990,10 +2192,17 @@ async function loadWallpapers() {
   } catch (error) {
     console.error("Failed to load wallpapers from IndexedDB:", error);
     wallpapers = [];
-    appSettings.activeWallpaperId = "";
-    appSettings.backgroundImage = "";
-    applyBackgroundImage("", appSettings.backgroundOpacity);
-    saveAppSettings();
+
+    // 极端情况下 IndexedDB 不可用时，保留旧版 localStorage 里的 dataURL 作为临时兜底，
+    // 不再主动把新壁纸写进 localStorage。
+    if (appSettings.backgroundImage && appSettings.backgroundImage.startsWith("data:image/")) {
+      applyBackgroundImage(appSettings.backgroundImage, appSettings.backgroundOpacity);
+    } else {
+      appSettings.activeWallpaperId = "";
+      appSettings.backgroundImage = "";
+      applyBackgroundImage("", appSettings.backgroundOpacity);
+      saveAppSettings();
+    }
   }
 
   renderWallpaperGrid();
@@ -2104,7 +2313,7 @@ function applyActiveWallpaperFromSettings() {
   const activeWallpaper = getActiveWallpaper();
 
   if (activeWallpaper) {
-    appSettings.backgroundImage = activeWallpaper.dataUrl;
+    appSettings.backgroundImage = "";
     applyBackgroundImage(activeWallpaper.dataUrl, appSettings.backgroundOpacity);
     saveAppSettings();
     return;
@@ -2124,8 +2333,9 @@ async function selectWallpaper(id) {
   if (!wallpaper) return;
 
   appSettings.activeWallpaperId = wallpaper.id;
-  appSettings.backgroundImage = wallpaper.dataUrl;
+  appSettings.backgroundImage = "";
   applyBackgroundImage(wallpaper.dataUrl, appSettings.backgroundOpacity);
+  requestPersistentStorage();
   saveAppSettings();
   renderWallpaperGrid();
 }
@@ -2214,6 +2424,7 @@ async function migrateLegacyBackgroundImage() {
   await saveWallpaperToDb(migratedWallpaper);
   wallpapers.push(migratedWallpaper);
   appSettings.activeWallpaperId = migratedWallpaper.id;
+  appSettings.backgroundImage = "";
   saveAppSettings();
 }
 
@@ -2264,6 +2475,7 @@ async function saveWallpaperToDb(wallpaper) {
 
     transaction.oncomplete = () => {
       db.close();
+      requestPersistentStorage();
       resolve();
     };
     transaction.onerror = () => {
@@ -2304,6 +2516,45 @@ function createWallpaperId() {
   if (window.crypto?.randomUUID) return crypto.randomUUID();
   return `wallpaper-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
+function setDarkMode(mode) {
+  appSettings.darkMode = ["light", "dark", "auto"].includes(mode) ? mode : "auto";
+
+  if (els.darkModeSelect) {
+    els.darkModeSelect.value = appSettings.darkMode;
+  }
+
+  updateDarkModeMenu();
+  applyThemeColor(appSettings.primaryThemeColor, appSettings.secondaryThemeColor);
+  saveAppSettings();
+}
+
+function updateDarkModeMenu() {
+  if (!els.darkModeMenu || !els.darkModeMenuText) return;
+
+  const mode = ["light", "dark", "auto"].includes(appSettings.darkMode)
+    ? appSettings.darkMode
+    : "auto";
+
+  els.darkModeMenuText.textContent = getDarkModeName(mode);
+
+  els.darkModeMenu.querySelectorAll("[data-dark-option]").forEach((button) => {
+    const isActive = button.dataset.darkOption === mode;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-selected", String(isActive));
+  });
+}
+
+function getDarkModeName(mode) {
+  if (mode === "light") return t("lightMode");
+  if (mode === "dark") return t("darkModeOnly");
+  return t("autoMode");
+}
+
+function closeDarkModeMenu() {
+  if (!els.darkModeMenu || !els.darkModeMenuButton) return;
+  els.darkModeMenu.hidden = true;
+  els.darkModeMenuButton.setAttribute("aria-expanded", "false");
+}
 
 function setLanguage(lang) {
   appSettings.language = i18n[lang] ? lang : defaultAppSettings.language;
@@ -2332,6 +2583,8 @@ function applyI18n() {
     node.textContent = t(node.dataset.navLabel);
   });
   renderWallpaperGrid();
+  renderDarkModeMenu();
+  updateDarkModeMenu();
 }
 
 function updateLanguageMenu() {
@@ -2343,7 +2596,12 @@ function updateLanguageMenu() {
     button.setAttribute("aria-selected", String(isActive));
   });
 }
+function closeLanguageMenu() {
+  if (!els.languageMenu || !els.languageMenuButton) return;
 
+  els.languageMenu.hidden = true;
+  els.languageMenuButton.setAttribute("aria-expanded", "false");
+}
 function openSettings() {
   openSheet(els.settingsSheet);
 }
@@ -2363,26 +2621,98 @@ function openSheet(sheet) {
 function closeAllSheets() {
   closeLanguageMenu();
 
+  if (typeof closeDarkModeMenu === "function") {
+    closeDarkModeMenu();
+  }
+
   [els.settingsSheet, els.wheelEditorSheet, els.numberSettingsSheet].forEach((sheet) => {
-    sheet.classList.remove("is-open", "is-expanded");
+    if (!sheet) return;
+    sheet.classList.remove("is-open", "is-expanded", "is-dragging");
     sheet.setAttribute("aria-hidden", "true");
+    sheet.style.transform = "";
   });
 
+  if (els.scrim) {
+    els.scrim.hidden = true;
+  }
+
   document.body.classList.remove("sheet-open");
-
-  window.setTimeout(() => {
-    const hasOpenSheet =
-      els.settingsSheet.classList.contains("is-open") ||
-      els.wheelEditorSheet.classList.contains("is-open") ||
-      els.numberSettingsSheet.classList.contains("is-open");
-
-    if (!hasOpenSheet) els.scrim.hidden = true;
-  }, 240);
 }
-function closeLanguageMenu() {
-  if (!els.languageMenu || !els.languageMenuButton) return;
-  els.languageMenu.hidden = true;
-  els.languageMenuButton.setAttribute("aria-expanded", "false");
+function bindDarkModeMenu() {
+  if (!els.darkModeMenuButton || !els.darkModeMenu) return;
+
+  if (els.darkModeMenuButton.dataset.bound === "1") {
+    updateDarkModeMenu();
+    return;
+  }
+
+  els.darkModeMenuButton.dataset.bound = "1";
+  updateDarkModeMenu();
+
+  els.darkModeMenuButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+
+    const willOpen = els.darkModeMenu.hidden;
+
+    closeLanguageMenu();
+
+    els.darkModeMenu.hidden = !willOpen;
+    els.darkModeMenuButton.setAttribute("aria-expanded", String(willOpen));
+  });
+
+  els.darkModeMenu.querySelectorAll("[data-dark-option]").forEach((button) => {
+    button.addEventListener("click", () => {
+      setDarkMode(button.dataset.darkOption);
+      closeDarkModeMenu();
+    });
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest(".dark-mode-picker")) {
+      closeDarkModeMenu();
+    }
+  });
+}
+
+function setDarkMode(mode) {
+  appSettings.darkMode = ["light", "dark", "auto"].includes(mode) ? mode : "auto";
+
+  if (els.darkModeSelect) {
+    els.darkModeSelect.value = appSettings.darkMode;
+  }
+
+  updateDarkModeMenu();
+  applyThemeColor(appSettings.primaryThemeColor, appSettings.secondaryThemeColor);
+  saveAppSettings();
+}
+
+function updateDarkModeMenu() {
+  if (!els.darkModeMenu || !els.darkModeMenuText) return;
+
+  const mode = ["light", "dark", "auto"].includes(appSettings.darkMode)
+    ? appSettings.darkMode
+    : "auto";
+
+  els.darkModeMenuText.textContent = getDarkModeName(mode);
+
+  els.darkModeMenu.querySelectorAll("[data-dark-option]").forEach((button) => {
+    const isActive = button.dataset.darkOption === mode;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-selected", String(isActive));
+  });
+}
+
+function getDarkModeName(mode) {
+  if (mode === "light") return t("lightMode");
+  if (mode === "dark") return t("darkModeOnly");
+  return t("autoMode");
+}
+
+function closeDarkModeMenu() {
+  if (!els.darkModeMenu || !els.darkModeMenuButton) return;
+
+  els.darkModeMenu.hidden = true;
+  els.darkModeMenuButton.setAttribute("aria-expanded", "false");
 }
 
 function loadState() {
@@ -2424,6 +2754,12 @@ function normalizeAppSettings(settings) {
     activeWallpaperId: typeof settings.activeWallpaperId === "string" ? settings.activeWallpaperId : "",
     backgroundOpacity: Number.isFinite(Number(settings.backgroundOpacity)) ? Math.max(0, Math.min(1, Number(settings.backgroundOpacity))) : defaultAppSettings.backgroundOpacity,
     language: i18n[settings.language] ? settings.language : defaultAppSettings.language,
+    //以下是新增加的 
+    topHeight: clampNumber(settings.topHeight, 0, 56, defaultAppSettings.topHeight),
+    dockThickness: clampNumber(settings.dockThickness, 46, 76, defaultAppSettings.dockThickness),
+    dockSideGap: clampNumber(settings.dockSideGap, 12, 64, defaultAppSettings.dockSideGap),
+    dockBottomGap: clampNumber(settings.dockBottomGap, 0, 36, defaultAppSettings.dockBottomGap),
+    darkMode: ["light", "dark", "auto"].includes(settings.darkMode) ? settings.darkMode : defaultAppSettings.darkMode,
   };
 }
 //==================修改结束 ===============
@@ -2611,6 +2947,6 @@ function escapeHtml(value) {
 }
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js');
+    navigator.serviceWorker.register('./service-worker.js');
   });
 }
