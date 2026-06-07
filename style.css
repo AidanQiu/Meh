@@ -26,7 +26,7 @@
   --top-extra: 16px;
   --dock-thickness: 58px;
   --dock-side-gap: 28px;
-  --dock-bottom-gap: 0px;
+  --dock-bottom-gap: 18px;
   --gesture-safe-bottom: 0px;
   --app-height: 100dvh;
 }

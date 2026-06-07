@@ -107,6 +107,15 @@ const i18n = {
     themeColor: "Theme color",
     primaryThemeColor: "Primary theme color (background)",
     secondaryThemeColor: "Secondary theme color (text/buttons)",
+    darkMode: "Dark mode",
+    lightMode: "Light",
+    darkModeOnly: "Dark",
+    autoMode: "Auto",
+    personalization: "Personalization",
+    topHeight: "Top height",
+    dockThickness: "Dock height",
+    dockSideGap: "Side margins",
+    dockBottomGap: "Bottom spacing",
     backgroundImage: "Custom background",
     backgroundOpacity: "Background opacity",
     clear: "Clear",
@@ -179,6 +188,15 @@ const i18n = {
     themeColor: "テーマカラー",
     primaryThemeColor: "メイン色（背景）",
     secondaryThemeColor: "サブ色（文字/ボタン）",
+    darkMode: "ダークモード",
+    lightMode: "ライト",
+    darkModeOnly: "ダーク",
+    autoMode: "自動",
+    personalization: "カスタマイズ",
+    topHeight: "上部の高さ",
+    dockThickness: "ドックの高さ",
+    dockSideGap: "左右の余白",
+    dockBottomGap: "下部の距離",
     backgroundImage: "背景画像",
     backgroundOpacity: "背景画像の透明度",
     clear: "クリア",
@@ -251,6 +269,15 @@ const i18n = {
     themeColor: "Тақырып түсі",
     primaryThemeColor: "Негізгі түс (фон)",
     secondaryThemeColor: "Қосымша түс (мәтін/батырма)",
+    darkMode: "Қараңғы режим",
+    lightMode: "Жарық",
+    darkModeOnly: "Қараңғы",
+    autoMode: "Авто",
+    personalization: "Жекелеу",
+    topHeight: "Жоғарғы биіктік",
+    dockThickness: "Төменгі жолақ биіктігі",
+    dockSideGap: "Бүйір аралығы",
+    dockBottomGap: "Төменгі аралық",
     backgroundImage: "Фон суреті",
     backgroundOpacity: "Фон мөлдірлігі",
     clear: "Тазалау",
@@ -382,7 +409,7 @@ const defaultAppSettings = {
   topHeight: 16,
   dockThickness: 58,
   dockSideGap: 28,
-  dockBottomGap: 0,
+  dockBottomGap: 18,
   darkMode: "auto",
   backgroundImage: "",
   activeWallpaperId: "",
@@ -2190,7 +2217,7 @@ function applyLayoutSettings() {
   const topHeight = clampNumber(appSettings.topHeight, 0, 56, defaultAppSettings.topHeight);
   const dockThickness = clampNumber(appSettings.dockThickness, 46, 76, defaultAppSettings.dockThickness);
   const dockSideGap = clampNumber(appSettings.dockSideGap, 12, 64, defaultAppSettings.dockSideGap);
-  const dockBottomGap = clampNumber(appSettings.dockBottomGap, 0, 36, defaultAppSettings.dockBottomGap);
+  const dockBottomGap = clampNumber(appSettings.dockBottomGap, 0, 40, defaultAppSettings.dockBottomGap);
 
   appSettings.topHeight = topHeight;
   appSettings.dockThickness = dockThickness;
@@ -2855,7 +2882,7 @@ function normalizeAppSettings(settings) {
     topHeight: clampNumber(settings.topHeight, 0, 56, defaultAppSettings.topHeight),
     dockThickness: clampNumber(settings.dockThickness, 46, 76, defaultAppSettings.dockThickness),
     dockSideGap: clampNumber(settings.dockSideGap, 12, 64, defaultAppSettings.dockSideGap),
-    dockBottomGap: clampNumber(settings.dockBottomGap, 0, 36, defaultAppSettings.dockBottomGap),
+    dockBottomGap: clampNumber(settings.dockBottomGap, 0, 40, defaultAppSettings.dockBottomGap),
     darkMode: ["light", "dark", "auto"].includes(settings.darkMode) ? settings.darkMode : defaultAppSettings.darkMode,
   };
 }
