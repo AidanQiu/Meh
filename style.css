@@ -168,6 +168,12 @@ p {
   font-weight: 700;
 }
 
+.top-stats.is-empty {
+  visibility: hidden;
+  background: transparent;
+  box-shadow: none;
+}
+
 .top-stats.is-coin {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2281,304 +2287,87 @@ body.sheet-open {
     inset 0 1px rgba(255, 255, 255, 0.06),
     inset 0 -8px 18px rgba(0, 0, 0, 0.22);
 }
-
-/* ===== iOS clean fix：底部颜色 + dock + sheet ===== */
-
-html {
-  min-height: 100%;
-  background: var(--surface-container) !important;
-}
-
-body {
-  min-height: 100vh;
-  min-height: 100svh;
-  margin: 0;
-  background: var(--app-background) !important;
-  background-size: var(--app-background-size) !important;
-  background-position: var(--app-background-position) !important;
-  overflow: hidden;
-}
-
-/* 专门填 iPhone Home Indicator 那一条，避免露出异色空白 */
-body::after {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 0;
-  height: max(28px, env(safe-area-inset-bottom, 0px));
-  background: var(--surface-container);
-  pointer-events: none;
-  content: "";
-}
-
-.phone-frame {
-  position: relative;
-  z-index: 1;
-  min-height: 100vh !important;
-  min-height: 100svh !important;
-  background: var(--app-background) !important;
-  background-size: var(--app-background-size) !important;
-  background-position: var(--app-background-position) !important;
-  overflow: hidden;
-}
-
-.app {
-  min-height: 100vh !important;
-  min-height: 100svh !important;
-}
-
-/* 底部导航恢复 fixed，并且压低、压薄 */
-.floating-dock {
-  position: fixed !important;
-  left: 50% !important;
-  right: auto !important;
-  bottom: max(6px, calc(env(safe-area-inset-bottom, 0px) - 22px)) !important;
-  width: min(calc(100vw - 40px), 448px) !important;
-  padding: 4px !important;
-  transform: translateX(-50%) !important;
-}
-
-.dock-item {
-  min-height: calc(50px * var(--ui-scale)) !important;
-  gap: 2px !important;
-}
-
-.dock-indicator {
-  top: 4px !important;
-  bottom: 4px !important;
-}
-
-/* 清零/继续按钮跟着 dock 变矮后重新定位 */
-.page-actions {
-  bottom: calc(
-    max(6px, calc(env(safe-area-inset-bottom, 0px) - 22px))
-    + calc(50px * var(--ui-scale))
-    + 38px
-  ) !important;
-}
-
-/* 弹窗只负责自己，不要影响 body 的触摸 */
-body.sheet-open {
-  overflow: hidden !important;
-  overscroll-behavior: none !important;
-  touch-action: auto !important;
-}
-
-.settings-sheet,
-.editor-sheet {
-  position: fixed !important;
-  right: 50% !important;
-  bottom: 0 !important;
-  width: min(100vw, 480px) !important;
-  max-height: calc(100svh - max(14px, env(safe-area-inset-top, 0px) + 8px)) !important;
-  overflow-y: auto !important;
-  overscroll-behavior-y: none !important;
-  -webkit-overflow-scrolling: touch !important;
-  transform: translate3d(50%, calc(100% + 24px), 0) !important;
-  transition: transform 260ms var(--ease) !important;
-  will-change: transform;
-}
-
-.settings-sheet.is-open,
-.editor-sheet.is-open {
-  transform: translate3d(50%, 0, 0) !important;
-}
-
-.settings-sheet.is-dragging,
-.editor-sheet.is-dragging {
-  transition: none !important;
-}
-
-/* 小白条：视觉小，触摸区域大 */
-.sheet-handle {
-  position: relative !important;
-  width: 120px !important;
-  height: 34px !important;
-  margin: -2px auto 0 !important;
-  background: transparent !important;
-  touch-action: none !important;
-}
-
-.sheet-handle::before {
-  position: absolute !important;
-  left: 50% !important;
-  top: 14px !important;
-  width: 42px !important;
-  height: 4px !important;
-  border-radius: 999px !important;
-  background: var(--outline) !important;
-  opacity: 0.38 !important;
-  transform: translateX(-50%) !important;
-  content: "" !important;
-}
-/* ===== bottom dock stable fix：底部导航不跟显示大小漂移 ===== */
-
-:root {
-  --dock-real-height: 56px;
-  --dock-real-bottom: 0px;
-}
-
-.floating-dock {
-  position: fixed !important;
-  left: 50% !important;
-  right: auto !important;
-  bottom: var(--dock-real-bottom) !important;
-  width: min(calc(100vw - 36px), 448px) !important;
-  height: var(--dock-real-height) !important;
-  padding: 4px !important;
-  transform: translateX(-50%) !important;
-}
-
-.dock-item {
-  min-height: 48px !important;
-  gap: 2px !important;
-}
-
-.dock-indicator {
-  top: 4px !important;
-  bottom: 4px !important;
-}
-
-.page-actions {
-  bottom: calc(var(--dock-real-bottom) + var(--dock-real-height) + 34px) !important;
-}
-
-/* ===== final iOS viewport + sheet gesture fix =====
-   放在文件最后，统一覆盖前面几段临时 fix，避免 100svh / 100dvh / !important 互相打架。 */
-:root {
-  --app-viewport-height: 100dvh;
-  --dock-content-height: var(--dock-thickness);
-  --dock-real-height: calc(var(--dock-content-height) + 8px);
-  --dock-real-bottom: max(var(--dock-bottom-gap), env(safe-area-inset-bottom, 0px));
-  --page-bottom-reserve: calc(var(--dock-real-bottom) + var(--dock-real-height) + 92px);
-  --sheet-hidden-y: calc(100% + 28px);
-}
+/* ===== iOS 最小修复：高度、底部 dock、设置面板 ===== */
 
 html,
 body {
   width: 100%;
-  height: var(--app-viewport-height) !important;
-  min-height: var(--app-viewport-height) !important;
-  overflow: hidden !important;
-  background: var(--app-background) !important;
-  background-size: var(--app-background-size) !important;
-  background-position: var(--app-background-position) !important;
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
-body::after {
-  height: max(28px, env(safe-area-inset-bottom, 0px)) !important;
-  background: var(--app-background) !important;
-  background-size: var(--app-background-size) !important;
-  background-position: var(--app-background-position) !important;
+body {
+  overflow: hidden;
+  background: var(--app-background);
+  background-size: var(--app-background-size);
+  background-position: var(--app-background-position);
 }
 
 .phone-frame {
-  width: min(100vw, 480px);
-  height: var(--app-viewport-height) !important;
-  min-height: var(--app-viewport-height) !important;
-  background: var(--app-background) !important;
-  background-size: var(--app-background-size) !important;
-  background-position: var(--app-background-position) !important;
-  overflow: hidden !important;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  overflow: hidden;
 }
 
 .app {
-  height: var(--app-viewport-height) !important;
-  min-height: var(--app-viewport-height) !important;
-  padding-bottom: var(--page-bottom-reserve) !important;
-  overflow: hidden !important;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding-bottom: calc(
+    var(--dock-bottom-gap)
+    + env(safe-area-inset-bottom, 0px)
+    + var(--dock-thickness)
+    + calc(110px * var(--ui-scale))
+  );
 }
 
-#customBgLayer {
-  height: var(--app-viewport-height) !important;
-}
-
+/* 底部导航继续使用你的设置项，不要写死高度 */
 .floating-dock {
-  position: fixed !important;
-  left: 50% !important;
-  right: auto !important;
-  bottom: var(--dock-real-bottom) !important;
-  width: min(calc(100vw - (var(--dock-side-gap) * 2)), 448px) !important;
-  height: var(--dock-real-height) !important;
-  padding: 4px !important;
-  transform: translate3d(-50%, 0, 0) !important;
+  position: fixed;
+  left: 50%;
+  right: auto;
+  bottom: calc(var(--dock-bottom-gap) + env(safe-area-inset-bottom, 0px));
+  width: min(calc(100vw - calc(var(--dock-side-gap) * 2)), 448px);
+  padding: 6px;
+  transform: translate3d(-50%, 0, 0);
+  will-change: transform;
 }
 
 .dock-item {
-  min-height: var(--dock-content-height) !important;
-}
-
-.dock-indicator {
-  top: 4px !important;
-  bottom: 4px !important;
+  min-height: var(--dock-thickness);
 }
 
 .page-actions {
-  bottom: calc(var(--dock-real-bottom) + var(--dock-real-height) + 34px) !important;
+  bottom: calc(
+    var(--dock-bottom-gap)
+    + env(safe-area-inset-bottom, 0px)
+    + var(--dock-thickness)
+    + 46px
+  );
 }
 
+/* iOS 上 backdrop-filter 拖动时很容易卡 */
+.scrim {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* 设置面板：不要用 !important，否则 JS 拖动不会跟手 */
 .settings-sheet,
 .editor-sheet {
-  --sheet-y: var(--sheet-hidden-y);
-  position: fixed !important;
-  right: 50% !important;
-  bottom: 0 !important;
-  width: min(100vw, 480px) !important;
-  max-height: calc(var(--app-viewport-height) - max(14px, env(safe-area-inset-top, 0px) + 8px)) !important;
-  overflow-y: auto !important;
-  overscroll-behavior-y: contain !important;
-  -webkit-overflow-scrolling: touch !important;
-  transform: translate3d(50%, var(--sheet-y), 0) !important;
-  transition: transform 260ms var(--ease) !important;
+  max-height: calc(100dvh - max(14px, env(safe-area-inset-top, 0px) + 8px));
+  transform: translate3d(50%, calc(100% + 24px), 0);
+  transition: transform 220ms var(--ease);
   will-change: transform;
-  contain: layout paint;
+  -webkit-overflow-scrolling: touch;
 }
 
 .settings-sheet.is-open,
 .editor-sheet.is-open {
-  --sheet-y: 0px;
+  transform: translate3d(50%, 0, 0);
 }
 
 .settings-sheet.is-dragging,
 .editor-sheet.is-dragging {
-  transition: none !important;
-  overflow-y: hidden !important;
-}
-
-.settings-sheet::after,
-.editor-sheet::after {
-  height: max(12px, env(safe-area-inset-bottom, 0px)) !important;
-}
-
-body.sheet-open {
-  overflow: hidden !important;
-  overscroll-behavior: none !important;
-  touch-action: auto !important;
-}
-
-/* ID 选择器也放到最后：覆盖前面 #settingsSheet/#wheelEditorSheet 的 82dvh !important。 */
-#settingsSheet,
-#wheelEditorSheet {
-  max-height: min(calc(var(--app-viewport-height) - max(14px, env(safe-area-inset-top, 0px) + 8px)), 720px) !important;
-  padding-bottom: max(24px, calc(env(safe-area-inset-bottom, 0px) + 16px)) !important;
-}
-
-#numberSettingsSheet {
-  max-height: min(calc(var(--app-viewport-height) - max(18px, env(safe-area-inset-top, 0px) + 12px)), 640px) !important;
-  padding-bottom: max(22px, calc(env(safe-area-inset-bottom, 0px) + 14px)) !important;
-}
-
-@media (min-width: 481px) {
-  body {
-    height: auto !important;
-    min-height: 100vh !important;
-    overflow: auto !important;
-  }
-
-  .phone-frame,
-  .app {
-    height: calc(100vh - 36px) !important;
-    min-height: calc(100vh - 36px) !important;
-  }
+  transition: none;
 }

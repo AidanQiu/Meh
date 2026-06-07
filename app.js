@@ -730,17 +730,26 @@ function bindSheetHandleGestures() {
       const shouldClose = currentY > 88 || totalDeltaY > Math.min(180, sheet.clientHeight * 0.28);
 
       if (shouldClose) {
-        setSheetOffset(sheet, `${currentY}px`);
+        sheet.style.transform = `translate3d(50%, ${currentY}px, 0)`;
 
         requestAnimationFrame(() => {
-          setSheetOffset(sheet, "calc(100% + 28px)");
+          sheet.style.transform = "translate3d(50%, calc(100% + 24px), 0)";
         });
 
         closeTimer = window.setTimeout(() => {
-          closeAllSheets();
+          sheet.classList.remove("is-open", "is-expanded", "is-dragging");
+          sheet.setAttribute("aria-hidden", "true");
+          sheet.style.transform = "";
           closeTimer = null;
-        }, 260);
-      } else {
+
+          const hasOpenSheet = document.querySelector(".settings-sheet.is-open, .editor-sheet.is-open");
+          if (!hasOpenSheet) {
+            els.scrim.hidden = true;
+            document.body.classList.remove("sheet-open");
+          }
+        }, 220);
+      }
+      else {
         setSheetOffset(sheet, `${currentY}px`);
 
         requestAnimationFrame(() => {
