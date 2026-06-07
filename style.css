@@ -330,26 +330,9 @@ p {
 }
 
 .page-heading h1 {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 8px;
   font-size: calc(36px * var(--ui-scale));
   line-height: 1.08;
   letter-spacing: 0;
-}
-
-.debug-revision-badge {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--primary-container) 78%, transparent);
-  color: var(--primary);
-  padding: 3px 8px;
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.2;
-  vertical-align: middle;
 }
 
 .page-card {

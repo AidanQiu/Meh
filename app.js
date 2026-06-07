@@ -4,7 +4,6 @@ const STORAGE_KEY = "meh-shell-state-v1";
 const WHEEL_PRESETS_KEY = "meh-wheel-presets-v1";
 const NUMBER_SETTINGS_KEY = "meh-number-settings-v1";
 const APP_SETTINGS_KEY = "meh-app-settings-v2";
-const DEBUG_REVISION_LABEL = "第4次修改";
 
 const i18n = {
   zh: {
@@ -329,7 +328,34 @@ const pages = {
   },
 };
 
-const wheelColors = ["#c9b8f5", "#9be3ce", "#f5bdcb", "#ffd086", "#9dccf3", "#d8bfd2", "#b9dfae", "#f2b8a8"];
+const wheelColors = [
+  "#c9b8f5",
+  "#9be3ce",
+  "#f5bdcb",
+  "#ffd086",
+  "#9dccf3",
+  "#d8bfd2",
+  "#b9dfae",
+  "#f2b8a8",
+  "#c5d98b",
+  "#f0c38f",
+  "#b8c7f0",
+  "#e0b7db",
+];
+const wheelDarkColors = [
+  "#7f6ac3",
+  "#4c9d87",
+  "#b7687b",
+  "#b77f36",
+  "#4d7fb0",
+  "#8c6389",
+  "#6f985e",
+  "#b06d5d",
+  "#7e9442",
+  "#a87543",
+  "#6377b0",
+  "#9b5d94",
+];
 
 const defaultWheelOptions = [
   { text: "选项 1", weight: 1 },
@@ -823,12 +849,6 @@ function renderPage() {
   const page = pages[state.page] || pages.coin;
 
   els.pageTitle.textContent = t(state.page);
-  if (state.page === "coin") {
-    const badge = document.createElement("span");
-    badge.className = "debug-revision-badge";
-    badge.textContent = DEBUG_REVISION_LABEL;
-    els.pageTitle.append(" ", badge);
-  }
   els.pageActions.hidden = !["coin", "dice", "wheel", "number"].includes(state.page);
   updateFeatureButton();
 
@@ -1206,19 +1226,21 @@ function renderWheelPage() {
 
 function renderWheelSvg() {
   const sectors = buildWheelSectors();
+  const isDark = els.root.classList.contains("theme-dark");
   const parts = sectors
     .map((sector, index) => {
       const labelPoint = polarToCartesian(100, 100, 58, sector.centerAngle);
       const rotate = sector.centerAngle + 90;
+      const fillColor = getWheelSectorColor(index, isDark);
       return `
-        <path d="${describeSector(100, 100, 96, sector.startAngle, sector.endAngle)}" fill="${wheelColors[index % wheelColors.length]}"></path>
+        <path d="${describeSector(100, 100, 96, sector.startAngle, sector.endAngle)}" fill="${fillColor}"></path>
         <text
           x="${labelPoint.x}"
           y="${labelPoint.y}"
           text-anchor="middle"
           dominant-baseline="middle"
           transform="rotate(${rotate} ${labelPoint.x} ${labelPoint.y})"
-          fill="#2d2831"
+          fill="${isDark ? "#f7f0ff" : "#2d2831"}"
           font-size="9"
           font-weight="700"
         >${escapeHtml(truncateLabel(sector.option.text))}</text>
@@ -1239,6 +1261,11 @@ function renderWheelSvg() {
       <circle cx="100" cy="100" r="96" fill="none" stroke="rgba(255,255,255,0.72)" stroke-width="3"></circle>
     </svg>
   `;
+}
+
+function getWheelSectorColor(index, isDark = false) {
+  const palette = isDark ? wheelDarkColors : wheelColors;
+  return palette[index % palette.length];
 }
 
 function buildWheelSectors() {
