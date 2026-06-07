@@ -545,6 +545,18 @@ async function init() {
   bindEvents();
   applyI18n();
   renderPage();
+
+  requestAnimationFrame(() => {
+    applyUiScale(appSettings.uiScale);
+    applyLayoutSettings();
+    updateDockIndicator();
+
+    requestAnimationFrame(() => {
+      applyUiScale(appSettings.uiScale);
+      applyLayoutSettings();
+      updateDockIndicator();
+    });
+  });
 }
 
 function bindEvents() {
@@ -1872,6 +1884,8 @@ async function initSettings() {
   els.uiScaleRange.value = appSettings.uiScale;
   els.languageSelect.value = appSettings.language;
   if (els.darkModeSelect) els.darkModeSelect.value = appSettings.darkMode;
+
+  applyUiScale(appSettings.uiScale);
   applyLayoutSettings();
   if (els.bgOpacityRange && els.bgOpacityValue) {
     els.bgOpacityRange.value = appSettings.backgroundOpacity ?? 0.5;
@@ -1889,7 +1903,6 @@ async function initSettings() {
   renderColorSwatches();
   initCustomColorPickers();
   applyThemeColor(appSettings.primaryThemeColor, appSettings.secondaryThemeColor);
-  applyUiScale(appSettings.uiScale);
   await loadWallpapers();
 
   els.uiScaleRange.addEventListener("input", () => {
@@ -2238,7 +2251,7 @@ function applyLayoutSettings() {
   const topHeight = clampNumber(appSettings.topHeight, 0, 56, defaultAppSettings.topHeight);
   const dockThickness = clampNumber(appSettings.dockThickness, 46, 76, defaultAppSettings.dockThickness);
   const dockSideGap = clampNumber(appSettings.dockSideGap, 12, 64, defaultAppSettings.dockSideGap);
-  const dockBottomGap = clampNumber(appSettings.dockBottomGap, 0, 36, defaultAppSettings.dockBottomGap);
+  const dockBottomGap = clampNumber(appSettings.dockBottomGap, 0, 96, defaultAppSettings.dockBottomGap);
 
   appSettings.topHeight = topHeight;
   appSettings.dockThickness = dockThickness;
@@ -2872,7 +2885,7 @@ function normalizeAppSettings(settings) {
     topHeight: clampNumber(settings.topHeight, 0, 56, defaultAppSettings.topHeight),
     dockThickness: clampNumber(settings.dockThickness, 46, 76, defaultAppSettings.dockThickness),
     dockSideGap: clampNumber(settings.dockSideGap, 12, 64, defaultAppSettings.dockSideGap),
-    dockBottomGap: clampNumber(settings.dockBottomGap, 0, 36, defaultAppSettings.dockBottomGap),
+    dockBottomGap: clampNumber(settings.dockBottomGap, 0, 96, defaultAppSettings.dockBottomGap),
     darkMode: ["light", "dark", "auto"].includes(settings.darkMode) ? settings.darkMode : defaultAppSettings.darkMode,
   };
 }
