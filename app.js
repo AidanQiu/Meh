@@ -613,21 +613,26 @@ function bindEvents() {
   els.addWheelOptionButton.addEventListener("click", addWheelOption);
   els.saveWheelPresetButton.addEventListener("click", saveCurrentWheelPreset);
   els.saveNumberSettingsButton.addEventListener("click", saveNumberSettingsFromPanel);
-  window.addEventListener("resize", () => {
+  
+  const refreshLayout = () => {
     updateAppHeight();
     applyLayoutSettings();
     updateDockIndicator();
-  });
+  };
+
+  window.addEventListener("resize", refreshLayout);
 
   window.addEventListener("orientationchange", () => {
-    setTimeout(() => {
-      updateAppHeight();
-      applyLayoutSettings();
-      updateDockIndicator();
-    }, 300);
+    setTimeout(refreshLayout, 300);
   });
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", refreshLayout);
+    window.visualViewport.addEventListener("scroll", refreshLayout);
+  }
+
   bindDocumentScrollLock();
-}
+  }
 
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator) || window.location.protocol === "file:") return;
