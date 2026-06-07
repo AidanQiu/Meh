@@ -352,10 +352,10 @@ const defaultAppSettings = {
   primaryThemeColor: "#6b9c94",
   secondaryThemeColor: "#6750a4",
   uiScale: 1,
-  topHeight: 16,
+  topHeight: 12,
   dockThickness: 58,
   dockSideGap: 28,
-  dockBottomGap: 10,
+  dockBottomGap: 6,
   darkMode: "auto",
   backgroundImage: "",
   activeWallpaperId: "",
@@ -502,12 +502,13 @@ const els = {
 };
 
 function updateAppHeight() {
-  const height = Math.ceil(
-    Math.max(
-      window.innerHeight || 0,
-      document.documentElement.clientHeight || 0,
-      window.visualViewport?.height || 0
-    )
+  const viewport = window.visualViewport;
+
+  const height = Math.round(
+    viewport?.height ||
+    window.innerHeight ||
+    document.documentElement.clientHeight ||
+    0
   );
 
   document.documentElement.style.setProperty("--app-height", `${height}px`);
