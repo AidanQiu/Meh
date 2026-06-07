@@ -2186,7 +2186,6 @@ function applyThemeColor(primaryColor, secondaryColor) {
     meta.setAttribute("content", statusColor);
   });
 
-  document.body.style.backgroundColor = surfaceContainer;
 }
 
 function getResolvedDarkMode() {
@@ -3077,3 +3076,4 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./service-worker.js');
   });
 }
+

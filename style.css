@@ -2371,3 +2371,51 @@ body {
 .editor-sheet.is-dragging {
   transition: none;
 }
+
+html,
+body {
+  width: 100%;
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+.phone-frame {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--app-background);
+  background-size: var(--app-background-size);
+  background-position: var(--app-background-position);
+}
+
+.app {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.floating-dock {
+  position: fixed;
+  left: 50%;
+  right: auto;
+  bottom: calc(var(--dock-bottom-gap) + env(safe-area-inset-bottom, 0px));
+  width: min(calc(100vw - calc(var(--dock-side-gap) * 2)), 448px);
+  transform: translate3d(-50%, 0, 0);
+}
+
+.dock-item {
+  min-height: var(--dock-thickness);
+}
+
+.page-actions {
+  bottom: calc(
+    var(--dock-bottom-gap)
+    + env(safe-area-inset-bottom, 0px)
+    + var(--dock-thickness)
+    + 46px
+  );
+}
+
