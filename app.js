@@ -5,6 +5,38 @@ const WHEEL_PRESETS_KEY = "meh-wheel-presets-v1";
 const NUMBER_SETTINGS_KEY = "meh-number-settings-v1";
 const APP_SETTINGS_KEY = "meh-app-settings-v2";
 
+const offlineIconPaths = {
+  add: "M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z",
+  casino:
+    "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm2 4v2h2V7H7zm8 0v2h2V7h-2zm-4 4v2h2v-2h-2zm-4 4v2h2v-2H7zm8 0v2h2v-2h-2z",
+  close: "M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12 19 17.6 17.6 19 12 13.4 6.4 19 5 17.6 10.6 12 5 6.4z",
+  dark_mode: "M21 14.3A8.5 8.5 0 0 1 9.7 3 7 7 0 1 0 21 14.3z",
+  data_usage:
+    "M12 3a9 9 0 1 1-6.4 2.6l1.4 1.4A7 7 0 1 0 12 5V3zm-1 1h2v8h-2V4zm1 13a5 5 0 0 1-4.6-3H5.3A7 7 0 0 0 12 19v-2z",
+  delete:
+    "M7 21a2 2 0 0 1-2-2V8h14v11a2 2 0 0 1-2 2H7zM9 4h6l1 2h4v2H4V6h4l1-2zm0 6v7h2v-7H9zm4 0v7h2v-7h-2z",
+  edit:
+    "M5 18.1V21h2.9L18.6 10.3l-2.9-2.9L5 18.1zM20.7 7a1 1 0 0 0 0-1.4l-2.3-2.3a1 1 0 0 0-1.4 0l-1.8 1.8 3.2 3.2L20.7 7z",
+  expand_more: "M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z",
+  history: "M13 3a9 9 0 1 1-8.3 5.5H2l3.8-3.8L9.6 8.5H6.8A7 7 0 1 0 13 5v5l4 2-.9 1.6L11 10.7V3h2z",
+  image:
+    "M5 5h14a2 2 0 0 1 2 2v12H3V7a2 2 0 0 1 2-2zm1 11h12l-4-5-3 4-2-2.5L6 16zm2-7.5A1.5 1.5 0 1 0 8 5a1.5 1.5 0 0 0 0 3z",
+  language:
+    "M12.9 15.5a15 15 0 0 0 2.6-5.5H18V8h-6V5h-2v3H4v2h9.4a12.5 12.5 0 0 1-2 4.1A13 13 0 0 1 9.7 12h-2.3a16 16 0 0 0 2.6 3.5l-3.2 3.2L8.2 20l3.2-3.2 2 2 1.4-1.4-1.9-1.9zM18 12h2l3 8h-2l-.6-1.8h-2.8L17 20h-2l3-8zm-.8 4.7h1.8l-.9-2.7-.9 2.7z",
+  more_horiz: "M5 10a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm7 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm7 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4z",
+  paid:
+    "M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20zm1 4h-2v2.1c-1.8.3-3 1.4-3 3 0 1.9 1.6 2.7 4 3.2 1.6.4 2 .8 2 1.4 0 .7-.7 1.2-1.8 1.2-1.3 0-2.4-.5-3.2-1.3l-1.3 1.5c.9.9 2 1.4 3.3 1.6V20h2v-2.1c1.9-.3 3.2-1.5 3.2-3.1 0-1.9-1.3-2.8-3.9-3.4-1.8-.4-2.2-.7-2.2-1.3 0-.6.6-1.1 1.7-1.1 1 0 1.9.3 2.8 1l1.2-1.6c-.8-.7-1.7-1.1-2.8-1.3V6z",
+  palette:
+    "M12 3a9 9 0 0 0 0 18h1.5a1.8 1.8 0 0 0 1.2-3.1 1.2 1.2 0 0 1 .8-2.1H17a6 6 0 0 0 0-12h-5zm-4 7a1.4 1.4 0 1 1 0-2.8A1.4 1.4 0 0 1 8 10zm3-3a1.4 1.4 0 1 1 0-2.8A1.4 1.4 0 0 1 11 7zm5 3a1.4 1.4 0 1 1 0-2.8A1.4 1.4 0 0 1 16 10zM7 14a1.4 1.4 0 1 1 0-2.8A1.4 1.4 0 0 1 7 14z",
+  query_stats:
+    "M4 19h16v2H2V3h2v16zm3-2V9h3v8H7zm5 0V5h3v12h-3zm5 0v-6h3v6h-3zM18.5 4 21 6.5l-1.4 1.4-.8-.8-3.6 3.6-2-2L9.4 12 8 10.6l5.2-5.2 2 2 2.2-2.2-.8-.8L18.5 4z",
+  settings:
+    "M19.4 13.5a7.8 7.8 0 0 0 0-3l2-1.5-2-3.5-2.4 1a8 8 0 0 0-2.6-1.5L14 2h-4l-.4 3a8 8 0 0 0-2.6 1.5l-2.4-1-2 3.5 2 1.5a7.8 7.8 0 0 0 0 3l-2 1.5 2 3.5 2.4-1a8 8 0 0 0 2.6 1.5l.4 3h4l.4-3a8 8 0 0 0 2.6-1.5l2.4 1 2-3.5-2-1.5zM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5z",
+  tag: "M20 10v10H4V10h16zM6 12v6h12v-6H6zm5-8h2v5h-2V4zM5 6h4v2H5V6zm10 0h4v2h-4V6z",
+  tune:
+    "M3 6h10v2H3V6zm12-1h2v4h-2V5zm2 1h4v2h-4V6zM3 16h4v2H3v-2zm6-1h2v4H9v-4zm2 1h10v2H11v-2z",
+};
+
 const i18n = {
   zh: {
     appName: "随便吧",
@@ -577,6 +609,20 @@ async function init() {
   bindEvents();
   applyI18n();
   renderPage();
+  hydrateOfflineIcons();
+}
+
+function renderIconElement(iconElement, iconName) {
+  if (!iconElement) return;
+  const name = iconName || iconElement.dataset.icon || iconElement.textContent.trim();
+  iconElement.dataset.icon = name;
+  iconElement.textContent = name;
+}
+
+function hydrateOfflineIcons(root = document) {
+  root.querySelectorAll(".material-symbols-rounded").forEach((iconElement) => {
+    renderIconElement(iconElement);
+  });
 }
 
 function bindEvents() {
@@ -896,6 +942,7 @@ function renderPage() {
   els.dockItems.forEach((item) => {
     item.classList.toggle("is-active", item.dataset.page === state.page);
   });
+  hydrateOfflineIcons();
   updateDockIndicator();
 }
 
@@ -957,7 +1004,9 @@ function updateFeatureButton() {
   const isUseful = isWheel || isNumber;
   els.featureButton.hidden = !isUseful;
   els.topBar.classList.toggle("no-feature", !isUseful);
-  icon.textContent = isWheel || isNumber ? "edit" : "more_horiz";
+  const iconName = isWheel || isNumber ? "edit" : "more_horiz";
+  icon.textContent = iconName;
+  renderIconElement(icon, iconName);
   els.featureButton.classList.toggle("is-feature-active", isUseful);
   els.featureButton.setAttribute("aria-label", isWheel ? t("editWheel") : isNumber ? t("tuneNumber") : "");
 }
@@ -1249,6 +1298,7 @@ function renderWheelPage() {
       </div>
     </div>
   `;
+  hydrateOfflineIcons(els.pageContent);
 }
 
 function renderWheelSvg() {
@@ -1386,6 +1436,7 @@ function updateWheelStats() {
       ${items || `<div class="wheel-history-item">${t("noHistory")}</div>`}
     </div>
   `;
+  hydrateOfflineIcons(els.topStats);
 
   document.querySelector("#wheelHistoryButton").addEventListener("click", () => {
     wheelState.historyExpanded = !wheelState.historyExpanded;
@@ -1509,6 +1560,7 @@ function renderWheelOptionRows() {
   els.wheelOptionList.querySelectorAll("[data-wheel-delete]").forEach((button) => {
     button.addEventListener("click", () => deleteWheelOption(Number(button.dataset.wheelDelete)));
   });
+  hydrateOfflineIcons(els.wheelOptionList);
 }
 
 function syncWheelOptionCount() {
@@ -1757,6 +1809,7 @@ function updateNumberHistoryStats() {
       ${items}
     </div>
   `;
+  hydrateOfflineIcons(els.topStats);
 
   const button = document.querySelector("#numberHistoryButton");
   if (button) {
@@ -1973,6 +2026,7 @@ function renderSwatchGroup(container, colors, activeColor, onPick, onAdd) {
   });
 
   container.querySelector(".swatch-add-button").addEventListener("click", onAdd);
+  hydrateOfflineIcons(container);
 }
 // 原代码
 // function initCustomColorPickers() {
@@ -2325,6 +2379,7 @@ function renderWallpaperGrid() {
     : "";
 
   els.presetWallpaperGrid.innerHTML = wallpaperButtons + addButton;
+  hydrateOfflineIcons(els.presetWallpaperGrid);
 
   if (els.wallpaperDeleteToggle) {
     const hasWallpapers = wallpapers.length > 0;

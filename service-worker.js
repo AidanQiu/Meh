@@ -1,5 +1,5 @@
-const APP_CACHE_NAME = "meh-app-shell-v14";
-const RUNTIME_CACHE_NAME = "meh-runtime-v14";
+const APP_CACHE_NAME = "meh-app-shell-v17";
+const RUNTIME_CACHE_NAME = "meh-runtime-v17";
 
 const APP_SHELL = [
   "./",
@@ -8,6 +8,7 @@ const APP_SHELL = [
   "./app.js",
   "./manifest.webmanifest",
   "./favicon.ico",
+  "./fonts/material-symbols-rounded.woff2",
   "./icons/icon-180.png",
   "./icons/icon-192.png",
   "./icons/icon-512.png"
@@ -56,7 +57,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Google Fonts / icon fonts 等跨域资源：在线时更新，离线时读缓存。
+  // Cross-origin runtime resources: update online, fall back to cache offline.
   event.respondWith(staleWhileRevalidate(request));
 });
 

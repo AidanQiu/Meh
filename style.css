@@ -1,4 +1,16 @@
 :root {
+  font-synthesis: none;
+}
+
+@font-face {
+  font-family: "Material Symbols Rounded";
+  src: url("./fonts/material-symbols-rounded.woff2") format("woff2");
+  font-display: block;
+  font-style: normal;
+  font-weight: 100 700;
+}
+
+:root {
   color-scheme: light;
   --ui-scale: 1;
   --primary: #7d5260;
@@ -73,7 +85,24 @@ p {
 .material-symbols-rounded {
   font-family: "Material Symbols Rounded";
   font-size: calc(22px * var(--ui-scale));
+  font-feature-settings: "liga";
+  font-style: normal;
+  font-weight: 500;
+  font-variation-settings: "FILL" 1, "wght" 500, "GRAD" 0, "opsz" 24;
+  letter-spacing: 0;
   line-height: 1;
+  text-transform: none;
+  white-space: nowrap;
+  word-wrap: normal;
+  -webkit-font-smoothing: antialiased;
+}
+
+.material-symbols-rounded svg {
+  display: block;
+  width: 1em;
+  height: 1em;
+  fill: currentColor;
+  pointer-events: none;
 }
 
 .phone-frame {
