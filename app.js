@@ -502,10 +502,8 @@ const els = {
 };
 
 function updateAppHeight() {
-  const viewport = window.visualViewport;
-
   const height = Math.round(
-    viewport?.height ||
+    window.visualViewport?.height ||
     window.innerHeight ||
     document.documentElement.clientHeight ||
     0
