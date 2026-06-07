@@ -501,6 +501,12 @@ const els = {
   saveNumberSettingsButton: document.querySelector("#saveNumberSettingsButton"),
 };
 
+function updateAppHeight() {
+  const height = window.innerHeight || document.documentElement.clientHeight;
+  document.documentElement.style.setProperty("--app-height", `${height}px`);
+}
+
+updateAppHeight();
 init();
 
 function updateViewportMetrics() {
@@ -531,9 +537,10 @@ function clearSheetOffset(sheet) {
 }
 
 async function init() {
+  updateAppHeight();
+
   registerServiceWorker();
   requestPersistentStorage();
-  bindViewportMetrics();
 
   numberState.settings = loadNumberSettings();
   wheelState.presets = loadWheelPresets();
@@ -547,11 +554,13 @@ async function init() {
   renderPage();
 
   requestAnimationFrame(() => {
+    updateAppHeight();
     applyUiScale(appSettings.uiScale);
     applyLayoutSettings();
     updateDockIndicator();
 
     requestAnimationFrame(() => {
+      updateAppHeight();
       applyUiScale(appSettings.uiScale);
       applyLayoutSettings();
       updateDockIndicator();
@@ -597,7 +606,19 @@ function bindEvents() {
   els.addWheelOptionButton.addEventListener("click", addWheelOption);
   els.saveWheelPresetButton.addEventListener("click", saveCurrentWheelPreset);
   els.saveNumberSettingsButton.addEventListener("click", saveNumberSettingsFromPanel);
-  window.addEventListener("resize", updateDockIndicator);
+  window.addEventListener("resize", () => {
+    updateAppHeight();
+    applyLayoutSettings();
+    updateDockIndicator();
+  });
+
+  window.addEventListener("orientationchange", () => {
+    setTimeout(() => {
+      updateAppHeight();
+      applyLayoutSettings();
+      updateDockIndicator();
+    }, 300);
+  });
   bindDocumentScrollLock();
 }
 
@@ -1908,6 +1929,8 @@ async function initSettings() {
   els.uiScaleRange.addEventListener("input", () => {
     appSettings.uiScale = Number(els.uiScaleRange.value);
     applyUiScale(appSettings.uiScale);
+    applyLayoutSettings();
+    updateDockIndicator();
     saveAppSettings();
   });
 
