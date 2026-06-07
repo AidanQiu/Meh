@@ -4,7 +4,7 @@ const STORAGE_KEY = "meh-shell-state-v1";
 const WHEEL_PRESETS_KEY = "meh-wheel-presets-v1";
 const NUMBER_SETTINGS_KEY = "meh-number-settings-v1";
 const APP_SETTINGS_KEY = "meh-app-settings-v2";
-const DEBUG_REVISION_LABEL = "第1次修改";
+const DEBUG_REVISION_LABEL = "第2次修改";
 
 const i18n = {
   zh: {
