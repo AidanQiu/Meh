@@ -355,7 +355,7 @@ const defaultAppSettings = {
   topHeight: 16,
   dockThickness: 58,
   dockSideGap: 28,
-  dockBottomGap: 10,
+  dockBottomGap: 0,
   darkMode: "auto",
   backgroundImage: "",
   activeWallpaperId: "",

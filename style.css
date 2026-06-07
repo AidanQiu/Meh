@@ -26,8 +26,8 @@
   --top-extra: 16px;
   --dock-thickness: 58px;
   --dock-side-gap: 28px;
-  --dock-bottom-gap: 10px;
-  --gesture-safe-bottom: max(env(safe-area-inset-bottom, 0px), 10px);
+  --dock-bottom-gap: 0px;
+  --gesture-safe-bottom: 0px;
   --app-height: 100dvh;
 }
 
@@ -110,7 +110,7 @@ p {
     env(safe-area-inset-right, 0px)
   );
 
-  padding-bottom: calc(188px * var(--ui-scale) + var(--gesture-safe-bottom));
+  padding-bottom: calc(188px * var(--ui-scale));
   position: relative;
   z-index: 2;
 }
@@ -2009,7 +2009,7 @@ p {
   position: absolute !important;
   left: var(--dock-side-gap) !important;
   right: var(--dock-side-gap) !important;
-  bottom: calc(var(--gesture-safe-bottom) + var(--dock-bottom-gap) + 2px) !important;
+  bottom: var(--dock-bottom-gap) !important;
   width: auto !important;
   transform: none !important;
   padding: 5px !important;
@@ -2027,8 +2027,7 @@ p {
 
 .page-actions {
   bottom: calc(
-    var(--gesture-safe-bottom)
-    + var(--dock-bottom-gap)
+    var(--dock-bottom-gap)
     + calc(var(--dock-thickness) * var(--ui-scale))
     + 44px
   ) !important;
@@ -2141,8 +2140,7 @@ body {
   min-height: 0 !important;
   overflow: hidden !important;
   padding-bottom: calc(
-    var(--gesture-safe-bottom)
-    + var(--dock-bottom-gap)
+    var(--dock-bottom-gap)
     + calc(var(--dock-thickness) * var(--ui-scale))
     + calc(116px * var(--ui-scale))
   ) !important;
