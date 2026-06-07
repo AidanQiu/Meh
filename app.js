@@ -2135,8 +2135,13 @@ if (window.matchMedia) {
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
     if (appSettings.darkMode === "auto") {
       applyThemeColor(appSettings.primaryThemeColor, appSettings.secondaryThemeColor);
+      refreshThemeSensitivePage();
     }
   });
+}
+
+function refreshThemeSensitivePage() {
+  if (state.page === "wheel") renderWheelPage();
 }
 
 function applyUiScale(scale) {
@@ -2576,6 +2581,7 @@ function setDarkMode(mode) {
 
   updateDarkModeMenu();
   applyThemeColor(appSettings.primaryThemeColor, appSettings.secondaryThemeColor);
+  refreshThemeSensitivePage();
   saveAppSettings();
 }
 
@@ -2773,6 +2779,7 @@ function setDarkMode(mode) {
 
   updateDarkModeMenu();
   applyThemeColor(appSettings.primaryThemeColor, appSettings.secondaryThemeColor);
+  refreshThemeSensitivePage();
   saveAppSettings();
 }
 
