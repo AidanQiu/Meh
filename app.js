@@ -595,7 +595,11 @@ async function requestPersistentStorage() {
 }
 
 function syncAppHeight() {
-  const viewportHeight = window.visualViewport?.height || window.innerHeight;
+  const viewportHeight = Math.max(
+    window.innerHeight || 0,
+    document.documentElement.clientHeight || 0,
+    window.visualViewport?.height || 0
+  );
   if (!viewportHeight) return;
 
   els.root.style.setProperty("--app-height", `${Math.round(viewportHeight)}px`);
