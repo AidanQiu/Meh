@@ -607,26 +607,16 @@ function bindSheetHandleGestures() {
     let currentY = 0;
     let isDragging = false;
     let shouldTrack = false;
-    let startedFromHandle = false;
-    let startScrollTop = 0;
-
-    const isInteractiveTarget = (target) => {
-      return Boolean(
-        target.closest(
-          "button, input, select, textarea, label, .picker-field, .picker-hue-range, .range-input, .language-menu"
-        )
-      );
-    };
 
     const startDrag = (event) => {
       if (event.touches.length !== 1) return;
 
-      startedFromHandle = Boolean(event.target.closest(".sheet-handle"));
-      shouldTrack = startedFromHandle || !isInteractiveTarget(event.target);
-      if (!shouldTrack) return;
+      // 只允许从顶部小白条下拉关闭。
+      // 不再从主题色、色块、滑杆等内容区域接管手势，避免 iOS 滚动回弹和弹窗 transform 打架。
+      if (!event.target.closest(".sheet-handle")) return;
 
+      shouldTrack = true;
       startY = event.touches[0].clientY;
-      startScrollTop = sheet.scrollTop;
       currentY = 0;
       isDragging = false;
     };
@@ -635,12 +625,8 @@ function bindSheetHandleGestures() {
       if (!shouldTrack || event.touches.length !== 1) return;
 
       const deltaY = event.touches[0].clientY - startY;
-      const isAtTop = sheet.scrollTop <= 0 || startScrollTop <= 0;
-      const shouldPullDown = startedFromHandle || isDragging || (isAtTop && deltaY > 0);
-
-      if (!shouldPullDown) return;
-
       currentY = Math.max(0, deltaY);
+
       if (currentY < 2) return;
 
       isDragging = true;
@@ -654,7 +640,11 @@ function bindSheetHandleGestures() {
 
       shouldTrack = false;
 
-      if (!isDragging) return;
+      if (!isDragging) {
+        currentY = 0;
+        return;
+      }
+
       isDragging = false;
       sheet.classList.remove("is-dragging");
       sheet.style.transform = "";
@@ -886,7 +876,7 @@ function updateFeatureButton() {
   const isUseful = isWheel || isNumber;
   els.featureButton.hidden = !isUseful;
   els.topBar.classList.toggle("no-feature", !isUseful);
-  icon.textContent = isWheel ? "edit" : isNumber ? "tune" : "more_horiz";
+  icon.textContent = isWheel || isNumber ? "edit" : "more_horiz";
   els.featureButton.classList.toggle("is-feature-active", isUseful);
   els.featureButton.setAttribute("aria-label", isWheel ? t("editWheel") : isNumber ? t("tuneNumber") : "");
 }
