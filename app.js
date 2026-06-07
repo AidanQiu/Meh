@@ -502,7 +502,14 @@ const els = {
 };
 
 function updateAppHeight() {
-  const height = window.innerHeight || document.documentElement.clientHeight;
+  const height = Math.ceil(
+    Math.max(
+      window.innerHeight || 0,
+      document.documentElement.clientHeight || 0,
+      window.visualViewport?.height || 0
+    )
+  );
+
   document.documentElement.style.setProperty("--app-height", `${height}px`);
 }
 
