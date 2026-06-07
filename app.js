@@ -605,61 +605,101 @@ function bindSheetHandleGestures() {
   document.querySelectorAll(".settings-sheet, .editor-sheet").forEach((sheet) => {
     let startY = 0;
     let currentY = 0;
-    let isDragging = false;
-    let shouldTrack = false;
-    let startedFromHandle = false;
     let startScrollTop = 0;
+    let isTracking = false;
+    let isDragging = false;
+    let closeTimer = null;
 
-    const isInteractiveTarget = (target) => {
+    const shouldIgnoreTarget = (target) => {
       return Boolean(
         target.closest(
-          "button, input, select, textarea, label, .picker-field, .picker-hue-range, .range-input, .language-menu"
+          "input, select, textarea, .picker-field, .picker-hue-range, .range-input, .language-menu, .dark-mode-menu"
         )
       );
     };
 
     const startDrag = (event) => {
       if (event.touches.length !== 1) return;
+      if (shouldIgnoreTarget(event.target)) return;
 
-      startedFromHandle = Boolean(event.target.closest(".sheet-handle"));
-      shouldTrack = startedFromHandle || !isInteractiveTarget(event.target);
-      if (!shouldTrack) return;
+      if (closeTimer) {
+        window.clearTimeout(closeTimer);
+        closeTimer = null;
+      }
 
-      startY = event.touches[0].clientY;
-      startScrollTop = sheet.scrollTop;
-      currentY = 0;
+      isTracking = true;
       isDragging = false;
+      startY = event.touches[0].clientY;
+      currentY = 0;
+      startScrollTop = sheet.scrollTop;
     };
 
     const moveDrag = (event) => {
-      if (!shouldTrack || event.touches.length !== 1) return;
+      if (!isTracking || event.touches.length !== 1) return;
 
-      const deltaY = event.touches[0].clientY - startY;
+      const y = event.touches[0].clientY;
+      const deltaY = y - startY;
+      const isPullingDown = deltaY > 0;
       const isAtTop = sheet.scrollTop <= 0 || startScrollTop <= 0;
-      const shouldPullDown = startedFromHandle || isDragging || (isAtTop && deltaY > 0);
+      const startedFromHandle = Boolean(event.target.closest(".sheet-handle"));
+      const startedFromHeader = Boolean(event.target.closest(".sheet-header"));
 
-      if (!shouldPullDown) return;
+      if (!isDragging) {
+        if (Math.abs(deltaY) < 6) return;
 
-      currentY = Math.max(0, deltaY);
-      if (currentY < 2) return;
+        if (!isPullingDown) {
+          isTracking = false;
+          return;
+        }
 
-      isDragging = true;
+        if (!isAtTop && !startedFromHandle && !startedFromHeader) {
+          return;
+        }
+
+        isDragging = true;
+        sheet.classList.add("is-dragging");
+      }
+
       event.preventDefault();
-      sheet.classList.add("is-dragging");
-      sheet.style.transform = `translate(50%, ${currentY}px)`;
+
+      currentY = Math.min(260, Math.max(0, deltaY * 0.86));
+      sheet.style.transform = `translate3d(50%, ${currentY}px, 0)`;
     };
 
     const finishDrag = () => {
-      if (!shouldTrack) return;
+      if (!isTracking) return;
 
-      shouldTrack = false;
+      isTracking = false;
 
-      if (!isDragging) return;
+      if (!isDragging) {
+        currentY = 0;
+        return;
+      }
+
       isDragging = false;
       sheet.classList.remove("is-dragging");
-      sheet.style.transform = "";
 
-      if (currentY > 72) closeAllSheets();
+      const shouldClose = currentY > 82;
+
+      if (shouldClose) {
+        sheet.style.transform = `translate3d(50%, ${currentY}px, 0)`;
+
+        requestAnimationFrame(() => {
+          sheet.style.transform = "translate3d(50%, calc(100% + 24px), 0)";
+        });
+
+        closeTimer = window.setTimeout(() => {
+          closeAllSheets();
+          closeTimer = null;
+        }, 260);
+      } else {
+        sheet.style.transform = `translate3d(50%, ${currentY}px, 0)`;
+
+        requestAnimationFrame(() => {
+          sheet.style.transform = "";
+        });
+      }
+
       currentY = 0;
     };
 
@@ -886,7 +926,7 @@ function updateFeatureButton() {
   const isUseful = isWheel || isNumber;
   els.featureButton.hidden = !isUseful;
   els.topBar.classList.toggle("no-feature", !isUseful);
-  icon.textContent = isWheel ? "edit" : isNumber ? "tune" : "more_horiz";
+  icon.textContent = isWheel || isNumber ? "edit" : "more_horiz";
   els.featureButton.classList.toggle("is-feature-active", isUseful);
   els.featureButton.setAttribute("aria-label", isWheel ? t("editWheel") : isNumber ? t("tuneNumber") : "");
 }

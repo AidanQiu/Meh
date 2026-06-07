@@ -2002,37 +2002,6 @@ p {
   max-height: min(72dvh, 640px) !important;
 }
 
-/* ===== 手机端底部导航栏：再降低一点 ===== */
-.floating-dock {
-  position: absolute !important;
-  left: var(--dock-side-gap) !important;
-  right: var(--dock-side-gap) !important;
-  bottom: calc(var(--gesture-safe-bottom) + var(--dock-bottom-gap)) !important;
-  width: auto !important;
-  transform: none !important;
-  padding: 5px !important;
-}
-
-.dock-item {
-  min-height: calc(var(--dock-thickness) * var(--ui-scale)) !important;
-  gap: 3px !important;
-}
-
-.dock-indicator {
-  top: 5px !important;
-  bottom: 5px !important;
-}
-
-.page-actions {
-  bottom: calc(
-    var(--gesture-safe-bottom)
-    + var(--dock-bottom-gap)
-    + calc(var(--dock-thickness) * var(--ui-scale))
-    + 44px
-  ) !important;
-}
-
-
 /* ===== 弹窗打开时禁止背景跟着滚动 ===== */
 body.sheet-open {
   overflow: hidden !important;
@@ -2092,47 +2061,6 @@ body.sheet-open {
   content: "" !important;
   opacity: 0.38 !important;
   transform: translateX(-50%) !important;
-}
-
-/* ===== Final PWA/mobile interaction fixes ===== */
-html,
-body {
-  width: 100%;
-  height: 100%;
-  overflow: hidden !important;
-  overscroll-behavior: none !important;
-}
-
-body {
-  min-height: 100dvh;
-}
-
-.phone-frame {
-  position: relative;
-  z-index: 1;
-  width: min(100vw, 480px);
-  min-height: 100dvh;
-  margin: 0 auto;
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
-  box-shadow: 0 0 0 1px rgba(127, 116, 124, 0.14), var(--shadow-2);
-  overflow: hidden;
-}
-
-.app {
-  height: 100dvh !important;
-  min-height: 100dvh !important;
-  overflow: hidden !important;
-}
-
-.top-stats.is-empty {
-  visibility: hidden !important;
-  pointer-events: none !important;
-}
-
-body.sheet-open {
-  overflow: hidden !important;
-  overscroll-behavior: none !important;
-  touch-action: auto !important;
 }
 
 .settings-sheet,
@@ -2353,12 +2281,17 @@ body.sheet-open {
     inset 0 1px rgba(255, 255, 255, 0.06),
     inset 0 -8px 18px rgba(0, 0, 0, 0.22);
 }
-/* ===== iOS final override：弹窗、底部颜色、导航栏 ===== */
 
-html,
-body {
-  width: 100%;
+/* ===== iOS clean fix：底部颜色 + dock + sheet ===== */
+
+html {
   min-height: 100%;
+  background: var(--surface-container) !important;
+}
+
+body {
+  min-height: 100vh;
+  min-height: 100svh;
   margin: 0;
   background: var(--app-background) !important;
   background-size: var(--app-background-size) !important;
@@ -2366,72 +2299,41 @@ body {
   overflow: hidden;
 }
 
-body {
-  min-height: 100svh;
-  min-height: 100dvh;
+/* 专门填 iPhone Home Indicator 那一条，避免露出异色空白 */
+body::after {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+  height: max(28px, env(safe-area-inset-bottom, 0px));
+  background: var(--surface-container);
+  pointer-events: none;
+  content: "";
 }
 
 .phone-frame {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh !important;
   min-height: 100svh !important;
-  min-height: 100dvh !important;
   background: var(--app-background) !important;
   background-size: var(--app-background-size) !important;
   background-position: var(--app-background-position) !important;
+  overflow: hidden;
 }
 
-/* 弹窗：用 translate3d，减少 iOS 闪烁 */
-.settings-sheet,
-.editor-sheet {
-  position: fixed !important;
-  right: 50% !important;
-  bottom: 0 !important;
-  width: min(100vw, 480px) !important;
-  max-height: min(82dvh, 720px) !important;
-  overflow-y: auto !important;
-  overscroll-behavior-y: none !important;
-  -webkit-overflow-scrolling: touch !important;
-  transform: translate3d(50%, 105%, 0) !important;
-  transition: transform 260ms var(--ease) !important;
-  will-change: transform;
+.app {
+  min-height: 100vh !important;
+  min-height: 100svh !important;
 }
 
-.settings-sheet.is-open,
-.editor-sheet.is-open {
-  transform: translate3d(50%, 0, 0) !important;
-}
-
-.settings-sheet.is-dragging,
-.editor-sheet.is-dragging {
-  transition: none !important;
-  overflow-y: hidden !important;
-}
-
-/* 小白条：触摸区域大一点，但视觉不夸张 */
-.sheet-handle {
-  width: 96px !important;
-  height: 36px !important;
-  margin: -4px auto 4px !important;
-  background: transparent !important;
-  touch-action: none !important;
-}
-
-.sheet-handle::before {
-  display: block !important;
-  width: 42px !important;
-  height: 4px !important;
-  margin: 16px auto 0 !important;
-  border-radius: 999px !important;
-  background: var(--outline) !important;
-  content: "" !important;
-  opacity: 0.38 !important;
-}
-
-/* 底部导航：恢复 fixed，不要 absolute */
+/* 底部导航恢复 fixed，并且压低、压薄 */
 .floating-dock {
   position: fixed !important;
   left: 50% !important;
   right: auto !important;
-  bottom: max(4px, calc(env(safe-area-inset-bottom, 0px) - 10px)) !important;
+  bottom: max(6px, calc(env(safe-area-inset-bottom, 0px) - 22px)) !important;
   width: min(calc(100vw - 40px), 448px) !important;
   padding: 4px !important;
   transform: translateX(-50%) !important;
@@ -2447,11 +2349,66 @@ body {
   bottom: 4px !important;
 }
 
-/* 继续/清零按钮跟着导航栏降低 */
+/* 清零/继续按钮跟着 dock 变矮后重新定位 */
 .page-actions {
   bottom: calc(
-    max(4px, calc(env(safe-area-inset-bottom, 0px) - 10px))
+    max(6px, calc(env(safe-area-inset-bottom, 0px) - 22px))
     + calc(50px * var(--ui-scale))
-    + 42px
+    + 38px
   ) !important;
+}
+
+/* 弹窗只负责自己，不要影响 body 的触摸 */
+body.sheet-open {
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+  touch-action: auto !important;
+}
+
+.settings-sheet,
+.editor-sheet {
+  position: fixed !important;
+  right: 50% !important;
+  bottom: 0 !important;
+  width: min(100vw, 480px) !important;
+  max-height: calc(100svh - max(14px, env(safe-area-inset-top, 0px) + 8px)) !important;
+  overflow-y: auto !important;
+  overscroll-behavior-y: none !important;
+  -webkit-overflow-scrolling: touch !important;
+  transform: translate3d(50%, calc(100% + 24px), 0) !important;
+  transition: transform 260ms var(--ease) !important;
+  will-change: transform;
+}
+
+.settings-sheet.is-open,
+.editor-sheet.is-open {
+  transform: translate3d(50%, 0, 0) !important;
+}
+
+.settings-sheet.is-dragging,
+.editor-sheet.is-dragging {
+  transition: none !important;
+}
+
+/* 小白条：视觉小，触摸区域大 */
+.sheet-handle {
+  position: relative !important;
+  width: 120px !important;
+  height: 34px !important;
+  margin: -2px auto 0 !important;
+  background: transparent !important;
+  touch-action: none !important;
+}
+
+.sheet-handle::before {
+  position: absolute !important;
+  left: 50% !important;
+  top: 14px !important;
+  width: 42px !important;
+  height: 4px !important;
+  border-radius: 999px !important;
+  background: var(--outline) !important;
+  opacity: 0.38 !important;
+  transform: translateX(-50%) !important;
+  content: "" !important;
 }
