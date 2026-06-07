@@ -355,7 +355,7 @@ const defaultAppSettings = {
   topHeight: 16,
   dockThickness: 58,
   dockSideGap: 28,
-  dockBottomGap: 10,
+  dockBottomGap: 0,
   darkMode: "auto",
   backgroundImage: "",
   activeWallpaperId: "",
@@ -432,6 +432,11 @@ let diceRollTimer = null;
 let diceFaceTimer = null;
 let diceFaceTimers = [];
 let wheelSpinTimer = null;
+let sheetCloseTimer = null;
+let pageScrollLock = {
+  active: false,
+  y: 0,
+};
 
 const els = {
   root: document.documentElement,
@@ -503,37 +508,10 @@ const els = {
 
 init();
 
-function updateViewportMetrics() {
-  const viewport = window.visualViewport;
-  const height = Math.max(320, Math.round(viewport?.height || window.innerHeight || document.documentElement.clientHeight || 0));
-  els.root.style.setProperty("--app-viewport-height", `${height}px`);
-}
-
-function bindViewportMetrics() {
-  updateViewportMetrics();
-  window.addEventListener("resize", updateViewportMetrics);
-  window.addEventListener("orientationchange", updateViewportMetrics);
-
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener("resize", updateViewportMetrics);
-    window.visualViewport.addEventListener("scroll", updateViewportMetrics);
-  }
-}
-
-function setSheetOffset(sheet, value) {
-  if (!sheet) return;
-  sheet.style.setProperty("--sheet-y", value);
-}
-
-function clearSheetOffset(sheet) {
-  if (!sheet) return;
-  sheet.style.removeProperty("--sheet-y");
-}
-
 async function init() {
   registerServiceWorker();
   requestPersistentStorage();
-  bindViewportMetrics();
+  syncAppHeight();
 
   numberState.settings = loadNumberSettings();
   wheelState.presets = loadWheelPresets();
@@ -585,7 +563,13 @@ function bindEvents() {
   els.addWheelOptionButton.addEventListener("click", addWheelOption);
   els.saveWheelPresetButton.addEventListener("click", saveCurrentWheelPreset);
   els.saveNumberSettingsButton.addEventListener("click", saveNumberSettingsFromPanel);
-  window.addEventListener("resize", updateDockIndicator);
+  window.addEventListener("resize", () => {
+    syncAppHeight();
+    updateDockIndicator();
+  });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", syncAppHeight);
+  }
   bindDocumentScrollLock();
 }
 
@@ -608,6 +592,17 @@ async function requestPersistentStorage() {
   } catch (error) {
     console.warn("Persistent storage request failed:", error);
   }
+}
+
+function syncAppHeight() {
+  const viewportHeight = Math.max(
+    window.innerHeight || 0,
+    document.documentElement.clientHeight || 0,
+    window.visualViewport?.height || 0
+  );
+  if (!viewportHeight) return;
+
+  els.root.style.setProperty("--app-height", `${Math.round(viewportHeight)}px`);
 }
 
 function bindDocumentScrollLock() {
@@ -633,126 +628,74 @@ function bindSheetHandleGestures() {
   document.querySelectorAll(".settings-sheet, .editor-sheet").forEach((sheet) => {
     let startY = 0;
     let currentY = 0;
-    let startScrollTop = 0;
-    let isTracking = false;
     let isDragging = false;
-    let closeTimer = null;
-    let cleanupTimer = null;
-    let dragTarget = null;
+    let shouldTrack = false;
+    let startedFromHandle = false;
+    let startScrollTop = 0;
 
-    const shouldIgnoreTarget = (target) => {
+    const isInteractiveTarget = (target) => {
       return Boolean(
         target.closest(
-          "input, select, textarea, .picker-field, .picker-hue-range, .range-input, .language-menu, .dark-mode-menu"
+          "button, input, select, textarea, label, .picker-field, .picker-hue-range, .range-input, .language-menu"
         )
       );
     };
 
-    const clearTimers = () => {
-      if (closeTimer) {
-        window.clearTimeout(closeTimer);
-        closeTimer = null;
-      }
-      if (cleanupTimer) {
-        window.clearTimeout(cleanupTimer);
-        cleanupTimer = null;
-      }
-    };
-
     const startDrag = (event) => {
       if (event.touches.length !== 1) return;
-      if (!sheet.classList.contains("is-open")) return;
-      if (shouldIgnoreTarget(event.target)) return;
 
-      clearTimers();
+      startedFromHandle = Boolean(event.target.closest(".sheet-handle"));
+      shouldTrack = startedFromHandle || !isInteractiveTarget(event.target);
+      if (!shouldTrack) return;
 
-      isTracking = true;
-      isDragging = false;
-      dragTarget = event.target;
       startY = event.touches[0].clientY;
-      currentY = 0;
       startScrollTop = sheet.scrollTop;
+      currentY = 0;
+      isDragging = false;
     };
 
     const moveDrag = (event) => {
-      if (!isTracking || event.touches.length !== 1) return;
+      if (!shouldTrack || event.touches.length !== 1) return;
 
-      const y = event.touches[0].clientY;
-      const deltaY = y - startY;
-      const absDeltaY = Math.abs(deltaY);
-      const isPullingDown = deltaY > 0;
-      const startedFromHandle = Boolean(dragTarget?.closest(".sheet-handle"));
-      const startedFromHeader = Boolean(dragTarget?.closest(".sheet-header"));
-      const isAtTop = sheet.scrollTop <= 0 || startScrollTop <= 0;
-
-      if (!isDragging) {
-        if (absDeltaY < 4) return;
-
-        if (!isPullingDown) {
-          isTracking = false;
-          dragTarget = null;
-          return;
-        }
-
-        if (!startedFromHandle && !startedFromHeader && !isAtTop) {
-          return;
-        }
-
-        isDragging = true;
-        sheet.classList.add("is-dragging");
-        setSheetOffset(sheet, "0px");
+      const deltaY = event.touches[0].clientY - startY;
+      const isAtTop = sheet.scrollTop <= 1 && startScrollTop <= 1;
+      if (isAtTop && deltaY > 0 && event.cancelable) {
+        event.preventDefault();
       }
 
-      event.preventDefault();
+      const shouldPullDown = startedFromHandle || isDragging || (isAtTop && deltaY > 0);
 
-      // 阻尼曲线：前段几乎 1:1，越往下阻尼越强；iOS 上手感比固定 0.86 更像原生 sheet。
-      currentY = Math.min(360, Math.max(0, deltaY * (deltaY < 140 ? 0.98 : 0.82)));
-      setSheetOffset(sheet, `${currentY}px`);
+      if (!shouldPullDown) return;
+
+      currentY = Math.max(0, deltaY);
+      if (currentY < 2) return;
+
+      isDragging = true;
+      if (event.cancelable) event.preventDefault();
+      sheet.classList.add("is-dragging");
+      sheet.style.transform = `translate3d(50%, ${currentY}px, 0)`;
     };
 
-    const finishDrag = (event) => {
-      if (!isTracking) return;
+    const finishDrag = () => {
+      if (!shouldTrack) return;
 
-      const endY = event?.changedTouches?.[0]?.clientY ?? startY;
-      const totalDeltaY = Math.max(0, endY - startY);
+      shouldTrack = false;
 
-      isTracking = false;
-      dragTarget = null;
+      if (!isDragging) return;
+      isDragging = false;
 
-      if (!isDragging) {
+      if (currentY > 72) {
+        sheet.classList.remove("is-dragging");
+        sheet.getBoundingClientRect();
+        sheet.style.transform = "translate3d(50%, 105%, 0)";
+        window.clearTimeout(sheetCloseTimer);
+        sheetCloseTimer = window.setTimeout(closeAllSheets, 180);
         currentY = 0;
         return;
       }
 
-      isDragging = false;
       sheet.classList.remove("is-dragging");
-
-      const shouldClose = currentY > 88 || totalDeltaY > Math.min(180, sheet.clientHeight * 0.28);
-
-      if (shouldClose) {
-        setSheetOffset(sheet, `${currentY}px`);
-
-        requestAnimationFrame(() => {
-          setSheetOffset(sheet, "calc(100% + 28px)");
-        });
-
-        closeTimer = window.setTimeout(() => {
-          closeAllSheets();
-          closeTimer = null;
-        }, 260);
-      } else {
-        setSheetOffset(sheet, `${currentY}px`);
-
-        requestAnimationFrame(() => {
-          setSheetOffset(sheet, "0px");
-        });
-
-        cleanupTimer = window.setTimeout(() => {
-          clearSheetOffset(sheet);
-          cleanupTimer = null;
-        }, 260);
-      }
-
+      sheet.style.transform = "";
       currentY = 0;
     };
 
@@ -2187,8 +2130,6 @@ function applyUiScale(scale) {
   els.root.style.setProperty("--ui-scale", safeScale);
   els.uiScaleRange.value = safeScale;
   els.uiScaleValue.textContent = safeScale.toFixed(2);
-  updateViewportMetrics();
-  updateDockIndicator();
 }
 function bindLayoutRange(input, valueNode, key) {
   if (!input || !valueNode) return;
@@ -2240,8 +2181,6 @@ function applyLayoutSettings() {
   els.root.style.setProperty("--dock-thickness", `${dockThickness}px`);
   els.root.style.setProperty("--dock-side-gap", `${dockSideGap}px`);
   els.root.style.setProperty("--dock-bottom-gap", `${dockBottomGap}px`);
-  els.root.style.setProperty("--dock-real-height", `${dockThickness + 8}px`);
-  els.root.style.setProperty("--dock-content-height", `${dockThickness}px`);
 
   if (els.topHeightRange) els.topHeightRange.value = topHeight;
   if (els.topHeightValue) els.topHeightValue.textContent = topHeight;
@@ -2255,7 +2194,6 @@ function applyLayoutSettings() {
   if (els.dockBottomGapRange) els.dockBottomGapRange.value = dockBottomGap;
   if (els.dockBottomGapValue) els.dockBottomGapValue.textContent = dockBottomGap;
 
-  updateViewportMetrics();
   updateDockIndicator();
 }
 
@@ -2708,21 +2646,53 @@ function closeSettings() {
   closeAllSheets();
 }
 
+function lockPageScroll() {
+  if (pageScrollLock.active) return;
+
+  pageScrollLock = {
+    active: true,
+    y: window.scrollY || document.documentElement.scrollTop || 0,
+  };
+  document.documentElement.style.overflow = "hidden";
+  document.body.style.position = "fixed";
+  document.body.style.top = `-${pageScrollLock.y}px`;
+  document.body.style.left = "0";
+  document.body.style.right = "0";
+  document.body.style.width = "100%";
+}
+
+function unlockPageScroll() {
+  if (!pageScrollLock.active) return;
+
+  const scrollY = pageScrollLock.y;
+  pageScrollLock = {
+    active: false,
+    y: 0,
+  };
+  document.documentElement.style.overflow = "";
+  document.body.style.position = "";
+  document.body.style.top = "";
+  document.body.style.left = "";
+  document.body.style.right = "";
+  document.body.style.width = "";
+  window.scrollTo(0, scrollY);
+}
+
 function openSheet(sheet) {
   if (!sheet) return;
-
-  updateViewportMetrics();
-  clearSheetOffset(sheet);
+  window.clearTimeout(sheetCloseTimer);
+  syncAppHeight();
+  lockPageScroll();
   els.scrim.hidden = false;
   document.body.classList.add("sheet-open");
 
-  requestAnimationFrame(() => {
-    sheet.classList.add("is-open");
-    sheet.setAttribute("aria-hidden", "false");
-  });
+  sheet.style.transform = "";
+  sheet.classList.add("is-open");
+  sheet.setAttribute("aria-hidden", "false");
 }
 
 function closeAllSheets() {
+  window.clearTimeout(sheetCloseTimer);
   closeLanguageMenu();
 
   if (typeof closeDarkModeMenu === "function") {
@@ -2734,7 +2704,6 @@ function closeAllSheets() {
     sheet.classList.remove("is-open", "is-expanded", "is-dragging");
     sheet.setAttribute("aria-hidden", "true");
     sheet.style.transform = "";
-    clearSheetOffset(sheet);
   });
 
   if (els.scrim) {
@@ -2742,6 +2711,7 @@ function closeAllSheets() {
   }
 
   document.body.classList.remove("sheet-open");
+  unlockPageScroll();
 }
 function bindDarkModeMenu() {
   if (!els.darkModeMenuButton || !els.darkModeMenu) return;
