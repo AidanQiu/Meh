@@ -4,6 +4,7 @@ const STORAGE_KEY = "meh-shell-state-v1";
 const WHEEL_PRESETS_KEY = "meh-wheel-presets-v1";
 const NUMBER_SETTINGS_KEY = "meh-number-settings-v1";
 const APP_SETTINGS_KEY = "meh-app-settings-v2";
+const DEBUG_REVISION_LABEL = "第1次修改";
 
 const i18n = {
   zh: {
@@ -841,6 +842,12 @@ function renderPage() {
   const page = pages[state.page] || pages.coin;
 
   els.pageTitle.textContent = t(state.page);
+  if (state.page === "coin") {
+    const badge = document.createElement("span");
+    badge.className = "debug-revision-badge";
+    badge.textContent = DEBUG_REVISION_LABEL;
+    els.pageTitle.append(" ", badge);
+  }
   els.pageActions.hidden = !["coin", "dice", "wheel", "number"].includes(state.page);
   updateFeatureButton();
 

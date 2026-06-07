@@ -330,9 +330,26 @@ p {
 }
 
 .page-heading h1 {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
   font-size: calc(36px * var(--ui-scale));
   line-height: 1.08;
   letter-spacing: 0;
+}
+
+.debug-revision-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary-container) 78%, transparent);
+  color: var(--primary);
+  padding: 3px 8px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  vertical-align: middle;
 }
 
 .page-card {
@@ -2431,7 +2448,7 @@ body {
   position: fixed !important;
   left: var(--dock-side-gap) !important;
   right: var(--dock-side-gap) !important;
-  bottom: var(--dock-bottom-gap) !important;
+  bottom: calc(var(--dock-bottom-gap) - env(safe-area-inset-bottom, 0px)) !important;
   width: auto !important;
   transform: none !important;
   padding: 6px !important;
@@ -2445,6 +2462,7 @@ body {
   position: fixed !important;
   bottom: calc(
     var(--dock-bottom-gap)
+    - env(safe-area-inset-bottom, 0px)
     + calc(var(--dock-thickness) * var(--ui-scale))
     + 44px
   ) !important;
