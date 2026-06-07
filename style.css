@@ -28,11 +28,12 @@
   --dock-side-gap: 28px;
   --dock-bottom-gap: 10px;
   --gesture-safe-bottom: max(env(safe-area-inset-bottom, 0px), 10px);
+  --app-height: 100dvh;
 }
+
 * {
   box-sizing: border-box;
 }
-
 html {
   min-height: 100%;
   background: var(--surface-container);
@@ -45,7 +46,8 @@ body {
   -webkit-touch-callout: none; /* 禁用 iOS 的长按弹出菜单 */
   overscroll-behavior-y: none;
   /* 修改结束 */
-  min-height: 100vh;
+  height: var(--app-height);
+  min-height: var(--app-height);
   margin: 0;
   background: var(--app-background);
   background-size: var(--app-background-size);
@@ -95,7 +97,7 @@ p {
 
 /* 使用gemini修改 */
 .app {
-  min-height: 100dvh;
+  min-height: var(--app-height);
   padding-top: calc(env(safe-area-inset-top, 0px) + var(--top-extra));
 
   padding-left: max(
@@ -108,7 +110,7 @@ p {
     env(safe-area-inset-right, 0px)
   );
 
-  padding-bottom: calc(188px * var(--ui-scale));
+  padding-bottom: calc(188px * var(--ui-scale) + var(--gesture-safe-bottom));
   position: relative;
   z-index: 2;
 }
@@ -166,12 +168,6 @@ p {
   color: var(--on-surface-variant);
   font-size: calc(13px * var(--ui-scale));
   font-weight: 700;
-}
-
-.top-stats.is-empty {
-  visibility: hidden;
-  background: transparent;
-  box-shadow: none;
 }
 
 .top-stats.is-coin {
@@ -1034,7 +1030,7 @@ p {
   --dock-indicator-w: 0px;
   position: fixed;
   left: 50%;
-  bottom: var(--dock-bottom-gap);
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   z-index: 6;
   display: grid;
   width: min(calc(100vw - 56px), 448px);
@@ -1058,7 +1054,7 @@ p {
 .dock-item {
   display: grid;
   min-width: 0;
-  min-height: var(--dock-thickness);
+  min-height: calc(58px * var(--ui-scale));
   align-content: center;
   justify-items: center;
   gap: 4px;
@@ -1126,7 +1122,7 @@ p {
   width: min(100vw, 480px);
   border-radius: 34px 34px 0 0;
   background: color-mix(in srgb, var(--surface) 94%, var(--primary-container));
-  max-height: calc(100dvh - max(calc(28px * var(--ui-scale)), env(safe-area-inset-top, 28px)));
+  max-height: calc(var(--app-height) - max(calc(28px * var(--ui-scale)), env(safe-area-inset-top, 28px)));
   overflow-y: auto;
   padding: 10px 18px max(28px, calc(env(safe-area-inset-bottom, 0px) + 24px));
   box-shadow: 0 -18px 42px rgba(29, 27, 32, 0.22);
@@ -1979,34 +1975,65 @@ p {
 
 /* 设置界面：和转盘编辑界面同高 */
 #settingsSheet {
-  max-height: min(82dvh, 720px) !important;
+  max-height: min(calc(var(--app-height) - env(safe-area-inset-top, 0px) - 28px), 720px) !important;
   padding-bottom: max(28px, calc(env(safe-area-inset-bottom, 0px) + 24px)) !important;
 }
 
 /* 转盘二级菜单：和设置界面同高 */
 #wheelEditorSheet {
-  max-height: min(82dvh, 720px) !important;
+  max-height: min(calc(var(--app-height) - env(safe-area-inset-top, 0px) - 28px), 720px) !important;
   padding-bottom: max(28px, calc(env(safe-area-inset-bottom, 0px) + 24px)) !important;
 }
 
 /* 随机数菜单：单独矮一点 */
 #numberSettingsSheet {
-  max-height: min(72dvh, 640px) !important;
+  max-height: min(calc(var(--app-height) - env(safe-area-inset-top, 0px) - 96px), 640px) !important;
   padding-bottom: max(22px, calc(env(safe-area-inset-bottom, 0px) + 22px)) !important;
 }
 
 /* 如果之前 JS 留下了 is-expanded，也强制不改变高度 */
 #settingsSheet.is-expanded {
-  max-height: min(82dvh, 720px) !important;
+  max-height: min(calc(var(--app-height) - env(safe-area-inset-top, 0px) - 28px), 720px) !important;
 }
 
 #wheelEditorSheet.is-expanded {
-  max-height: min(82dvh, 720px) !important;
+  max-height: min(calc(var(--app-height) - env(safe-area-inset-top, 0px) - 28px), 720px) !important;
 }
 
 #numberSettingsSheet.is-expanded {
-  max-height: min(72dvh, 640px) !important;
+  max-height: min(calc(var(--app-height) - env(safe-area-inset-top, 0px) - 96px), 640px) !important;
 }
+
+/* ===== 手机端底部导航栏：再降低一点 ===== */
+.floating-dock {
+  position: absolute !important;
+  left: var(--dock-side-gap) !important;
+  right: var(--dock-side-gap) !important;
+  bottom: calc(var(--gesture-safe-bottom) + var(--dock-bottom-gap) + 2px) !important;
+  width: auto !important;
+  transform: none !important;
+  padding: 5px !important;
+}
+
+.dock-item {
+  min-height: calc(var(--dock-thickness) * var(--ui-scale)) !important;
+  gap: 3px !important;
+}
+
+.dock-indicator {
+  top: 5px !important;
+  bottom: 5px !important;
+}
+
+.page-actions {
+  bottom: calc(
+    var(--gesture-safe-bottom)
+    + var(--dock-bottom-gap)
+    + calc(var(--dock-thickness) * var(--ui-scale))
+    + 44px
+  ) !important;
+}
+
 
 /* ===== 弹窗打开时禁止背景跟着滚动 ===== */
 body.sheet-open {
@@ -2069,11 +2096,61 @@ body.sheet-open {
   transform: translateX(-50%) !important;
 }
 
+/* ===== Final PWA/mobile interaction fixes ===== */
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+}
+
+body {
+  min-height: var(--app-height);
+  background-color: var(--surface-container);
+}
+
+.phone-frame {
+  position: relative;
+  z-index: 1;
+  width: min(100vw, 480px);
+  height: var(--app-height);
+  min-height: var(--app-height);
+  max-height: var(--app-height);
+  margin: 0 auto;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: 0 0 0 1px rgba(127, 116, 124, 0.14), var(--shadow-2);
+  overflow: hidden;
+}
+
+.app {
+  height: var(--app-height) !important;
+  min-height: var(--app-height) !important;
+  overflow: hidden !important;
+}
+
+.top-stats.is-empty {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+body.sheet-open {
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+  touch-action: auto !important;
+}
+
 .settings-sheet,
 .editor-sheet {
   overscroll-behavior-y: contain !important;
   touch-action: pan-y !important;
   will-change: transform;
+  transform: translate3d(50%, 105%, 0);
+}
+
+.settings-sheet.is-open,
+.editor-sheet.is-open {
+  transform: translate3d(50%, 0, 0);
 }
 
 .settings-sheet.is-dragging,
@@ -2286,232 +2363,4 @@ body.sheet-open {
   box-shadow:
     inset 0 1px rgba(255, 255, 255, 0.06),
     inset 0 -8px 18px rgba(0, 0, 0, 0.22);
-}
-
-/* ===== mobile viewport final fix ===== */
-
-html,
-body {
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  overflow: hidden;
-  background: var(--app-background);
-  background-size: var(--app-background-size);
-  background-position: var(--app-background-position);
-}
-
-body {
-  position: fixed;
-  inset: 0;
-  overscroll-behavior: none;
-}
-
-.phone-frame {
-  position: relative;
-  width: min(100vw, 480px);
-  height: var(--app-height, 100dvh);
-  min-height: var(--app-height, 100dvh);
-  margin: 0 auto;
-  overflow: hidden;
-  background: var(--app-background);
-  background-size: var(--app-background-size);
-  background-position: var(--app-background-position);
-  box-shadow: none;
-}
-
-.app {
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-
-  padding-top: calc(env(safe-area-inset-top, 0px) + var(--top-extra));
-
-  padding-left: max(
-    calc(18px * var(--ui-scale)),
-    env(safe-area-inset-left, 0px)
-  );
-
-  padding-right: max(
-    calc(18px * var(--ui-scale)),
-    env(safe-area-inset-right, 0px)
-  );
-
-  padding-bottom: calc(
-    env(safe-area-inset-bottom, 0px)
-    + var(--dock-bottom-gap)
-    + var(--dock-thickness)
-    + calc(116px * var(--ui-scale))
-  );
-}
-
-/* 底部按钮固定在 phone-frame 内，不再固定到浏览器视口 */
-.page-actions {
-  position: absolute;
-  left: 50%;
-  bottom: calc(
-    env(safe-area-inset-bottom, 0px)
-    + var(--dock-bottom-gap)
-    + var(--dock-thickness)
-    + 46px
-  );
-  transform: translateX(-50%);
-}
-
-/* 底部 dock 也固定在 phone-frame 内 */
-.floating-dock {
-  position: absolute;
-  left: 50%;
-  right: auto;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--dock-bottom-gap));
-  width: min(calc(100vw - calc(var(--dock-side-gap) * 2)), 448px);
-  padding: 6px;
-  transform: translate3d(-50%, 0, 0);
-  will-change: transform;
-}
-
-.dock-item {
-  min-height: var(--dock-thickness);
-}
-
-/* 设置弹窗拖动修复：JS 设置的 --sheet-y 现在真正生效 */
-.settings-sheet,
-.editor-sheet {
-  --sheet-y: 0px;
-  max-height: calc(var(--app-height, 100dvh) - env(safe-area-inset-top, 0px) - 12px);
-  transform: translate3d(50%, calc(100% + 24px), 0);
-  transition: transform 220ms var(--ease);
-  will-change: transform;
-  -webkit-overflow-scrolling: touch;
-}
-
-.settings-sheet.is-open,
-.editor-sheet.is-open {
-  transform: translate3d(50%, var(--sheet-y, 0px), 0);
-}
-
-.settings-sheet.is-dragging,
-.editor-sheet.is-dragging {
-  transition: none;
-}
-
-/* 不要在 body.sheet-open 上用 touch-action: none，否则 iOS 下弹窗滚动/拖动容易抽风 */
-body.sheet-open {
-  overflow: hidden !important;
-  overscroll-behavior: none !important;
-}
-
-.scrim {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-/* ===== DEBUG: 先彻底消灭底部黑边/层叠感 ===== */
-
-html,
-body {
-  width: 100% !important;
-  min-width: 100% !important;
-  height: 100% !important;
-  min-height: 100% !important;
-  margin: 0 !important;
-  overflow: hidden !important;
-  background: var(--app-background) !important;
-  background-size: var(--app-background-size) !important;
-  background-position: var(--app-background-position) !important;
-}
-
-body {
-  position: fixed !important;
-  inset: 0 !important;
-}
-
-.phone-frame {
-  width: min(100vw, 480px) !important;
-  height: var(--app-height, 100svh) !important;
-  min-height: 0 !important;
-  max-height: var(--app-height, 100svh) !important;
-  margin: 0 auto !important;
-  overflow: hidden !important;
-  background: var(--app-background) !important;
-  background-size: var(--app-background-size) !important;
-  background-position: var(--app-background-position) !important;
-
-  /* 关键：先把疑似黑边源头全部关掉 */
-  box-shadow: none !important;
-  border: 0 !important;
-  outline: 0 !important;
-}
-
-/* 防止 iOS 底部安全区露白 */
-.phone-frame::after {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 0;
-  height: max(36px, env(safe-area-inset-bottom, 0px));
-  background: var(--app-background);
-  background-size: var(--app-background-size);
-  background-position: var(--app-background-position);
-  content: "";
-  pointer-events: none;
-}
-
-.app {
-  position: relative !important;
-  z-index: 2 !important;
-  height: 100% !important;
-  min-height: 0 !important;
-  overflow: hidden !important;
-
-  padding-top: calc(env(safe-area-inset-top, 0px) + var(--top-extra)) !important;
-
-  padding-left: max(calc(18px * var(--ui-scale)), env(safe-area-inset-left, 0px)) !important;
-  padding-right: max(calc(18px * var(--ui-scale)), env(safe-area-inset-right, 0px)) !important;
-
-  padding-bottom: calc(
-    var(--dock-bottom-gap)
-    + var(--dock-thickness)
-    + calc(118px * var(--ui-scale))
-  ) !important;
-}
-
-/* 按钮和 dock 都固定在 phone-frame 内，不要再 fixed 到浏览器视口 */
-.page-actions {
-  position: absolute !important;
-  z-index: 8 !important;
-  left: 50% !important;
-  bottom: calc(var(--dock-bottom-gap) + var(--dock-thickness) + 46px) !important;
-  width: min(calc(100% - 56px), 396px) !important;
-  transform: translateX(-50%) !important;
-}
-
-.floating-dock {
-  position: absolute !important;
-  z-index: 9 !important;
-  left: 50% !important;
-  right: auto !important;
-  bottom: var(--dock-bottom-gap) !important;
-  width: min(calc(100% - calc(var(--dock-side-gap) * 2)), 448px) !important;
-  transform: translateX(-50%) !important;
-
-  /* 关键：先去掉黑边、阴影、模糊 */
-  border: 0 !important;
-  box-shadow: none !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  background: color-mix(in srgb, var(--surface-container) 92%, transparent) !important;
-}
-
-.dock-item {
-  min-height: var(--dock-thickness) !important;
-}
-
-.pill-button,
-.page-card,
-.number-display,
-.dice,
-.wheel-svg {
-  box-shadow: none !important;
 }

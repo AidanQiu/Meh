@@ -1,5 +1,5 @@
-const APP_CACHE_NAME = "meh-app-shell-v3";
-const RUNTIME_CACHE_NAME = "meh-runtime-v3";
+const APP_CACHE_NAME = "meh-app-shell-v4";
+const RUNTIME_CACHE_NAME = "meh-runtime-v4";
 
 const APP_SHELL = [
   "./",
