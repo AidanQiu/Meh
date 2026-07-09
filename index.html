@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <meta id="themeColorMeta" name="theme-color" content="#e8e3e8" />
+    <meta id="themeColorMeta" name="theme-color" content="#e8e3e8" media="(prefers-color-scheme: light)" />
+    <meta id="themeColorDarkMeta" name="theme-color" content="#1d1b20" media="(prefers-color-scheme: dark)" />
     <meta name="color-scheme" content="light dark" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Meh" />
@@ -293,8 +294,11 @@
       </div>
 
       <section class="setting-group">
-        <label class="editor-label" for="wheelPresetSelect" data-i18n="choosePreset">选择预设</label>
-        <select class="editor-field" id="wheelPresetSelect"></select>
+        <div class="editor-section-title">
+          <h3 id="wheelPresetHeading" data-i18n="choosePreset">当前预设</h3>
+          <button class="small-pill-button preset-add-button" id="addWheelPresetButton" type="button" data-i18n="add">添加</button>
+        </div>
+        <select class="editor-field" id="wheelPresetSelect" aria-labelledby="wheelPresetHeading"></select>
         <div class="preset-chip-list" id="wheelPresetList"></div>
       </section>
 

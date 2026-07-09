@@ -39,6 +39,8 @@
   --dock-thickness: 58px;
   --dock-side-gap: 28px;
   --dock-bottom-gap: 18px;
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --dock-bottom-offset: max(var(--dock-bottom-gap), var(--safe-area-bottom));
   --gesture-safe-bottom: 0px;
   --app-height: 100dvh;
 }
@@ -139,7 +141,7 @@ p {
     env(safe-area-inset-right, 0px)
   );
 
-  padding-bottom: calc(188px * var(--ui-scale));
+  padding-bottom: calc(188px * var(--ui-scale) + var(--safe-area-bottom));
   position: relative;
   z-index: 2;
 }
@@ -1767,6 +1769,13 @@ p {
   gap: 12px;
 }
 
+.editor-section-title h3 {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  line-height: 1;
+}
+
 .small-pill-button,
 .delete-option-button,
 .save-preset-button {
@@ -1778,7 +1787,12 @@ p {
   min-height: 36px;
   background: var(--primary-container);
   color: var(--primary);
+  line-height: 1;
   padding: 0 14px;
+}
+
+.preset-add-button {
+  transform: translateY(-3px);
 }
 
 .wheel-option-list {
@@ -2453,14 +2467,14 @@ body {
   min-height: 100dvh !important;
   height: auto !important;
   overflow: hidden !important;
-  padding-bottom: calc(188px * var(--ui-scale)) !important;
+  padding-bottom: calc(188px * var(--ui-scale) + var(--safe-area-bottom)) !important;
 }
 
 .floating-dock {
   position: fixed !important;
   left: var(--dock-side-gap) !important;
   right: var(--dock-side-gap) !important;
-  bottom: calc(var(--dock-bottom-gap) + 34px - env(safe-area-inset-bottom, 0px)) !important;
+  bottom: var(--dock-bottom-offset) !important;
   width: auto !important;
   transform: none !important;
   padding: 6px !important;
@@ -2473,9 +2487,7 @@ body {
 .page-actions {
   position: fixed !important;
   bottom: calc(
-    var(--dock-bottom-gap)
-    + 34px
-    - env(safe-area-inset-bottom, 0px)
+    var(--dock-bottom-offset)
     + calc(var(--dock-thickness) * var(--ui-scale))
     + 44px
   ) !important;

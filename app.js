@@ -85,7 +85,7 @@ const i18n = {
     editWheel: "编辑转盘",
     tuneNumber: "设置随机数范围",
     wheelEditorTitle: "编辑预设",
-    choosePreset: "选择预设",
+    choosePreset: "当前预设",
     saveName: "保存名称",
     optionCount: "选项数量",
     optionWeight: "选项和权重",
@@ -108,8 +108,7 @@ const i18n = {
     diceReadyHint: "点击继续开始第一次摇骰子。",
     point: "点",
     wheelSpinning: "旋转中",
-    wheelSpinningHint: "转盘正在减速靠近结果。",
-    wheelResultHint: "这是刚刚命中的选项。",
+    wheelSpinningHint: "旋转中...",
     wheelReadyTitle: "准备转动",
     wheelReadyHint: "点击继续，让转盘帮你选一个。",
     numberReadyTitle: "准备生成",
@@ -166,7 +165,7 @@ const i18n = {
     editWheel: "Edit wheel",
     tuneNumber: "Number settings",
     wheelEditorTitle: "Edit preset",
-    choosePreset: "Choose preset",
+    choosePreset: "Current preset",
     saveName: "Save name",
     optionCount: "Option count",
     optionWeight: "Options and weights",
@@ -189,7 +188,7 @@ const i18n = {
     diceReadyHint: "Tap Continue to roll the first die.",
     point: "pts",
     wheelSpinning: "Spinning",
-    wheelSpinningHint: "The wheel is slowing toward the result.",
+    wheelSpinningHint: "Spinning...",
     wheelResultHint: "This is the option just selected.",
     wheelReadyTitle: "Ready to spin",
     wheelReadyHint: "Tap Continue and let the wheel choose.",
@@ -247,7 +246,7 @@ const i18n = {
     editWheel: "ルーレット編集",
     tuneNumber: "乱数設定",
     wheelEditorTitle: "プリセット編集",
-    choosePreset: "プリセット選択",
+    choosePreset: "現在のプリセット",
     saveName: "保存名",
     optionCount: "項目数",
     optionWeight: "項目と重み",
@@ -270,7 +269,7 @@ const i18n = {
     diceReadyHint: "続けるを押して最初のサイコロを振ります。",
     point: "点",
     wheelSpinning: "回転中",
-    wheelSpinningHint: "ルーレットが結果に向かって減速しています。",
+    wheelSpinningHint: "回転中...",
     wheelResultHint: "いま当たった項目です。",
     wheelReadyTitle: "回転準備",
     wheelReadyHint: "続けるを押してルーレットに選ばせます。",
@@ -328,7 +327,7 @@ const i18n = {
     editWheel: "Дөңгелекті өңдеу",
     tuneNumber: "Сан баптауы",
     wheelEditorTitle: "Үлгіні өңдеу",
-    choosePreset: "Үлгіні таңдау",
+    choosePreset: "Қазіргі үлгі",
     saveName: "Атын сақтау",
     optionCount: "Нұсқа саны",
     optionWeight: "Нұсқалар мен салмақ",
@@ -351,7 +350,7 @@ const i18n = {
     diceReadyHint: "Алғашқы зарды тастау үшін Жалғастыруды басыңыз.",
     point: "ұпай",
     wheelSpinning: "Айналып жатыр",
-    wheelSpinningHint: "Дөңгелек нәтижеге қарай баяулап келеді.",
+    wheelSpinningHint: "Айналып жатыр...",
     wheelResultHint: "Жаңа түскен нұсқа осы.",
     wheelReadyTitle: "Айналдыруға дайын",
     wheelReadyHint: "Жалғастыруды басып, дөңгелекке таңдауды тапсырыңыз.",
@@ -583,6 +582,7 @@ const els = {
   wheelPresetName: document.querySelector("#wheelPresetName"),
   wheelOptionCount: document.querySelector("#wheelOptionCount"),
   wheelOptionList: document.querySelector("#wheelOptionList"),
+  addWheelPresetButton: document.querySelector("#addWheelPresetButton"),
   addWheelOptionButton: document.querySelector("#addWheelOptionButton"),
   saveWheelPresetButton: document.querySelector("#saveWheelPresetButton"),
   numberMinInput: document.querySelector("#numberMinInput"),
@@ -649,17 +649,13 @@ function bindEvents() {
   els.continueButton.addEventListener("click", handleContinue);
 
   els.wheelPresetSelect.addEventListener("change", () => {
-    if (els.wheelPresetSelect.value === "__new__") {
-      createDraftWheelPreset();
-      renderWheelEditor();
-      if (state.page === "wheel") renderWheelPage();
-      return;
-    }
     applyWheelPreset(els.wheelPresetSelect.value);
     renderWheelEditor();
-    if (state.page === "wheel") renderWheelPage();
+    renderWheelPageIfActive();
   });
+  els.wheelPresetName.addEventListener("input", updateCurrentWheelPresetName);
   els.wheelOptionCount.addEventListener("change", syncWheelOptionCount);
+  els.addWheelPresetButton.addEventListener("click", createNewWheelPreset);
   els.addWheelOptionButton.addEventListener("click", addWheelOption);
   els.saveWheelPresetButton.addEventListener("click", saveCurrentWheelPreset);
   els.saveNumberSettingsButton.addEventListener("click", saveNumberSettingsFromPanel);
@@ -1455,13 +1451,15 @@ function resetWheelHistory() {
 }
 
 function getWheelResultText() {
+  const presetName = getActiveWheelPresetName();
+
   if (wheelState.isSpinning) {
-    return { title: t("wheelSpinning"), hint: t("wheelSpinningHint") };
+    return { title: presetName, hint: t("wheelSpinningHint") };
   }
   if (wheelState.result) {
-    return { title: wheelState.result, hint: t("wheelResultHint") };
+    return { title: presetName, hint: wheelState.result };
   }
-  return { title: t("wheelReadyTitle"), hint: t("wheelReadyHint") };
+  return { title: presetName, hint: t("wheelReadyHint") };
 }
 
 function openWheelEditor() {
@@ -1481,9 +1479,7 @@ function renderWheelEditor() {
 }
 
 function renderWheelPresetSelect() {
-  els.wheelPresetSelect.innerHTML =
-    `<option value="__new__">＋ ${t("newPreset")}</option>` +
-    wheelState.presets
+  els.wheelPresetSelect.innerHTML = wheelState.presets
     .map((preset) => `<option value="${preset.id}">${escapeHtml(preset.name)}</option>`)
     .join("");
   els.wheelPresetSelect.value = wheelState.selectedPresetId;
@@ -1591,12 +1587,41 @@ function deleteWheelOption(index) {
   renderWheelPageIfActive();
 }
 
-function createDraftWheelPreset() {
-  wheelState.selectedPresetId = "";
-  wheelState.options = createDefaultWheelOptions();
+function createNewWheelPreset() {
+  const preset = {
+    id: createId(),
+    name: `${t("newPreset")} ${wheelState.presets.length + 1}`,
+    options: createDefaultWheelOptions(),
+  };
+
+  wheelState.presets.push(preset);
+  wheelState.selectedPresetId = preset.id;
+  wheelState.options = cloneOptions(preset.options);
   wheelState.result = null;
   wheelState.rotation = 0;
-  els.wheelPresetName.value = `${t("newPreset")} ${wheelState.presets.length + 1}`;
+  saveWheelPresets();
+  renderWheelEditor();
+  renderWheelPageIfActive();
+}
+
+function updateCurrentWheelPresetName() {
+  const preset = wheelState.presets.find((item) => item.id === wheelState.selectedPresetId);
+  if (!preset) return;
+
+  preset.name = els.wheelPresetName.value.trim() || t("unnamedWheelPreset");
+  saveWheelPresets();
+  updateWheelPresetNameViews(preset);
+  renderWheelPageIfActive();
+}
+
+function updateWheelPresetNameViews(preset) {
+  Array.from(els.wheelPresetSelect.options).forEach((option) => {
+    if (option.value === preset.id) option.textContent = preset.name;
+  });
+
+  els.wheelPresetList.querySelectorAll(".preset-chip").forEach((button) => {
+    if (button.dataset.presetId === preset.id) button.textContent = preset.name;
+  });
 }
 
 function deleteWheelPreset(id) {
@@ -3123,9 +3148,4 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
-}
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./service-worker.js');
-  });
 }
