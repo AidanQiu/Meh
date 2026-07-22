@@ -137,7 +137,7 @@ try {
       finalBottom: html.getPropertyValue('--app-safe-bottom').trim(),
     };
   })()`);
-  check(base.build === "1.1.1-pwa-r9", "browser loaded the wrong build");
+  check(base.build === "1.1.1-pwa-r8", "browser loaded the wrong build");
   check(base.viewport[0] === 390, `portrait viewport width was ${base.viewport[0]}, expected 390`);
   check(base.bodyPadding.join(",") === "0px,0px", "visual body must not consume safe-area padding");
   check(base.framePadding.join(",") === "0px,0px", "visual root must not consume safe-area padding");
@@ -207,17 +207,13 @@ try {
     root.classList.add('pwa-standalone');
     root.style.setProperty('--browser-safe-top', '59px');
     root.style.setProperty('--browser-safe-bottom', '34px');
-    root.style.setProperty('--dock-bottom-gap', '0px');
     const app = getComputedStyle(document.querySelector('.app'));
     const dock = getComputedStyle(document.querySelector('.floating-dock'));
-    const indicator = getComputedStyle(document.querySelector('.dock-indicator'));
     const body = getComputedStyle(document.body);
-    return { appTop: app.paddingTop, dockBottom: dock.bottom, dockPaddingBottom: dock.paddingBottom, indicatorBottom: indicator.bottom, bodyTop: body.paddingTop, bodyBottom: body.paddingBottom, appHeight: getComputedStyle(root).getPropertyValue('--app-height').trim() };
+    return { appTop: app.paddingTop, dockBottom: dock.bottom, bodyTop: body.paddingTop, bodyBottom: body.paddingBottom, appHeight: getComputedStyle(root).getPropertyValue('--app-height').trim() };
   })()`);
   check(iosSimulation.appTop === "59px", `simulated iOS top inset was applied ${iosSimulation.appTop}, expected once as 59px`);
-  check(iosSimulation.dockBottom === "0px", `simulated iOS dock background stayed ${iosSimulation.dockBottom} above the bottom with configured distance 0`);
-  check(iosSimulation.dockPaddingBottom === "40px", `simulated iOS dock content padding was ${iosSimulation.dockPaddingBottom}, expected 6px + 34px`);
-  check(iosSimulation.indicatorBottom === "40px", `simulated iOS dock indicator entered the gesture area: bottom ${iosSimulation.indicatorBottom}`);
+  check(iosSimulation.dockBottom === "52px", `simulated iOS dock offset was ${iosSimulation.dockBottom}, expected 18px + 34px`);
   check(iosSimulation.bodyTop === "0px" && iosSimulation.bodyBottom === "0px", "simulated iOS visual background was inset");
   check(iosSimulation.appHeight === "100vh", `simulated iOS standalone canvas used ${iosSimulation.appHeight}, expected 100vh`);
 
@@ -228,16 +224,14 @@ try {
     root.style.setProperty('--browser-safe-bottom', '99px');
     root.style.setProperty('--native-safe-top', '24px');
     root.style.setProperty('--native-safe-bottom', '24px');
-    root.style.setProperty('--dock-bottom-gap', '0px');
     const style = getComputedStyle(root);
     const app = getComputedStyle(document.querySelector('.app'));
     const dock = getComputedStyle(document.querySelector('.floating-dock'));
-    return { finalTop: style.getPropertyValue('--app-safe-top').trim(), finalBottom: style.getPropertyValue('--app-safe-bottom').trim(), appTop: app.paddingTop, dockBottom: dock.bottom, dockPaddingBottom: dock.paddingBottom };
+    return { finalTop: style.getPropertyValue('--app-safe-top').trim(), finalBottom: style.getPropertyValue('--app-safe-bottom').trim(), appTop: app.paddingTop, dockBottom: dock.bottom };
   })()`);
   check(androidSimulation.finalTop === "24px" && androidSimulation.finalBottom === "24px", "Android did not exclusively select native inset variables");
   check(androidSimulation.appTop === "24px", `simulated Android top inset was applied ${androidSimulation.appTop}, expected once`);
-  check(androidSimulation.dockBottom === "0px", `simulated Android dock background stayed ${androidSimulation.dockBottom} above the bottom with configured distance 0`);
-  check(androidSimulation.dockPaddingBottom === "30px", `simulated Android dock content padding was ${androidSimulation.dockPaddingBottom}, expected 6px + 24px`);
+  check(androidSimulation.dockBottom === "42px", `simulated Android dock offset was ${androidSimulation.dockBottom}, expected 18px + 24px`);
 
   await send("Emulation.setDeviceMetricsOverride", {
     width: 844,
