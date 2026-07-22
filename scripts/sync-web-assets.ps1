@@ -5,8 +5,10 @@ $targetRoot = Join-Path $projectRoot "android/app/src/main/assets/www"
 $files = @(
     "index.html",
     "app.js",
+    "pwa-update.js",
     "style.css",
     "service-worker.js",
+    "version.json",
     "manifest.webmanifest",
     "manifest-meh.webmanifest",
     "manifest-zh.webmanifest",

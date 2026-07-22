@@ -6,11 +6,12 @@
     <meta id="themeColorMeta" name="theme-color" content="#e8e3e8" media="(prefers-color-scheme: light)" />
     <meta id="themeColorDarkMeta" name="theme-color" content="#1d1b20" media="(prefers-color-scheme: dark)" />
     <meta name="color-scheme" content="light dark" />
+    <meta name="meh-build" content="1.1.1-pwa-r2" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta id="appleWebAppTitle" name="apple-mobile-web-app-title" content="随便吧" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>随便吧</title>
-    <link id="appManifest" rel="manifest" href="./manifest-zh.webmanifest" />
+    <link id="appManifest" rel="manifest" href="./manifest-zh.webmanifest?v=1.1.1-pwa-r2" />
     <script>
       (() => {
         const supportedLanguages = ["zh", "en", "ja", "kk"];
@@ -28,17 +29,18 @@
 
         const isChinese = language === "zh";
         const appName = isChinese ? "随便吧" : "Meh";
+        const pwaBuild = document.querySelector('meta[name="meh-build"]').content;
         document.documentElement.lang = isChinese ? "zh-CN" : language;
         document.title = appName;
         document.querySelector("#appleWebAppTitle").content = appName;
         document.querySelector("#appManifest").href = isChinese
-          ? "./manifest-zh.webmanifest"
-          : "./manifest-meh.webmanifest";
+          ? `./manifest-zh.webmanifest?v=${encodeURIComponent(pwaBuild)}`
+          : `./manifest-meh.webmanifest?v=${encodeURIComponent(pwaBuild)}`;
       })();
     </script>
-    <link rel="icon" href="./favicon.ico" sizes="any" />
-    <link rel="apple-touch-icon" href="./icons/icon-180.png" />
-    <link rel="stylesheet" href="./style.css?v=1.1.1" />
+    <link rel="icon" href="./favicon.ico?v=1.1.1-pwa-r2" sizes="any" />
+    <link rel="apple-touch-icon" href="./icons/icon-180.png?v=1.1.1-pwa-r2" />
+    <link rel="stylesheet" href="./style.css?v=1.1.1-pwa-r2" />
   </head>
   <body>
     <div class="phone-frame">
@@ -304,6 +306,19 @@
           <option value="kk">Қазақша</option>
         </select>
       </section>
+
+      <section class="setting-card version-card" aria-labelledby="aboutVersionTitle">
+        <div class="setting-section-title">
+          <span class="material-symbols-rounded setting-title-icon" aria-hidden="true">info</span>
+          <span class="setting-title" id="aboutVersionTitle" data-i18n="aboutVersion">关于 / 版本</span>
+        </div>
+        <div class="version-details">
+          <span><span data-i18n="webVersion">Web 版本</span>：1.1.1</span>
+          <span><span data-i18n="buildVersion">构建</span>：<span id="pwaBuildValue">1.1.1-pwa-r2</span></span>
+        </div>
+        <button class="small-pill-button full-width" id="checkUpdateButton" type="button" data-i18n="checkUpdate">检查更新</button>
+        <p class="update-status" id="pwaUpdateStatus" role="status" aria-live="polite"></p>
+      </section>
     </aside>
 
     <aside class="editor-sheet" id="wheelEditorSheet" aria-hidden="true" aria-labelledby="wheelEditorTitle">
@@ -383,6 +398,7 @@
       <button class="save-preset-button" id="saveNumberSettingsButton" type="button" data-i18n="settings">设置</button>
     </aside>
 
-    <script src="./app.js?v=1.1.1"></script>
+    <script src="./pwa-update.js?v=1.1.1-pwa-r2" defer></script>
+    <script src="./app.js?v=1.1.1-pwa-r2" defer></script>
   </body>
 </html>

@@ -30,6 +30,8 @@ const offlineIconPaths = {
     "M12 3a9 9 0 0 0 0 18h1.5a1.8 1.8 0 0 0 1.2-3.1 1.2 1.2 0 0 1 .8-2.1H17a6 6 0 0 0 0-12h-5zm-4 7a1.4 1.4 0 1 1 0-2.8A1.4 1.4 0 0 1 8 10zm3-3a1.4 1.4 0 1 1 0-2.8A1.4 1.4 0 0 1 11 7zm5 3a1.4 1.4 0 1 1 0-2.8A1.4 1.4 0 0 1 16 10zM7 14a1.4 1.4 0 1 1 0-2.8A1.4 1.4 0 0 1 7 14z",
   query_stats:
     "M4 19h16v2H2V3h2v16zm3-2V9h3v8H7zm5 0V5h3v12h-3zm5 0v-6h3v6h-3zM18.5 4 21 6.5l-1.4 1.4-.8-.8-3.6 3.6-2-2L9.4 12 8 10.6l5.2-5.2 2 2 2.2-2.2-.8-.8L18.5 4z",
+  info:
+    "M11 10h2v7h-2v-7zm0-4h2v2h-2V6zm1-4a10 10 0 1 1 0 20 10 10 0 0 1 0-20zm0 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16z",
   settings:
     "M19.4 13.5a7.8 7.8 0 0 0 0-3l2-1.5-2-3.5-2.4 1a8 8 0 0 0-2.6-1.5L14 2h-4l-.4 3a8 8 0 0 0-2.6 1.5l-2.4-1-2 3.5 2 1.5a7.8 7.8 0 0 0 0 3l-2 1.5 2 3.5 2.4-1a8 8 0 0 0 2.6 1.5l.4 3h4l.4-3a8 8 0 0 0 2.6-1.5l2.4 1 2-3.5-2-1.5zM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5z",
   tag: "M20 10v10H4V10h16zM6 12v6h12v-6H6zm5-8h2v5h-2V4zM5 6h4v2H5V6zm10 0h4v2h-4V6z",
@@ -117,6 +119,16 @@ const i18n = {
     numberGroupTitle: "随机数组",
     numberGroupHint: "这一组数字来自 {range}。",
     rangeTo: "{min} 到 {max}",
+    aboutVersion: "关于 / 版本",
+    webVersion: "Web 版本",
+    buildVersion: "构建",
+    checkUpdate: "检查更新",
+    updateChecking: "正在检查…",
+    updateInstalling: "正在更新…",
+    updateLatest: "已是最新版本",
+    updateOffline: "当前离线，暂时无法检查更新",
+    updateUnavailable: "当前环境不支持 PWA 更新检查",
+    updateError: "暂时无法检查更新",
   },
   en: {
     appName: "Meh",
@@ -198,6 +210,16 @@ const i18n = {
     numberGroupTitle: "Random group",
     numberGroupHint: "This group is from {range}.",
     rangeTo: "{min} to {max}",
+    aboutVersion: "About / Version",
+    webVersion: "Web version",
+    buildVersion: "Build",
+    checkUpdate: "Check for updates",
+    updateChecking: "Checking…",
+    updateInstalling: "Updating…",
+    updateLatest: "Up to date",
+    updateOffline: "Offline; updates cannot be checked right now",
+    updateUnavailable: "PWA updates are unavailable in this environment",
+    updateError: "Unable to check for updates right now",
   },
   ja: {
     appName: "まかせる",
@@ -279,6 +301,16 @@ const i18n = {
     numberGroupTitle: "乱数グループ",
     numberGroupHint: "この数字群は {range} から生成されました。",
     rangeTo: "{min} から {max}",
+    aboutVersion: "情報 / バージョン",
+    webVersion: "Web バージョン",
+    buildVersion: "ビルド",
+    checkUpdate: "更新を確認",
+    updateChecking: "確認中…",
+    updateInstalling: "更新中…",
+    updateLatest: "最新バージョンです",
+    updateOffline: "オフラインのため更新を確認できません",
+    updateUnavailable: "この環境では PWA 更新を確認できません",
+    updateError: "現在、更新を確認できません",
   },
   kk: {
     appName: "Таңдай сал",
@@ -360,6 +392,16 @@ const i18n = {
     numberGroupTitle: "Сандар тобы",
     numberGroupHint: "Бұл сандар {range} аралығынан алынды.",
     rangeTo: "{min} - {max}",
+    aboutVersion: "Қолданба туралы / Нұсқа",
+    webVersion: "Web нұсқасы",
+    buildVersion: "Құрастырылым",
+    checkUpdate: "Жаңартуды тексеру",
+    updateChecking: "Тексерілуде…",
+    updateInstalling: "Жаңартылуда…",
+    updateLatest: "Соңғы нұсқа орнатылған",
+    updateOffline: "Қазір офлайн, жаңартуды тексеру мүмкін емес",
+    updateUnavailable: "Бұл ортада PWA жаңартуын тексеру мүмкін емес",
+    updateError: "Жаңартуды қазір тексеру мүмкін емес",
   },
 };
 
@@ -598,12 +640,13 @@ const els = {
   numberCountInput: document.querySelector("#numberCountInput"),
   numberRepeatInput: document.querySelector("#numberRepeatInput"),
   saveNumberSettingsButton: document.querySelector("#saveNumberSettingsButton"),
+  checkUpdateButton: document.querySelector("#checkUpdateButton"),
+  pwaUpdateStatus: document.querySelector("#pwaUpdateStatus"),
 };
 
 init();
 
 async function init() {
-  registerServiceWorker();
   requestPersistentStorage();
   syncAppHeight();
 
@@ -667,6 +710,14 @@ function bindEvents() {
   els.addWheelOptionButton.addEventListener("click", addWheelOption);
   els.saveWheelPresetButton.addEventListener("click", saveCurrentWheelPreset);
   els.saveNumberSettingsButton.addEventListener("click", saveNumberSettingsFromPanel);
+  els.checkUpdateButton?.addEventListener("click", async () => {
+    setPwaUpdateStatus("checking");
+    await window.MehPwaUpdate?.checkForUpdates({ manual: true, force: true });
+  });
+  window.addEventListener("meh:pwa-update-status", (event) => {
+    setPwaUpdateStatus(event.detail?.status);
+  });
+  if (window.MehPwaUpdate?.status) setPwaUpdateStatus(window.MehPwaUpdate.status);
   window.addEventListener("resize", () => {
     syncAppHeight();
     updateDockIndicator();
@@ -675,16 +726,6 @@ function bindEvents() {
     window.visualViewport.addEventListener("resize", syncAppHeight);
   }
   bindDocumentScrollLock();
-}
-
-function registerServiceWorker() {
-  if (!("serviceWorker" in navigator) || window.location.protocol === "file:") return;
-
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js").catch((error) => {
-      console.warn("Service worker registration failed:", error);
-    });
-  });
 }
 
 async function requestPersistentStorage() {
@@ -2756,6 +2797,23 @@ function applyI18n() {
   renderWallpaperGrid();
   renderDarkModeMenu();
   updateDarkModeMenu();
+  if (els.pwaUpdateStatus?.dataset.status) {
+    setPwaUpdateStatus(els.pwaUpdateStatus.dataset.status);
+  }
+}
+
+function setPwaUpdateStatus(status) {
+  if (!els.pwaUpdateStatus) return;
+  const statusKeys = {
+    checking: "updateChecking",
+    updating: "updateInstalling",
+    latest: "updateLatest",
+    offline: "updateOffline",
+    unavailable: "updateUnavailable",
+    error: "updateError",
+  };
+  els.pwaUpdateStatus.dataset.status = status || "";
+  els.pwaUpdateStatus.textContent = statusKeys[status] ? t(statusKeys[status]) : "";
 }
 
 function updateAppIdentity(lang) {
@@ -2768,9 +2826,10 @@ function updateAppIdentity(lang) {
 
   const manifest = document.querySelector("#appManifest");
   if (manifest) {
+    const pwaBuild = document.querySelector('meta[name="meh-build"]')?.content || "";
     manifest.href = lang === "zh"
-      ? "./manifest-zh.webmanifest"
-      : "./manifest-meh.webmanifest";
+      ? `./manifest-zh.webmanifest?v=${encodeURIComponent(pwaBuild)}`
+      : `./manifest-meh.webmanifest?v=${encodeURIComponent(pwaBuild)}`;
   }
 }
 

@@ -1,137 +1,121 @@
-const CACHE_NAME = "meh-cache-v1.1.1";
-const RUNTIME_CACHE_NAME = "meh-runtime-v1.1.1";
+const SW_VERSION = "1.1.1-pwa-r2";
+const CACHE_NAME = `meh-shell-${SW_VERSION}`;
+const RUNTIME_CACHE_NAME = `meh-runtime-${SW_VERSION}`;
 
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./style.css?v=1.1.1",
-  "./app.js?v=1.1.1",
-  "./manifest.webmanifest",
-  "./manifest-meh.webmanifest",
-  "./manifest-zh.webmanifest",
-  "./favicon.ico",
-  "./fonts/material-symbols-rounded.woff2",
-  "./icons/icon-180.png",
-  "./icons/icon-192.png",
-  "./icons/icon-512.png",
-  "./icons/icon-1024.png",
-  "./icons/icon-maskable-192.png",
-  "./icons/icon-maskable-512.png"
+  `./style.css?v=${SW_VERSION}`,
+  `./app.js?v=${SW_VERSION}`,
+  `./pwa-update.js?v=${SW_VERSION}`,
+];
+
+const OPTIONAL_ASSETS = [
+  `./manifest.webmanifest?v=${SW_VERSION}`,
+  `./manifest-meh.webmanifest?v=${SW_VERSION}`,
+  `./manifest-zh.webmanifest?v=${SW_VERSION}`,
+  `./favicon.ico?v=${SW_VERSION}`,
+  `./fonts/material-symbols-rounded.woff2?v=${SW_VERSION}`,
+  `./icons/icon-180.png?v=${SW_VERSION}`,
+  `./icons/icon-192.png?v=${SW_VERSION}`,
+  `./icons/icon-512.png?v=${SW_VERSION}`,
+  `./icons/icon-1024.png?v=${SW_VERSION}`,
+  `./icons/icon-maskable-192.png?v=${SW_VERSION}`,
+  `./icons/icon-maskable-512.png?v=${SW_VERSION}`,
 ];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) =>
-      Promise.allSettled(
-        APP_SHELL.map((url) =>
-          cache.add(new Request(url, { cache: "reload" })).catch(() => null)
-        )
-      )
-    )
-  );
-  self.skipWaiting();
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    await cache.addAll(APP_SHELL.map((url) => new Request(url, { cache: "reload" })));
+    await Promise.allSettled(
+      OPTIONAL_ASSETS.map((url) => cache.add(new Request(url, { cache: "reload" })))
+    );
+    await self.skipWaiting();
+  })());
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") {
+    event.waitUntil(self.skipWaiting());
+  }
+  if (event.data?.type === "GET_VERSION") {
+    event.source?.postMessage({ type: "SW_VERSION", version: SW_VERSION });
+  }
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches
-      .keys()
-      .then((keys) =>
-        Promise.all(
-          keys
-            .filter((key) => ![CACHE_NAME, RUNTIME_CACHE_NAME].includes(key))
-            .map((key) => caches.delete(key))
-        )
-      )
-      .then(() => self.clients.claim())
-  );
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(
+      keys
+        .filter((key) => key.startsWith("meh-") && ![CACHE_NAME, RUNTIME_CACHE_NAME].includes(key))
+        .map((key) => caches.delete(key))
+    );
+    await self.clients.claim();
+  })());
 });
 
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET") return;
 
+  const url = new URL(request.url);
+  if (url.origin === self.location.origin && url.pathname.endsWith("/version.json")) {
+    event.respondWith(fetch(new Request(request, { cache: "no-store" })).catch(() =>
+      new Response(JSON.stringify({ error: "offline" }), {
+        status: 503,
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+      })
+    ));
+    return;
+  }
+
   if (request.mode === "navigate") {
     event.respondWith(networkFirstForPage(request));
     return;
   }
 
-  const url = new URL(request.url);
   if (url.origin === self.location.origin) {
-    if (isCoreShellAsset(url)) {
-      event.respondWith(networkFirstForAsset(request));
-      return;
-    }
-
-    event.respondWith(cacheFirst(request));
+    event.respondWith(networkFirstForAsset(request));
     return;
   }
 
-  // Cross-origin runtime resources: update online, fall back to cache offline.
   event.respondWith(staleWhileRevalidate(request));
 });
 
 async function networkFirstForPage(request) {
   const cache = await caches.open(CACHE_NAME);
-
   try {
-    const response = await fetch(request);
-    if (response && response.ok) {
-      await cache.put("./index.html", response.clone());
-    }
+    const response = await fetch(new Request(request, { cache: "no-cache" }));
+    if (response?.ok) await cache.put("./index.html", response.clone());
     return response;
   } catch {
-    return (await cache.match("./index.html")) || (await cache.match("./"));
+    return (await cache.match("./index.html")) || (await cache.match("./")) || Response.error();
   }
 }
 
 async function networkFirstForAsset(request) {
   const cache = await caches.open(CACHE_NAME);
-
   try {
     const response = await fetch(request);
-    if (response && response.ok) {
-      await cache.put(request, response.clone());
-    }
+    if (response?.ok) await cache.put(request, response.clone());
     return response;
   } catch {
-    return (await cache.match(request)) || (await cache.match(stripVersionParam(request)));
+    return (await cache.match(request)) || Response.error();
   }
-}
-
-async function cacheFirst(request) {
-  const cached = await caches.match(request);
-  if (cached) return cached;
-
-  const cache = await caches.open(CACHE_NAME);
-  const response = await fetch(request);
-  if (response && response.ok) await cache.put(request, response.clone());
-  return response;
 }
 
 async function staleWhileRevalidate(request) {
   const cache = await caches.open(RUNTIME_CACHE_NAME);
   const cached = await cache.match(request);
-
-  const fetchPromise = fetch(request)
+  const network = fetch(request)
     .then((response) => {
       if (response && (response.ok || response.type === "opaque")) {
         cache.put(request, response.clone());
       }
       return response;
     })
-    .catch(() => cached);
-
-  return cached || fetchPromise;
-}
-
-function isCoreShellAsset(url) {
-  const path = url.pathname.split("/").pop();
-  return path === "app.js" || path === "style.css" || path === "index.html" || path === "";
-}
-
-function stripVersionParam(request) {
-  const url = new URL(request.url);
-  url.searchParams.delete("v");
-  return new Request(url.toString(), { cache: "reload" });
+    .catch(() => cached || Response.error());
+  return cached || network;
 }
