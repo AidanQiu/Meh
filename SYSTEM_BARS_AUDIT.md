@@ -1,6 +1,13 @@
 # iOS PWA / Android WebView 系统栏专项审计
 
-构建标识：`1.1.1-pwa-r8`
+构建标识：`1.1.1-pwa-r9`
+
+## r9 底部导航与顶部接缝复盘
+
+- “离底部距离”只控制 `--dock-bottom-gap`，但 r8 最终规则把 `.floating-dock` 放在 `bottom: dockBottomGap + safe-area-inset-bottom`。因此用户设置 0 时，整个导航背景仍被底部安全区向上抬起；截图中的剩余距离就是这条规则产生的真实空间。
+- r9 将导航背景外框改为 `bottom: var(--dock-bottom-gap)`。安全区只加入导航内部 `padding-bottom`，按钮和活动指示层仍位于手势条上方；距离设为 0 时，导航背景的下边缘实际到达屏幕底部。
+- 页面操作按钮仍使用 `dockBottomGap + safe-area + dockThickness` 计算，不会因导航背景下沉而被遮挡。Android 手势和三键导航也沿用同一“背景延伸、内容避让”结构。
+- iOS 系统状态栏在 WebKit 缺陷模式下只能显示宿主实色，网页此前第一像素却立即叠加紫色 radial gradient，形成可见横向色差。r9 在全局背景最上方增加从准确 `--surface` 开始的渐变过渡，使网页顶边与宿主 `theme-color/background-color` 使用同一个起始颜色；没有增加高度、padding、border 或 spacer。
 
 ## r8 iOS 真机截图复盘
 
@@ -61,7 +68,7 @@
 - 浏览器/iOS：`--app-safe-*` 唯一来源是四个 `env(safe-area-inset-*)` 变量。
 - Android WebView：原生读取 `systemBars | displayCutout`，按 density 从物理 px 转成 CSS px，写入 `--native-safe-*`；`.android-webview` 只把这些变量映射为 `--app-safe-*`，不再叠加 `env()`。
 - 顶部 inset 只由 `.app` 的内容 padding 使用一次；默认非系统顶部间距已改为 0。r6 若曾把旧默认 16px 写入本地设置，r7 会做一次版本化迁移，避免旧值继续制造空段；用户主动设置的其他数值保留。
-- 底部背景不缩进；`.floating-dock`、`.page-actions` 和共用 sheet 的交互内容分别使用同一个 `--app-safe-bottom` 来源完成必要避让。
+- 底部背景不缩进；`.floating-dock` 外框按用户配置的视觉距离定位，内部按钮 padding、`.page-actions` 和共用 sheet 的交互内容分别使用同一个 `--app-safe-bottom` 来源完成必要避让。
 - IME inset 仅记录诊断，不会保存为 bottom safe-area。WebView 使用 `adjustResize`；全屏背景高度始终由 CSS viewport 单位负责，`visualViewport` 只记录诊断，避免 iOS standalone 将扣过 safe-area 的值错误应用到根画布。
 
 ## Android Window 最终配置
@@ -80,7 +87,7 @@
 - 最终 HTML 只有一条 `theme-color`，启动脚本在 CSS 加载前按已保存主题同步其实际 surface 色。
 - 保留 `apple-mobile-web-app-capable=yes`、`apple-mobile-web-app-status-bar-style=black-translucent`，并补齐 `mobile-web-app-capable=yes`。
 - Service Worker 对导航继续使用 network-first；入口 HTML不会被长期 cache-first 固定。
-- r8 使用新的 shell/runtime cache 名称，activate 时删除旧 `meh-*` cache，`skipWaiting + clients.claim` 保持启用。
+- r9 使用新的 shell/runtime cache 名称，activate 时删除旧 `meh-*` cache，`skipWaiting + clients.claim` 保持启用。
 
 ## 诊断入口
 

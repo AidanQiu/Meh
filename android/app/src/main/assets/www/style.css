@@ -4,7 +4,7 @@
 
 @font-face {
   font-family: "Material Symbols Rounded";
-  src: url("./fonts/material-symbols-rounded.woff2?v=1.1.1-pwa-r8") format("woff2");
+  src: url("./fonts/material-symbols-rounded.woff2?v=1.1.1-pwa-r9") format("woff2");
   font-display: block;
   font-style: normal;
   font-weight: 100 700;
@@ -31,7 +31,8 @@
   --shadow-3: 0 22px 34px rgba(29, 27, 32, 0.18);
   --ease: cubic-bezier(0.2, 0, 0, 1);
   --app-background:
-    radial-gradient(circle at 16% 6%, color-mix(in srgb, var(--primary) 18%, transparent), transparent 30%),
+    linear-gradient(180deg, var(--surface) 0px, transparent 112px),
+    radial-gradient(circle at 16% 12%, color-mix(in srgb, var(--primary) 18%, transparent), transparent 30%),
     linear-gradient(180deg, var(--surface) 0%, var(--surface-container) 100%);
   --app-background-size: auto;
   --app-background-position: center;
@@ -2509,14 +2510,19 @@ body {
   position: fixed !important;
   left: var(--dock-side-gap) !important;
   right: var(--dock-side-gap) !important;
-  bottom: var(--dock-bottom-offset) !important;
+  bottom: var(--dock-bottom-gap) !important;
   width: auto !important;
   transform: none !important;
-  padding: 6px !important;
+  padding: 6px 6px calc(6px + var(--app-safe-bottom)) !important;
 }
 
 .dock-item {
   min-height: calc(var(--dock-thickness) * var(--ui-scale)) !important;
+}
+
+.dock-indicator {
+  top: 6px !important;
+  bottom: calc(6px + var(--app-safe-bottom)) !important;
 }
 
 .page-actions {

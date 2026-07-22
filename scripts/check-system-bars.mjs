@@ -36,7 +36,9 @@ check(directSafeAreaUses.length === 4, `safe-area env() must appear only in four
 check(!css.includes("constant(safe-area"), "legacy constant(safe-area...) handling must not coexist");
 check(css.includes(":root.android-webview") && css.includes("--app-safe-top: var(--native-safe-top)"), "Android must select native safe-area variables");
 check(css.includes("padding-top: calc(var(--app-safe-top) + var(--top-extra))"), "top content must consume the unified top inset once");
-check(css.includes("--dock-bottom-offset: calc(var(--dock-bottom-gap) + var(--app-safe-bottom))"), "bottom dock must consume the unified bottom inset");
+check(css.includes("--dock-bottom-offset: calc(var(--dock-bottom-gap) + var(--app-safe-bottom))"), "content stacked above the dock must include the unified bottom inset");
+check(css.includes("bottom: var(--dock-bottom-gap) !important") && css.includes("padding: 6px 6px calc(6px + var(--app-safe-bottom)) !important"), "dock background must use the configured visual gap while only its content consumes the bottom inset");
+check(css.includes("bottom: calc(6px + var(--app-safe-bottom)) !important"), "dock indicator must remain above the bottom safe area");
 check(!css.includes(".settings-sheet::after") && !css.includes(".editor-sheet::after"), "bottom sheet safe-area spacer pseudo-elements must be absent");
 check(!/--top-extra:\s*(20|24|44|47|59)px/.test(css), "fixed status-bar-sized top spacer found");
 check(css.includes("#customBgLayer {\n  position: fixed;\n  inset: 0;"), "custom background must cover the viewport behind system bars");
@@ -46,6 +48,7 @@ check(app.includes('document.body.insertBefore(bgLayer, document.body.firstChild
 check(!app.includes('setProperty("--app-height"'), "JavaScript must not size the full-screen canvas from visualViewport");
 check(css.includes(":root.pwa-standalone") && css.includes("--app-height: 100vh"), "iOS standalone must use the full-screen vh canvas instead of WebKit's inset dvh/visualViewport height");
 check(css.includes("background-color: var(--surface) !important") && css.includes("background-image: var(--app-background) !important"), "root canvas needs a non-transparent system fallback color behind its visual background");
+check(css.includes("linear-gradient(180deg, var(--surface) 0px, transparent 112px)"), "web canvas must begin with the exact system surface color before decorative gradients appear");
 check(app.includes("window.MehLayoutDiagnostics"), "web inset diagnostics are missing");
 
 check((activity.match(/WindowCompat\.setDecorFitsSystemWindows\(window, false\)/g) || []).length === 1, "decorFitsSystemWindows=false must be configured exactly once");
