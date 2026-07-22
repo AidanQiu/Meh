@@ -1,4 +1,4 @@
-# ![随便吧 / Meh 图标](icons/meh_icon.png) 随便吧 / Meh
+# 随便吧 / Meh
 
 「随便吧 / Meh」是一款简洁的决策辅助应用：在犹豫时，用一次随机结果帮你快速做出选择。它提供可安装的网页 PWA，也提供基于本地 WebView 的 Android APK。
 
