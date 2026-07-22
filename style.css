@@ -4,7 +4,7 @@
 
 @font-face {
   font-family: "Material Symbols Rounded";
-  src: url("./fonts/material-symbols-rounded.woff2?v=1.1.1-pwa-r5") format("woff2");
+  src: url("./fonts/material-symbols-rounded.woff2?v=1.1.1-pwa-r6") format("woff2");
   font-display: block;
   font-style: normal;
   font-weight: 100 700;
@@ -1648,7 +1648,13 @@ p {
 }
 
 .file-input {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .full-width {
@@ -2450,7 +2456,9 @@ html {
   min-height: 100% !important;
   height: auto !important;
   overflow: hidden !important;
-  background: var(--surface-container) !important;
+  background: var(--app-background) !important;
+  background-size: var(--app-background-size) !important;
+  background-position: var(--app-background-position) !important;
 }
 
 body {
@@ -2477,7 +2485,9 @@ body {
   height: auto !important;
   max-height: none !important;
   margin: 0 auto !important;
-  background: color-mix(in srgb, var(--surface) 92%, transparent) !important;
+  background: var(--app-background) !important;
+  background-size: var(--app-background-size) !important;
+  background-position: var(--app-background-position) !important;
   box-shadow: 0 0 0 1px rgba(127, 116, 124, 0.14), var(--shadow-2) !important;
   overflow: hidden !important;
   transform: none !important;
@@ -2485,9 +2495,17 @@ body {
 
 .app {
   min-height: 100dvh !important;
+  min-height: var(--app-height) !important;
   height: auto !important;
+  background: transparent !important;
   overflow: hidden !important;
   padding-bottom: calc(188px * var(--ui-scale) + var(--safe-area-bottom)) !important;
+}
+
+@media (max-width: 480px) {
+  .phone-frame {
+    box-shadow: none !important;
+  }
 }
 
 .floating-dock {

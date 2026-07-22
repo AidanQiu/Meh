@@ -650,6 +650,10 @@ async function init() {
   requestPersistentStorage();
   syncAppHeight();
 
+  const isStandalone = window.matchMedia?.("(display-mode: standalone)").matches || navigator.standalone === true;
+  const runtime = window.MehAndroid ? "Android WebView" : isStandalone ? "PWA standalone" : "browser";
+  console.info(`[Meh] Runtime environment: ${runtime}`);
+
   numberState.settings = loadNumberSettings();
   wheelState.presets = loadWheelPresets();
   if (wheelState.presets.length) {
@@ -712,8 +716,26 @@ function bindEvents() {
   els.saveNumberSettingsButton.addEventListener("click", saveNumberSettingsFromPanel);
   els.checkUpdateButton?.addEventListener("click", async () => {
     setPwaUpdateStatus("checking");
+    if (window.MehAndroid?.checkForUpdates) {
+      els.checkUpdateButton.disabled = true;
+      console.info("[Meh] Manual Android update check requested");
+      window.MehAndroid.checkForUpdates();
+      return;
+    }
     await window.MehPwaUpdate?.checkForUpdates({ manual: true, force: true });
   });
+  window.MehAndroidUpdateResult = (status) => {
+    if (els.checkUpdateButton) els.checkUpdateButton.disabled = false;
+    setPwaUpdateStatus(status === "available" ? "" : status);
+  };
+  if (window.MehAndroid?.getVersionName) {
+    const detail = document.querySelector("#androidVersionDetail");
+    const value = document.querySelector("#androidVersionValue");
+    if (detail && value) {
+      value.textContent = String(window.MehAndroid.getVersionName());
+      detail.hidden = false;
+    }
+  }
   window.addEventListener("meh:pwa-update-status", (event) => {
     setPwaUpdateStatus(event.detail?.status);
   });
@@ -2278,6 +2300,9 @@ function applyThemeColor(primaryColor, secondaryColor) {
   });
 
   document.body.style.backgroundColor = surfaceContainer;
+  if (window.MehAndroid?.setSystemBarColor) {
+    window.MehAndroid.setSystemBarColor(surface, isDark);
+  }
 }
 
 function getResolvedDarkMode() {
@@ -2477,6 +2502,7 @@ function handleWallpaperGridClick(event) {
   }
 
   if (event.target.closest("[data-wallpaper-add]")) {
+    console.info("[Meh] Custom background button clicked");
     els.backgroundImageInput.value = "";
     els.backgroundImageInput.click();
     return;
@@ -2498,12 +2524,24 @@ function handleWallpaperGridKeydown(event) {
   }
 }
 
-function clearCurrentBackground() {
-  appSettings.activeWallpaperId = "";
-  appSettings.backgroundImage = "";
-  applyBackgroundImage("", appSettings.backgroundOpacity);
-  saveAppSettings();
-  renderWallpaperGrid();
+async function clearCurrentBackground() {
+  const activeId = appSettings.activeWallpaperId;
+  try {
+    if (activeId) {
+      await deleteWallpaperFromDb(activeId);
+      wallpapers = wallpapers.filter((item) => item.id !== activeId);
+    }
+    appSettings.activeWallpaperId = "";
+    appSettings.backgroundImage = "";
+    applyBackgroundImage("", appSettings.backgroundOpacity);
+    saveAppSettings();
+    if (els.backgroundImageInput) els.backgroundImageInput.value = "";
+    if (wallpapers.length === 0) isWallpaperDeleteMode = false;
+    renderWallpaperGrid();
+    console.info("[Meh] Custom background deleted successfully");
+  } catch (error) {
+    console.error("[Meh] Failed to delete custom background:", error);
+  }
 }
 
 function toggleWallpaperDeleteMode() {
@@ -2555,62 +2593,91 @@ async function selectWallpaper(id) {
 async function removeWallpaper(id) {
   const wallpaper = wallpapers.find((item) => item.id === id);
   if (!wallpaper) return;
+  try {
+    await deleteWallpaperFromDb(id);
+    wallpapers = wallpapers.filter((item) => item.id !== id);
 
-  await deleteWallpaperFromDb(id);
-  wallpapers = wallpapers.filter((item) => item.id !== id);
+    if (appSettings.activeWallpaperId === id) {
+      appSettings.activeWallpaperId = "";
+      appSettings.backgroundImage = "";
+      applyBackgroundImage("", appSettings.backgroundOpacity);
+      saveAppSettings();
+    }
 
-  if (appSettings.activeWallpaperId === id) {
-    appSettings.activeWallpaperId = "";
-    appSettings.backgroundImage = "";
-    applyBackgroundImage("", appSettings.backgroundOpacity);
-    saveAppSettings();
+    if (wallpapers.length === 0) isWallpaperDeleteMode = false;
+    if (els.backgroundImageInput) els.backgroundImageInput.value = "";
+    renderWallpaperGrid();
+    console.info("[Meh] Wallpaper deleted successfully");
+  } catch (error) {
+    console.error("[Meh] Failed to delete wallpaper:", error);
   }
-
-  if (wallpapers.length === 0) {
-    isWallpaperDeleteMode = false;
-  }
-
-  renderWallpaperGrid();
 }
 
 async function handleBackgroundImageSelect(event) {
+  console.info("[Meh] Background file selection callback received");
   const slotsLeft = MAX_WALLPAPERS - wallpapers.length;
   const files = Array.from(event.target.files || [])
     .filter((file) => file.type.startsWith("image/"))
     .slice(0, Math.max(0, slotsLeft));
 
   if (!files.length) {
+    console.info("[Meh] Background file selection cancelled or contained no supported image");
     event.target.value = "";
     return;
   }
 
   const createdWallpapers = [];
+  try {
+    for (const [index, file] of files.entries()) {
+      const dataUrl = await readWallpaperFile(file);
+      const wallpaper = {
+        id: createWallpaperId(),
+        name: file.name || t("uploadWallpaper"),
+        type: file.type || "image/*",
+        dataUrl,
+        createdAt: Date.now() + index,
+      };
 
-  for (const [index, file] of files.entries()) {
-    const dataUrl = await readFileAsDataUrl(file);
-    const wallpaper = {
-      id: createWallpaperId(),
-      name: file.name || t("uploadWallpaper"),
-      type: file.type || "image/*",
-      dataUrl,
-      createdAt: Date.now() + index,
-    };
+      await saveWallpaperToDb(wallpaper);
+      wallpapers.push(wallpaper);
+      createdWallpapers.push(wallpaper);
+    }
 
-    await saveWallpaperToDb(wallpaper);
-    wallpapers.push(wallpaper);
-    createdWallpapers.push(wallpaper);
+    wallpapers.sort((a, b) => Number(a.createdAt || 0) - Number(b.createdAt || 0));
+    const latestWallpaper = createdWallpapers.at(-1);
+    console.info(`[Meh] Saved ${createdWallpapers.length} background image(s) to IndexedDB`);
+    if (latestWallpaper) await selectWallpaper(latestWallpaper.id);
+    else renderWallpaperGrid();
+  } catch (error) {
+    console.error("[Meh] Failed to read or save background image:", error);
+    renderWallpaperGrid();
+  } finally {
+    event.target.value = "";
   }
+}
 
-  wallpapers.sort((a, b) => Number(a.createdAt || 0) - Number(b.createdAt || 0));
-  event.target.value = "";
-
-  const latestWallpaper = createdWallpapers.at(-1);
-  if (latestWallpaper) {
-    await selectWallpaper(latestWallpaper.id);
-    return;
+async function readWallpaperFile(file) {
+  if (file.size <= 8 * 1024 * 1024) return readFileAsDataUrl(file);
+  if (typeof createImageBitmap !== "function") return readFileAsDataUrl(file);
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch (error) {
+    console.warn("[Meh] Large image resize unavailable; preserving original image data", error);
+    return readFileAsDataUrl(file);
   }
-
-  renderWallpaperGrid();
+  try {
+    const scale = Math.min(1, 2560 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Canvas 2D is unavailable");
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", 0.86);
+  } finally {
+    bitmap.close();
+  }
 }
 
 async function migrateLegacyBackgroundImage() {
@@ -2890,6 +2957,7 @@ function unlockPageScroll() {
 
 function openSheet(sheet) {
   if (!sheet) return;
+  const alreadyHasOpenSheet = Boolean(document.querySelector(".settings-sheet.is-open, .editor-sheet.is-open"));
   window.clearTimeout(sheetCloseTimer);
   syncAppHeight();
   lockPageScroll();
@@ -2899,9 +2967,17 @@ function openSheet(sheet) {
   sheet.style.transform = "";
   sheet.classList.add("is-open");
   sheet.setAttribute("aria-hidden", "false");
+  if (!alreadyHasOpenSheet) {
+    history.pushState({ ...(history.state || {}), mehOverlay: sheet.id }, "", location.href);
+  }
+  console.info(`[Meh] Route opened: ${sheet.id}`);
 }
 
-function closeAllSheets() {
+function closeAllSheets(options = {}) {
+  if (!options.fromHistory && history.state?.mehOverlay) {
+    history.back();
+    return;
+  }
   window.clearTimeout(sheetCloseTimer);
   closeLanguageMenu();
 
@@ -2922,7 +2998,51 @@ function closeAllSheets() {
 
   document.body.classList.remove("sheet-open");
   unlockPageScroll();
+  console.info("[Meh] Route restored to main page");
 }
+
+window.addEventListener("popstate", () => {
+  closeAllSheets({ fromHistory: true });
+});
+
+window.MehAppBack = {
+  handleBack() {
+    if (els.languageMenu && !els.languageMenu.hidden) {
+      closeLanguageMenu();
+      console.info("[Meh] Back handled by language menu");
+      return true;
+    }
+    if (els.darkModeMenu && !els.darkModeMenu.hidden) {
+      closeDarkModeMenu();
+      console.info("[Meh] Back handled by dark mode menu");
+      return true;
+    }
+    const openColorPicker = document.querySelector(".advanced-color-picker:not([hidden])");
+    if (openColorPicker) {
+      openColorPicker.hidden = true;
+      console.info("[Meh] Back handled by color picker");
+      return true;
+    }
+    if (wheelState.historyExpanded) {
+      wheelState.historyExpanded = false;
+      updateWheelStats();
+      console.info("[Meh] Back handled by wheel history");
+      return true;
+    }
+    if (numberState.historyExpanded) {
+      numberState.historyExpanded = false;
+      updateNumberHistoryStats();
+      console.info("[Meh] Back handled by number history");
+      return true;
+    }
+    if (document.querySelector(".settings-sheet.is-open, .editor-sheet.is-open")) {
+      closeAllSheets();
+      console.info("[Meh] Back handled by open sheet");
+      return true;
+    }
+    return false;
+  },
+};
 function bindDarkModeMenu() {
   if (!els.darkModeMenuButton || !els.darkModeMenu) return;
 
