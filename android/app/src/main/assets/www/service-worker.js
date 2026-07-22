@@ -1,4 +1,4 @@
-const SW_VERSION = "1.1.1-pwa-r2";
+const SW_VERSION = "1.1.1-pwa-r3";
 const CACHE_NAME = `meh-shell-${SW_VERSION}`;
 const RUNTIME_CACHE_NAME = `meh-runtime-${SW_VERSION}`;
 
@@ -16,12 +16,7 @@ const OPTIONAL_ASSETS = [
   `./manifest-zh.webmanifest?v=${SW_VERSION}`,
   `./favicon.ico?v=${SW_VERSION}`,
   `./fonts/material-symbols-rounded.woff2?v=${SW_VERSION}`,
-  `./icons/icon-180.png?v=${SW_VERSION}`,
-  `./icons/icon-192.png?v=${SW_VERSION}`,
-  `./icons/icon-512.png?v=${SW_VERSION}`,
-  `./icons/icon-1024.png?v=${SW_VERSION}`,
-  `./icons/icon-maskable-192.png?v=${SW_VERSION}`,
-  `./icons/icon-maskable-512.png?v=${SW_VERSION}`,
+  `./icons/meh_icon.png?v=${SW_VERSION}`,
 ];
 
 self.addEventListener("install", (event) => {

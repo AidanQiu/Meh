@@ -21,11 +21,27 @@ foreach ($file in $files) {
     Copy-Item -LiteralPath (Join-Path $projectRoot $file) -Destination (Join-Path $targetRoot $file) -Force
 }
 
-foreach ($directory in @("fonts", "icons")) {
-    $sourceDirectory = Join-Path $projectRoot $directory
-    $targetDirectory = Join-Path $targetRoot $directory
-    New-Item -ItemType Directory -Force -Path $targetDirectory | Out-Null
-    Copy-Item -Path (Join-Path $sourceDirectory "*") -Destination $targetDirectory -Recurse -Force
+$sourceFonts = Join-Path $projectRoot "fonts"
+$targetFonts = Join-Path $targetRoot "fonts"
+New-Item -ItemType Directory -Force -Path $targetFonts | Out-Null
+Copy-Item -Path (Join-Path $sourceFonts "*") -Destination $targetFonts -Recurse -Force
+
+$iconFiles = @(
+    "icon_monochrome.svg",
+    "meh_background.svg",
+    "meh_foreground.svg",
+    "meh_icon.png"
+)
+$sourceIcons = Join-Path $projectRoot "icons"
+$targetIcons = Join-Path $targetRoot "icons"
+New-Item -ItemType Directory -Force -Path $targetIcons | Out-Null
+
+Get-ChildItem -LiteralPath $targetIcons -File | Where-Object {
+    $_.Name -notin $iconFiles
+} | Remove-Item -Force
+
+foreach ($iconFile in $iconFiles) {
+    Copy-Item -LiteralPath (Join-Path $sourceIcons $iconFile) -Destination (Join-Path $targetIcons $iconFile) -Force
 }
 
 Write-Output "Web assets synchronized to $targetRoot"

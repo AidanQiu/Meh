@@ -75,7 +75,7 @@ const navigatorMock = {
 const documentMock = Object.assign(documentHub, {
   visibilityState: "visible",
   querySelector(selector) {
-    return selector === 'meta[name="meh-build"]' ? { content: "1.1.1-pwa-r1" } : null;
+    return selector === 'meta[name="meh-build"]' ? { content: "1.1.1-pwa-r2" } : null;
   },
 });
 const locationMock = {
@@ -91,7 +91,7 @@ const context = vm.createContext({
   document: documentMock,
   fetch: async (url, options) => {
     versionFetch = { url, options };
-    return { ok: true, json: async () => ({ version: "1.1.1", build: "1.1.1-pwa-r2" }) };
+    return { ok: true, json: async () => ({ version: "1.1.1", build: "1.1.1-pwa-r3" }) };
   },
   indexedDB: fakeIndexedDb,
   localStorage: {
@@ -118,14 +118,14 @@ const assert = (condition, message) => {
   if (!condition) throw new Error(message);
 };
 
-assert(registerArgs?.url === "./service-worker.js?v=1.1.1-pwa-r1", "registration URL did not use the page build");
+assert(registerArgs?.url === "./service-worker.js?v=1.1.1-pwa-r2", "registration URL did not use the page build");
 assert(registerArgs?.options?.updateViaCache === "none", "updateViaCache was not disabled");
 assert(updateCalls >= 1, "registration.update() was not called");
 assert(versionFetch?.url.startsWith("./version.json?t="), "version.json timestamp was missing");
 assert(versionFetch?.options?.cache === "no-store", "version.json did not bypass HTTP cache");
 assert(skipWaitingMessages >= 1, "waiting worker did not receive SKIP_WAITING");
 assert(reloadCalls === 1, "controllerchange did not reload exactly once");
-assert(sessionData.get("meh-sw-reloaded-for-build") === "1.1.1-pwa-r1", "reload guard was not stored");
+assert(sessionData.get("meh-sw-reloaded-for-build") === "1.1.1-pwa-r2", "reload guard was not stored");
 
 serviceWorkerHub.dispatchEvent({ type: "controllerchange" });
 assert(reloadCalls === 1, "a repeated controllerchange caused an extra reload");
@@ -155,7 +155,7 @@ for (const localLocation of [
     CustomEvent: class CustomEvent { constructor(type, init) { this.type = type; this.detail = init?.detail; } },
     Date,
     document: {
-      querySelector: () => ({ content: "1.1.1-pwa-r2" }),
+      querySelector: () => ({ content: "1.1.1-pwa-r3" }),
     },
     location: { ...localLocation, reload() {} },
     navigator: localNavigator,
@@ -166,4 +166,4 @@ for (const localLocation of [
   assert(localRegisterCalls === 0, `Service Worker registered for local Android context ${localLocation.protocol}//${localLocation.hostname}`);
 }
 
-console.log("PWA r1 -> r2 simulation passed: one reload, preserved local data, safe offline fallback, no Android-local registration.");
+console.log("PWA r2 -> r3 simulation passed: one reload, preserved local data, safe offline fallback, no Android-local registration.");
