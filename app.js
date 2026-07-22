@@ -2434,12 +2434,16 @@ function bindLayoutRange(input, valueNode, key) {
   input.value = appSettings[key];
   valueNode.textContent = appSettings[key];
 
-  input.addEventListener("input", () => {
+  const applyRangeValue = () => {
     appSettings[key] = Number(input.value);
     valueNode.textContent = appSettings[key];
     applyLayoutSettings();
     saveAppSettings();
-  });
+  };
+
+  input.addEventListener("input", applyRangeValue);
+  // Some iOS PWA builds only commit a native range control on release.
+  input.addEventListener("change", applyRangeValue);
 }
 
 function renderDarkModeMenu() {
@@ -2478,6 +2482,8 @@ function applyLayoutSettings() {
   els.root.style.setProperty("--dock-thickness", `${dockThickness}px`);
   els.root.style.setProperty("--dock-side-gap", `${dockSideGap}px`);
   els.root.style.setProperty("--dock-bottom-gap", `${dockBottomGap}px`);
+  // Keep the user-controlled outer gap on the dock itself. Safe-area padding stays inside the dock.
+  els.dock?.style.setProperty("bottom", `${dockBottomGap}px`, "important");
 
   if (els.topHeightRange) els.topHeightRange.value = topHeight;
   if (els.topHeightValue) els.topHeightValue.textContent = topHeight;
