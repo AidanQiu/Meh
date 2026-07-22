@@ -433,6 +433,14 @@ const defaultState = {
   page: "coin",
 };
  // 新增加设置项与控件绑定
+function detectInitialLanguage() {
+  const supportedLanguages = ["zh", "en", "ja", "kk"];
+  const browserLanguages = navigator.languages || [navigator.language || "en"];
+  return browserLanguages
+    .map((language) => String(language).toLowerCase().split("-")[0])
+    .find((language) => supportedLanguages.includes(language)) || "en";
+}
+
 const defaultAppSettings = {
   primaryThemeColor: "#6b9c94",
   secondaryThemeColor: "#6750a4",
@@ -445,7 +453,7 @@ const defaultAppSettings = {
   backgroundImage: "",
   activeWallpaperId: "",
   backgroundOpacity: 0.5,
-  language: "zh",
+  language: detectInitialLanguage(),
 };
 // 新增加设置项与控件绑定
 const primarySwatches = ["#e8e3e8", "#c9b0f6", "#94e8bd", "#87c7f4", "#f9aaa5", "#55beb4", "#ffbd4a",  "#ffffff", "#2d7434"];
@@ -2750,8 +2758,6 @@ function applyI18n() {
   updateDarkModeMenu();
 }
 
-// Keep the visible title, installed-PWA manifest, and optional native wrapper
-// in sync. Chinese uses “随便吧”; every other supported language uses “Meh”.
 function updateAppIdentity(lang) {
   const appName = lang === "zh" ? "随便吧" : "Meh";
   els.appName.textContent = appName;
@@ -2761,13 +2767,11 @@ function updateAppIdentity(lang) {
   if (appleTitle) appleTitle.content = appName;
 
   const manifest = document.querySelector("#appManifest");
-  if (manifest) manifest.href = lang === "zh" ? "./manifest-zh.webmanifest" : "./manifest-meh.webmanifest";
-
-  // Native Android wrappers can listen for this event and update their launcher
-  // label using localized Android resources (see android/README.md).
-  window.dispatchEvent(new CustomEvent("meh:app-name-change", {
-    detail: { name: appName, language: lang, isChinese: lang === "zh" },
-  }));
+  if (manifest) {
+    manifest.href = lang === "zh"
+      ? "./manifest-zh.webmanifest"
+      : "./manifest-meh.webmanifest";
+  }
 }
 
 function updateLanguageMenu() {

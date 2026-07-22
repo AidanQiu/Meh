@@ -433,6 +433,14 @@ const defaultState = {
   page: "coin",
 };
  // 新增加设置项与控件绑定
+function detectInitialLanguage() {
+  const supportedLanguages = ["zh", "en", "ja", "kk"];
+  const browserLanguages = navigator.languages || [navigator.language || "en"];
+  return browserLanguages
+    .map((language) => String(language).toLowerCase().split("-")[0])
+    .find((language) => supportedLanguages.includes(language)) || "en";
+}
+
 const defaultAppSettings = {
   primaryThemeColor: "#6b9c94",
   secondaryThemeColor: "#6750a4",
@@ -445,7 +453,7 @@ const defaultAppSettings = {
   backgroundImage: "",
   activeWallpaperId: "",
   backgroundOpacity: 0.5,
-  language: "zh",
+  language: detectInitialLanguage(),
 };
 // 新增加设置项与控件绑定
 const primarySwatches = ["#e8e3e8", "#c9b0f6", "#94e8bd", "#87c7f4", "#f9aaa5", "#55beb4", "#ffbd4a",  "#ffffff", "#2d7434"];
@@ -2735,8 +2743,7 @@ function applyI18n() {
   const lang = appSettings.language;
   document.documentElement.lang = lang === "zh" ? "zh-CN" : lang;
   updateLanguageMenu();
-  els.appName.textContent = t("appName");
-  document.title = t("appName");
+  updateAppIdentity(lang);
   els.resetButton.textContent = t("reset");
   els.continueButton.textContent = isCurrentPageEmpty() ? t("start") : t("continue");
 
@@ -2749,6 +2756,22 @@ function applyI18n() {
   renderWallpaperGrid();
   renderDarkModeMenu();
   updateDarkModeMenu();
+}
+
+function updateAppIdentity(lang) {
+  const appName = lang === "zh" ? "随便吧" : "Meh";
+  els.appName.textContent = appName;
+  document.title = appName;
+
+  const appleTitle = document.querySelector("#appleWebAppTitle");
+  if (appleTitle) appleTitle.content = appName;
+
+  const manifest = document.querySelector("#appManifest");
+  if (manifest) {
+    manifest.href = lang === "zh"
+      ? "./manifest-zh.webmanifest"
+      : "./manifest-meh.webmanifest";
+  }
 }
 
 function updateLanguageMenu() {

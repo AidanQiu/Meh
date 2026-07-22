@@ -1,18 +1,22 @@
-const CACHE_NAME = "meh-cache-v0.1.4";
-const RUNTIME_CACHE_NAME = "meh-runtime-v0.1.4";
+const CACHE_NAME = "meh-cache-v1.1.1";
+const RUNTIME_CACHE_NAME = "meh-runtime-v1.1.1";
 
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./style.css?v=0.1.4",
-  "./app.js?v=0.1.4",
+  "./style.css?v=1.1.1",
+  "./app.js?v=1.1.1",
   "./manifest.webmanifest",
+  "./manifest-meh.webmanifest",
+  "./manifest-zh.webmanifest",
   "./favicon.ico",
   "./fonts/material-symbols-rounded.woff2",
   "./icons/icon-180.png",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
-  "./icons/icon-1024.png"
+  "./icons/icon-1024.png",
+  "./icons/icon-maskable-192.png",
+  "./icons/icon-maskable-512.png"
 ];
 
 self.addEventListener("install", (event) => {

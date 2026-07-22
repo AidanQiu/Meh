@@ -10,6 +10,7 @@ android/.cxx/
 
 # Android build artifacts
 android/app/release/
+release-output/
 *.apk
 *.aab
 

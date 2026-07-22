@@ -1,6 +1,6 @@
 {
-  "name": "随便吧",
-  "short_name": "随便吧",
+  "name": "Meh",
+  "short_name": "Meh",
   "description": "A small offline decision helper for coins, dice, wheels, and random numbers.",
   "start_url": "./index.html",
   "scope": "./",

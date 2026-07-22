@@ -2,7 +2,7 @@
 
 「随便吧 / Meh」是一款简洁的决策辅助应用：在犹豫时，用一次随机结果帮你快速做出选择。它提供可安装的网页 PWA，也提供基于本地 WebView 的 Android APK。
 
-网页会根据已选语言使用不同名称：中文为“随便吧”，其他语言为“Meh”。Android 当前应用标签为 “Meh”。网页核心资源由 Service Worker 缓存，因此在首次成功加载后，核心功能可在离线时继续使用。
+网页会根据已选语言使用不同名称：中文为“随便吧”，其他语言为“Meh”。Android 启动器名称也会根据系统语言本地化：中文环境显示“随便吧”，其他语言显示“Meh”。网页核心资源由 Service Worker 缓存，因此在首次成功加载后，核心功能可在离线时继续使用。
 
 ## 主要功能
 
@@ -27,9 +27,9 @@
 
 ## Android 安装 APK
 
-APK 发布在 [GitHub Releases](https://github.com/AidanQiu/Meh/releases)。进入最新版本，下载其中列出的 APK；当前已发布资源名为 `Meh-1.0.0-release.apk`。
+APK 发布在 [GitHub Releases 的 Latest 版本](https://github.com/AidanQiu/Meh/releases/latest)。进入最新版本并下载其中的 APK。
 
-1. 打开 [GitHub Releases](https://github.com/AidanQiu/Meh/releases) 并进入最新版本。
+1. 打开 [GitHub Releases 的 Latest 版本](https://github.com/AidanQiu/Meh/releases/latest)。
 2. 下载 APK 文件。
 3. 下载完成后，点击该 APK 开始安装。
 4. 若系统提示不允许安装未知应用，进入提示页，临时允许当前浏览器或文件管理器安装未知应用。
@@ -84,13 +84,13 @@ Android 13 及以上设备可在支持的系统与桌面启动器中启用“主
 
 ### Android APK
 
-从 [GitHub Releases](https://github.com/AidanQiu/Meh/releases) 下载新版 APK。若新旧 APK 使用相同签名，可以覆盖安装；本项目的设置保存在 WebView 本地存储中，是否保留取决于安装/卸载方式与系统处理，升级前建议自行确认重要的本地预设。
+从 [GitHub Releases 的 Latest 版本](https://github.com/AidanQiu/Meh/releases/latest) 下载新版 APK。若新旧 APK 使用相同签名，可以覆盖安装；本项目的设置保存在 WebView 本地存储中，是否保留取决于安装/卸载方式与系统处理，升级前建议自行确认重要的本地预设。
 
 ## 开发与构建
 
 网页使用 HTML、CSS 和 JavaScript；Android 工程位于 [android/](android/)，使用 Kotlin。它通过 `WebViewAssetLoader` 加载 [android/app/src/main/assets/www/](android/app/src/main/assets/www/) 中的本地网页资源。
 
-当前 Android 配置为：`minSdk 24`、`compileSdk 36`、`targetSdk 36`、`versionCode 1`、`versionName 1.0`；构建环境由项目的 Gradle Wrapper（Gradle 8.13）配置，并需要 Android Studio、JDK 11 和已安装的 Android SDK 36。
+当前 Android 配置为：`minSdk 24`、`compileSdk 36`、`targetSdk 36`、`versionCode 2`、`versionName 1.1.1`。构建需要 Android Studio、用于运行 Gradle 的 JDK 17、Android SDK 36 和项目自带的 Gradle Wrapper 8.13；Java/Kotlin 编译目标保持为 11。
 
 1. 克隆仓库。
 2. 使用 Android Studio 打开 [android/](android/) 文件夹。
@@ -105,7 +105,7 @@ Android 13 及以上设备可在支持的系统与桌面启动器中启用“主
 
 请通过本地 HTTP 服务运行网页，例如 VS Code Live Server；不要直接双击打开 [index.html](index.html)。Service Worker 通常需要 `localhost` 或 HTTPS 才能注册。
 
-根目录网页文件与 [android/app/src/main/assets/www/](android/app/src/main/assets/www/) 存在副本。修改网页代码后，请同步更新 Android `assets/www` 中对应的文件；仓库当前未提供自动同步脚本。
+根目录网页文件是网页资源的主版本。修改后，维护者可运行 `powershell -ExecutionPolicy Bypass -File scripts/sync-web-assets.ps1`，将共享文件安全复制到 [android/app/src/main/assets/www/](android/app/src/main/assets/www/)；脚本不会删除目标目录中的未知文件。
 
 ## 项目结构
 
@@ -115,10 +115,12 @@ Android 13 及以上设备可在支持的系统与桌面启动器中启用“主
 ├── style.css                     # 网页样式
 ├── app.js                        # 交互与随机逻辑
 ├── service-worker.js             # PWA 离线缓存
-├── manifest*.webmanifest         # PWA 安装清单
+├── manifest.webmanifest          # 非中文兼容回退清单
+├── manifest-meh.webmanifest      # 非中文 PWA 安装清单
+├── manifest-zh.webmanifest       # 中文 PWA 安装清单
 ├── fonts/                        # 本地字体
 ├── icons/                        # 网页图标资源
-├── icons/meh_icon.png            # 项目图标
+├── scripts/sync-web-assets.ps1   # 同步网页资源到 Android
 └── android/
     ├── gradlew*                  # Gradle Wrapper
     └── app/src/main/
@@ -130,7 +132,7 @@ Android 13 及以上设备可在支持的系统与桌面启动器中启用“主
 ## 下载
 
 - 在线使用：[https://aidanqiu.github.io/Meh/](https://aidanqiu.github.io/Meh/)
-- Android APK：[GitHub Releases](https://github.com/AidanQiu/Meh/releases)
+- Android APK：[GitHub Releases 的 Latest 版本](https://github.com/AidanQiu/Meh/releases/latest)
 
 ## 常见问题
 
@@ -164,8 +166,8 @@ PWA 会缓存资源。请关闭后重新打开，或清除该网站缓存后再�
 
 ## 开源许可证
 
-当前仓库暂未添加明确的开源许可证。
+本项目使用 MIT License，详见 [LICENSE](LICENSE) 文件。
 
 ## 版本信息
 
-当前 Android 配置版本：`versionName 1.0`（`versionCode 1`）。
+当前 Android 配置版本：`versionName 1.1.1`（`versionCode 2`）。

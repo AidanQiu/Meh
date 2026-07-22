@@ -10,24 +10,35 @@
     <meta id="appleWebAppTitle" name="apple-mobile-web-app-title" content="随便吧" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>随便吧</title>
+    <link id="appManifest" rel="manifest" href="./manifest-zh.webmanifest" />
     <script>
-      // Select the install manifest before the browser reads it. This preserves
-      // the chosen name when a PWA is installed after a previous language choice.
       (() => {
+        const supportedLanguages = ["zh", "en", "ja", "kk"];
+        const browserLanguage = (navigator.languages || [navigator.language || "en"])
+          .map((language) => String(language).toLowerCase().split("-")[0])
+          .find((language) => supportedLanguages.includes(language)) || "en";
+        let language = browserLanguage;
+
         try {
           const saved = JSON.parse(localStorage.getItem("meh-app-settings-v2") || "{}");
-          const manifest = saved.language === "zh" || !saved.language
-            ? "./manifest-zh.webmanifest"
-            : "./manifest-meh.webmanifest";
-          document.write(`<link id="appManifest" rel="manifest" href="${manifest}" />`);
+          if (supportedLanguages.includes(saved.language)) language = saved.language;
         } catch {
-          document.write('<link id="appManifest" rel="manifest" href="./manifest-zh.webmanifest" />');
+          // Keep the browser-derived language when storage is unavailable or invalid.
         }
+
+        const isChinese = language === "zh";
+        const appName = isChinese ? "随便吧" : "Meh";
+        document.documentElement.lang = isChinese ? "zh-CN" : language;
+        document.title = appName;
+        document.querySelector("#appleWebAppTitle").content = appName;
+        document.querySelector("#appManifest").href = isChinese
+          ? "./manifest-zh.webmanifest"
+          : "./manifest-meh.webmanifest";
       })();
     </script>
     <link rel="icon" href="./favicon.ico" sizes="any" />
     <link rel="apple-touch-icon" href="./icons/icon-180.png" />
-    <link rel="stylesheet" href="./style.css?v=0.1.4" />
+    <link rel="stylesheet" href="./style.css?v=1.1.1" />
   </head>
   <body>
     <div class="phone-frame">
@@ -372,6 +383,6 @@
       <button class="save-preset-button" id="saveNumberSettingsButton" type="button" data-i18n="settings">设置</button>
     </aside>
 
-    <script src="./app.js?v=0.1.4"></script>
+    <script src="./app.js?v=1.1.1"></script>
   </body>
 </html>
