@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta id="themeColorMeta" name="theme-color" content="#e8e3e8" media="(prefers-color-scheme: light)" />
+    <meta id="themeColorDarkMeta" name="theme-color" content="#1d1b20" media="(prefers-color-scheme: dark)" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta id="appleWebAppTitle" name="apple-mobile-web-app-title" content="随便吧" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>随便吧</title>
+    <script>
+      // Select the install manifest before the browser reads it. This preserves
+      // the chosen name when a PWA is installed after a previous language choice.
+      (() => {
+        try {
+          const saved = JSON.parse(localStorage.getItem("meh-app-settings-v2") || "{}");
+          const manifest = saved.language === "zh" || !saved.language
+            ? "./manifest-zh.webmanifest"
+            : "./manifest-meh.webmanifest";
+          document.write(`<link id="appManifest" rel="manifest" href="${manifest}" />`);
+        } catch {
+          document.write('<link id="appManifest" rel="manifest" href="./manifest-zh.webmanifest" />');
+        }
+      })();
+    </script>
+    <link rel="icon" href="./favicon.ico" sizes="any" />
+    <link rel="apple-touch-icon" href="./icons/icon-180.png" />
+    <link rel="stylesheet" href="./style.css?v=0.1.4" />
+  </head>
+  <body>
+    <div class="phone-frame">
+      <main class="app">
+        <header class="top-bar" id="topBar">
+          <button class="icon-button" id="settingsButton" type="button" aria-label="打开设置">
+            <span class="material-symbols-rounded" aria-hidden="true">settings</span>
+          </button>
+
+          <div class="top-stats" id="topStats" aria-label="统计信息">
+            <span class="material-symbols-rounded" aria-hidden="true">query_stats</span>
+            <span>统计</span>
+          </div>
+
+          <button class="icon-button" id="featureButton" type="button" aria-label="功能按钮">
+            <span class="material-symbols-rounded" aria-hidden="true">more_horiz</span>
+          </button>
+        </header>
+
+        <section class="page-heading">
+          <p class="app-name" id="appName">随便吧</p>
+          <h1 id="pageTitle">抛硬币</h1>
+        </section>
+
+        <section class="page-card" id="pageContent" aria-live="polite"></section>
+      </main>
+
+      <div class="page-actions" id="pageActions" hidden>
+        <button class="pill-button pill-button-tonal" id="resetButton" type="button">清零</button>
+        <button class="pill-button pill-button-filled" id="continueButton" type="button">继续</button>
+      </div>
+
+      <nav class="floating-dock" aria-label="主要功能">
+        <div class="dock-indicator" id="dockIndicator" aria-hidden="true"></div>
+        <button class="dock-item is-active" type="button" data-page="coin">
+          <span class="material-symbols-rounded" aria-hidden="true">paid</span>
+          <span data-nav-label="coin">抛硬币</span>
+        </button>
+        <button class="dock-item" type="button" data-page="dice">
+          <span class="material-symbols-rounded" aria-hidden="true">casino</span>
+          <span data-nav-label="dice">摇骰子</span>
+        </button>
+        <button class="dock-item" type="button" data-page="wheel">
+          <span class="material-symbols-rounded" aria-hidden="true">data_usage</span>
+          <span data-nav-label="wheel">大转盘</span>
+        </button>
+        <button class="dock-item" type="button" data-page="number">
+          <span class="material-symbols-rounded" aria-hidden="true">tag</span>
+          <span data-nav-label="number">随机数</span>
+        </button>
+      </nav>
+    </div>
+
+    <div class="scrim" id="scrim" hidden></div>
+
+    <aside class="settings-sheet" id="settingsSheet" aria-hidden="true" aria-labelledby="settingsTitle">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="sheet-header">
+        <div>
+          <h2 id="settingsTitle" data-i18n="settings">设置</h2>
+        </div>
+        <button class="icon-button" id="closeSettingsButton" type="button" aria-label="关闭设置">
+          <span class="material-symbols-rounded" aria-hidden="true">close</span>
+        </button>
+      </div>
+
+<!--=========原本段落=========-->
+
+      <!-- <section class="setting-card color-setting-card">
+        <div class="setting-title" data-i18n="themeColor">主题颜色</div>
+        <div class="palette-panel">
+          <div class="color-row">
+            <div>
+              <span class="setting-title" data-i18n="primaryThemeColor">首选主题色（背景）</span>
+              <span class="setting-copy">Surface / Background</span>
+            </div>
+          </div>
+          <div class="swatch-grid" id="primarySwatches"></div>
+          <div class="advanced-color-picker" id="primaryColorPicker" data-color-picker="primary" hidden>
+            <span class="picker-field" aria-hidden="true">
+              <span class="picker-dot"></span>
+            </span>
+            <input class="picker-hue-range" type="range" min="0" max="360" value="0" aria-label="Primary hue" />
+            <span class="picker-hue" aria-hidden="true">
+              <span class="picker-hue-thumb"></span>
+            </span>
+            <input class="color-input" id="primaryThemeColorInput" type="hidden" value="#6b9c94" />
+          </div>
+
+          <div class="color-row">
+            <div>
+              <span class="setting-title" data-i18n="secondaryThemeColor">次选主题色（字体/按钮）</span>
+              <span class="setting-copy">Text / Buttons</span>
+            </div>
+          </div>
+          <div class="swatch-grid" id="secondarySwatches"></div>
+          <div class="advanced-color-picker" id="secondaryColorPicker" data-color-picker="secondary" hidden>
+            <span class="picker-field" aria-hidden="true">
+              <span class="picker-dot"></span>
+            </span>
+            <input class="picker-hue-range" type="range" min="0" max="360" value="0" aria-label="Secondary hue" />
+            <span class="picker-hue" aria-hidden="true">
+              <span class="picker-hue-thumb"></span>
+            </span>
+            <input class="color-input" id="secondaryThemeColorInput" type="hidden" value="#6750a4" />
+          </div>
+        </div> 
+      </section>-->
+
+<!--========= 使用gemini=========修改 -->
+
+      <section class="setting-card color-setting-card">
+        <div class="setting-section-title">
+          <span class="material-symbols-rounded setting-title-icon" aria-hidden="true">palette</span>
+          <span class="setting-title" data-i18n="themeColor">主题颜色</span>
+        </div>
+        <div class="palette-panel">
+          <div class="color-row">
+            <span class="setting-title" data-i18n="primaryThemeColor">首选主题色（背景）</span>
+          </div>
+          <div class="swatch-grid" id="primarySwatches"></div>
+          <div class="advanced-color-picker" id="primaryColorPicker" data-color-picker="primary" hidden>
+            <span class="picker-field" aria-hidden="true">
+              <span class="picker-dot"></span>
+            </span>
+            <input class="picker-hue-range" type="range" min="0" max="360" value="0" aria-label="Primary hue" />
+            <span class="picker-hue" aria-hidden="true">
+              <span class="picker-hue-thumb"></span>
+            </span>
+            <input class="color-input" id="primaryThemeColorInput" type="hidden" value="#6b9c94" />
+          </div>
+
+          <div class="color-row" style="margin-top: 12px;">
+            <span class="setting-title" data-i18n="secondaryThemeColor">次选主题色（字体/按钮）</span>
+          </div>
+          <div class="swatch-grid" id="secondarySwatches"></div>
+          <div class="advanced-color-picker" id="secondaryColorPicker" data-color-picker="secondary" hidden>
+            <span class="picker-field" aria-hidden="true">
+              <span class="picker-dot"></span>
+            </span>
+            <input class="picker-hue-range" type="range" min="0" max="360" value="0" aria-label="Secondary hue" />
+            <span class="picker-hue" aria-hidden="true">
+              <span class="picker-hue-thumb"></span>
+            </span>
+            <input class="color-input" id="secondaryThemeColorInput" type="hidden" value="#6750a4" />
+          </div>
+        </div>
+      </section>
+
+<!-- =====使用gemini修改结束====== -->
+
+      <section class="setting-card">
+        <div class="dark-mode-picker">
+          <label class="editor-label language-label" for="darkModeMenuButton">
+            <span class="material-symbols-rounded" aria-hidden="true">dark_mode</span>
+            <span data-i18n="darkMode">深色模式</span>
+          </label>
+
+          <button class="editor-field language-menu-button" id="darkModeMenuButton" type="button" aria-haspopup="listbox" aria-expanded="false">
+            <span id="darkModeMenuText">自动</span>
+            <span class="material-symbols-rounded menu-arrow" aria-hidden="true">expand_more</span>
+          </button>
+
+          <div class="language-menu dark-mode-menu" id="darkModeMenu" role="listbox" hidden>
+            <button type="button" role="option" data-dark-option="light" data-i18n="lightMode">浅色</button>
+            <button type="button" role="option" data-dark-option="dark" data-i18n="darkModeOnly">深色</button>
+            <button type="button" role="option" data-dark-option="auto" data-i18n="autoMode">自动</button>
+          </div>
+        </div>
+
+        <select class="editor-field native-dark-mode-select" id="darkModeSelect" aria-hidden="true" tabindex="-1">
+          <option value="light">浅色</option>
+          <option value="dark">深色</option>
+          <option value="auto">自动</option>
+        </select>
+      </section>
+
+<!-- =====新增加的显示控件 =========-->
+      <section class="setting-card">
+        <div class="setting-section-title" style="margin-bottom: 12px;">
+          <span class="material-symbols-rounded setting-title-icon" aria-hidden="true">tune</span>
+          <span class="setting-title" data-i18n="personalization">个性化</span>
+        </div>
+
+        <div class="setting-row">
+          <label class="setting-title" for="uiScaleRange" data-i18n="displaySize">显示大小</label>
+          <span class="setting-value" id="uiScaleValue">1.00</span>
+        </div>
+        <input class="range-input" id="uiScaleRange" type="range" min="0.85" max="1.25" step="0.01" value="1" />
+
+        <div class="setting-row" style="margin-top: 14px;">
+          <label class="setting-title" for="topHeightRange" data-i18n="topHeight">顶部高度</label>
+          <span class="setting-value" id="topHeightValue">16</span>
+        </div>
+        <input class="range-input" id="topHeightRange" type="range" min="0" max="56" step="1" value="16" />
+
+        <div class="setting-row" style="margin-top: 14px;">
+          <label class="setting-title" for="dockThicknessRange" data-i18n="dockThickness">竖向厚度</label>
+          <span class="setting-value" id="dockThicknessValue">58</span>
+        </div>
+        <input class="range-input" id="dockThicknessRange" type="range" min="46" max="76" step="1" value="58" />
+
+        <div class="setting-row" style="margin-top: 14px;">
+          <label class="setting-title" for="dockSideGapRange" data-i18n="dockSideGap">左右边距</label>
+          <span class="setting-value" id="dockSideGapValue">28</span>
+        </div>
+        <input class="range-input" id="dockSideGapRange" type="range" min="12" max="64" step="1" value="28" />
+
+        <div class="setting-row" style="margin-top: 14px;">
+          <label class="setting-title" for="dockBottomGapRange" data-i18n="dockBottomGap">离底部距离</label>
+          <span class="setting-value" id="dockBottomGapValue">18</span>
+        </div>
+        <input class="range-input" id="dockBottomGapRange" type="range" min="0" max="40" step="1" value="18" />
+      </section>
+
+<!-- =====新增加的显示控件 =========-->
+      <section class="setting-card">
+        <div class="setting-row wallpaper-title-row">
+          <div class="setting-section-title">
+            <span class="material-symbols-rounded setting-title-icon" aria-hidden="true">image</span>
+            <span class="setting-title" data-i18n="backgroundImage">自定义背景图</span>
+          </div>
+          <button class="icon-button wallpaper-delete-toggle" id="wallpaperDeleteToggle" type="button" aria-label="清除当前壁纸" hidden>
+            <span class="material-symbols-rounded" aria-hidden="true">delete</span>
+          </button>
+        </div>
+
+
+
+        <div class="preset-wallpaper-grid" id="presetWallpaperGrid"></div>
+        <input class="file-input" id="backgroundImageInput" type="file" accept="image/*" multiple />
+        
+        <div class="setting-row" style="margin-top: 12px;">
+          <span class="setting-title" style="font-size: 14px;" data-i18n="backgroundOpacity">背景图透明度</span>
+          <span class="setting-value" id="bgOpacityValue">1.00</span>
+        </div>
+        <input class="range-input" id="bgOpacityRange" type="range" min="0" max="1" step="0.01" value="1" />
+        <button class="small-pill-button full-width" id="clearBackgroundButton" type="button" data-i18n="clear" style="margin-top: 8px;">清除</button>
+      </section>
+
+
+      <section class="setting-card">
+        <div class="language-picker">
+          <label class="editor-label language-label" for="languageMenuButton">
+            <span class="material-symbols-rounded" aria-hidden="true">language</span>
+            <span data-i18n="language">语言</span>
+          </label>
+          <button class="editor-field language-menu-button" id="languageMenuButton" type="button" aria-haspopup="listbox" aria-expanded="false">
+            <span id="languageMenuText">中文</span>
+            <span class="material-symbols-rounded menu-arrow" aria-hidden="true">expand_more</span>
+          </button>
+          <div class="language-menu" id="languageMenu" role="listbox" hidden>
+            <button type="button" role="option" data-lang-option="zh">中文</button>
+            <button type="button" role="option" data-lang-option="en">English</button>
+            <button type="button" role="option" data-lang-option="ja">日本語</button>
+            <button type="button" role="option" data-lang-option="kk">Қазақша</button>
+          </div>
+        </div>
+        <select class="editor-field native-language-select" id="languageSelect" aria-hidden="true" tabindex="-1">
+          <option value="zh">中文</option>
+          <option value="en">English</option>
+          <option value="ja">日本語</option>
+          <option value="kk">Қазақша</option>
+        </select>
+      </section>
+    </aside>
+
+    <aside class="editor-sheet" id="wheelEditorSheet" aria-hidden="true" aria-labelledby="wheelEditorTitle">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="sheet-header">
+        <div>
+          <p class="sheet-label" data-i18n="wheel">大转盘</p>
+          <h2 id="wheelEditorTitle" data-i18n="wheelEditorTitle">编辑预设</h2>
+        </div>
+        <button class="icon-button" id="closeWheelEditorButton" type="button" aria-label="关闭转盘编辑">
+          <span class="material-symbols-rounded" aria-hidden="true">close</span>
+        </button>
+      </div>
+
+      <section class="setting-group">
+        <div class="editor-section-title">
+          <h3 id="wheelPresetHeading" data-i18n="choosePreset">当前预设</h3>
+          <button class="small-pill-button preset-add-button" id="addWheelPresetButton" type="button" data-i18n="add">添加</button>
+        </div>
+        <select class="editor-field" id="wheelPresetSelect" aria-labelledby="wheelPresetHeading"></select>
+        <div class="preset-chip-list" id="wheelPresetList"></div>
+      </section>
+
+      <section class="setting-group">
+        <label class="editor-label" for="wheelPresetName" data-i18n="saveName">保存名称</label>
+        <input class="editor-field" id="wheelPresetName" type="text" value="默认转盘" />
+      </section>
+
+      <section class="setting-group">
+        <label class="editor-label" for="wheelOptionCount" data-i18n="optionCount">选项数量</label>
+        <input class="editor-field" id="wheelOptionCount" type="number" min="2" max="12" value="4" />
+      </section>
+
+      <section class="setting-group">
+        <div class="editor-section-title">
+          <h3 data-i18n="optionWeight">选项和权重</h3>
+          <button class="small-pill-button" id="addWheelOptionButton" type="button" data-i18n="add">添加</button>
+        </div>
+        <div class="wheel-option-list" id="wheelOptionList"></div>
+      </section>
+
+      <button class="save-preset-button" id="saveWheelPresetButton" type="button" data-i18n="saveWheelPreset">保存当前转盘预设</button>
+    </aside>
+
+    <aside class="editor-sheet" id="numberSettingsSheet" aria-hidden="true" aria-labelledby="numberSettingsTitle">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="sheet-header">
+        <div>
+          <p class="sheet-label" data-i18n="number">随机数</p>
+          <h2 id="numberSettingsTitle" data-i18n="tuneNumber">设置随机数范围</h2>
+        </div>
+        <button class="icon-button" id="closeNumberSettingsButton" type="button" aria-label="关闭随机数设置">
+          <span class="material-symbols-rounded" aria-hidden="true">close</span>
+        </button>
+      </div>
+
+      <section class="setting-group">
+        <label class="editor-label" for="numberMinInput" data-i18n="min">最小值</label>
+        <input class="editor-field" id="numberMinInput" type="number" value="1" />
+      </section>
+
+      <section class="setting-group">
+        <label class="editor-label" for="numberMaxInput" data-i18n="max">最大值</label>
+        <input class="editor-field" id="numberMaxInput" type="number" value="100" />
+      </section>
+
+      <section class="setting-group">
+        <label class="editor-label" for="numberCountInput" data-i18n="count">生成数量</label>
+        <input class="editor-field" id="numberCountInput" type="number" min="1" max="50" value="1" />
+      </section>
+
+      <label class="checkbox-row">
+        <input id="numberRepeatInput" type="checkbox" checked />
+        <span data-i18n="allowRepeat">允许重复</span>
+      </label>
+
+      <button class="save-preset-button" id="saveNumberSettingsButton" type="button" data-i18n="settings">设置</button>
+    </aside>
+
+    <script src="./app.js?v=0.1.4"></script>
+  </body>
+</html>

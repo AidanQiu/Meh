@@ -1,0 +1,57 @@
+# Android Studio / Gradle
+android/.gradle/
+android/.idea/
+android/.kotlin/
+android/**/build/
+android/local.properties
+android/captures/
+android/.externalNativeBuild/
+android/.cxx/
+
+# Android build artifacts
+android/app/release/
+*.apk
+*.aab
+
+# Signing material
+*.jks
+*.keystore
+keystore.properties
+**/keystore.properties
+
+# IDE and operating-system files
+*.iml
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.swp
+*~
+
+# Local environment files (may contain credentials)
+.env
+.env.*
+!.env.example
+
+# Android project-wide generated files and local configuration
+android/*.iml
+android/**/.idea/
+android/**/.navigation/
+android/**/.gradle/
+android/**/.kotlin/
+android/build/
+android/app/build/
+android/**/build/
+android/**/.cxx/
+android/externalNativeBuild/
+android/**/externalNativeBuild/
+android/key.properties
+android/keystore.properties
+android/secrets.properties
+key.properties
+secrets.properties
+*.apks
