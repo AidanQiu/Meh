@@ -137,7 +137,7 @@ try {
       finalBottom: html.getPropertyValue('--app-safe-bottom').trim(),
     };
   })()`);
-  check(base.build === "1.1.1-pwa-r10", "browser loaded the wrong build");
+  check(base.build === "1.1.1-pwa-r9", "browser loaded the wrong build");
   check(base.viewport[0] === 390, `portrait viewport width was ${base.viewport[0]}, expected 390`);
   check(base.bodyPadding.join(",") === "0px,0px", "visual body must not consume safe-area padding");
   check(base.framePadding.join(",") === "0px,0px", "visual root must not consume safe-area padding");
@@ -207,9 +207,7 @@ try {
     root.classList.add('pwa-standalone');
     root.style.setProperty('--browser-safe-top', '59px');
     root.style.setProperty('--browser-safe-bottom', '34px');
-    const dockRange = document.querySelector('#dockBottomGapRange');
-    dockRange.value = '0';
-    dockRange.dispatchEvent(new Event('input', { bubbles: true }));
+    root.style.setProperty('--dock-bottom-gap', '0px');
     const app = getComputedStyle(document.querySelector('.app'));
     const dock = getComputedStyle(document.querySelector('.floating-dock'));
     const indicator = getComputedStyle(document.querySelector('.dock-indicator'));
@@ -223,26 +221,6 @@ try {
   check(iosSimulation.bodyTop === "0px" && iosSimulation.bodyBottom === "0px", "simulated iOS visual background was inset");
   check(iosSimulation.appHeight === "100vh", `simulated iOS standalone canvas used ${iosSimulation.appHeight}, expected 100vh`);
 
-  const dockRangeUpdate = await evaluate(`(async () => {
-    const input = document.querySelector('#dockBottomGapRange');
-    const dock = document.querySelector('.floating-dock');
-    input.value = '40';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    await new Promise((resolve) => requestAnimationFrame(resolve));
-    const afterInput = { value: input.value, bottom: getComputedStyle(dock).bottom, inlinePriority: dock.style.getPropertyPriority('bottom') };
-    input.value = '7';
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-    await new Promise((resolve) => requestAnimationFrame(resolve));
-    const afterChange = { value: input.value, bottom: getComputedStyle(dock).bottom, inlinePriority: dock.style.getPropertyPriority('bottom') };
-    input.value = '0';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    await new Promise((resolve) => requestAnimationFrame(resolve));
-    return { afterInput, afterChange, resetBottom: getComputedStyle(dock).bottom };
-  })()`);
-  check(dockRangeUpdate.afterInput.value === "40" && dockRangeUpdate.afterInput.bottom === "40px" && dockRangeUpdate.afterInput.inlinePriority === "important", "dock bottom input event did not immediately update the controlled dock position");
-  check(dockRangeUpdate.afterChange.value === "7" && dockRangeUpdate.afterChange.bottom === "7px" && dockRangeUpdate.afterChange.inlinePriority === "important", "dock bottom change event did not commit the controlled dock position");
-  check(dockRangeUpdate.resetBottom === "0px", "dock bottom range reset did not restore the configured zero gap");
-
   const androidSimulation = await evaluate(`(() => {
     const root = document.documentElement;
     root.classList.add('android-webview');
@@ -250,9 +228,7 @@ try {
     root.style.setProperty('--browser-safe-bottom', '99px');
     root.style.setProperty('--native-safe-top', '24px');
     root.style.setProperty('--native-safe-bottom', '24px');
-    const dockRange = document.querySelector('#dockBottomGapRange');
-    dockRange.value = '0';
-    dockRange.dispatchEvent(new Event('input', { bubbles: true }));
+    root.style.setProperty('--dock-bottom-gap', '0px');
     const style = getComputedStyle(root);
     const app = getComputedStyle(document.querySelector('.app'));
     const dock = getComputedStyle(document.querySelector('.floating-dock'));

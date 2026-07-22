@@ -78,7 +78,7 @@ const app = read("app.js");
 const updater = read("pwa-update.js");
 const worker = read("service-worker.js");
 const syncScript = read("scripts/sync-web-assets.ps1");
-const currentBuild = "1.1.1-pwa-r10";
+const currentBuild = "1.1.1-pwa-r9";
 const iconPath = `./icons/meh_icon.png?v=${currentBuild}`;
 const expectedIcons = ["icon_monochrome.svg", "meh_background.svg", "meh_foreground.svg", "meh_icon.png"];
 
