@@ -1,3 +1,5 @@
+import org.gradle.api.tasks.Sync
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -35,6 +37,39 @@ android {
     kotlinOptions {
         jvmTarget = "11"
     }
+    buildFeatures {
+        buildConfig = true
+    }
+}
+
+val webProjectRoot = rootProject.projectDir.parentFile
+val syncWebAssets by tasks.registering(Sync::class) {
+    group = "build setup"
+    description = "Synchronize the canonical web build into the APK asset directory."
+    from(webProjectRoot) {
+        include(
+            "index.html",
+            "app.js",
+            "pwa-update.js",
+            "style.css",
+            "service-worker.js",
+            "version.json",
+            "manifest.webmanifest",
+            "manifest-meh.webmanifest",
+            "manifest-zh.webmanifest",
+            "favicon.ico",
+            "fonts/**",
+            "icons/icon_monochrome.svg",
+            "icons/meh_background.svg",
+            "icons/meh_foreground.svg",
+            "icons/meh_icon.png"
+        )
+    }
+    into(layout.projectDirectory.dir("src/main/assets/www"))
+}
+
+tasks.named("preBuild").configure {
+    dependsOn(syncWebAssets)
 }
 
 dependencies {

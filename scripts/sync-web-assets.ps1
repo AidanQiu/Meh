@@ -44,4 +44,33 @@ foreach ($iconFile in $iconFiles) {
     Copy-Item -LiteralPath (Join-Path $sourceIcons $iconFile) -Destination (Join-Path $targetIcons $iconFile) -Force
 }
 
+$expectedRelativeFiles = [System.Collections.Generic.HashSet[string]]::new(
+    [System.StringComparer]::OrdinalIgnoreCase
+)
+foreach ($file in $files) {
+    [void]$expectedRelativeFiles.Add($file.Replace("/", [System.IO.Path]::DirectorySeparatorChar))
+}
+$sourceFontsPrefix = [System.IO.Path]::GetFullPath($sourceFonts).TrimEnd(
+    [System.IO.Path]::DirectorySeparatorChar
+) + [System.IO.Path]::DirectorySeparatorChar
+Get-ChildItem -LiteralPath $sourceFonts -Recurse -File | ForEach-Object {
+    $relative = $_.FullName.Substring($sourceFontsPrefix.Length)
+    [void]$expectedRelativeFiles.Add((Join-Path "fonts" $relative))
+}
+foreach ($iconFile in $iconFiles) {
+    [void]$expectedRelativeFiles.Add((Join-Path "icons" $iconFile))
+}
+
+# The Android asset directory is a generated mirror. Remove stale files so an old index,
+# stylesheet, manifest, or icon cannot survive a later APK build.
+Get-ChildItem -LiteralPath $targetRoot -Recurse -File | ForEach-Object {
+    $targetPrefix = [System.IO.Path]::GetFullPath($targetRoot).TrimEnd(
+        [System.IO.Path]::DirectorySeparatorChar
+    ) + [System.IO.Path]::DirectorySeparatorChar
+    $relative = $_.FullName.Substring($targetPrefix.Length)
+    if (-not $expectedRelativeFiles.Contains($relative)) {
+        Remove-Item -LiteralPath $_.FullName -Force
+    }
+}
+
 Write-Output "Web assets synchronized to $targetRoot"

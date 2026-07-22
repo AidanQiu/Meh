@@ -3,29 +3,69 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <meta id="themeColorMeta" name="theme-color" content="#e8e3e8" media="(prefers-color-scheme: light)" />
-    <meta id="themeColorDarkMeta" name="theme-color" content="#1d1b20" media="(prefers-color-scheme: dark)" />
+    <meta id="themeColorMeta" name="theme-color" content="#d6e3e1" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="meh-build" content="1.1.1-pwa-r5" />
+    <meta name="meh-build" content="1.1.1-pwa-r7" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta id="appleWebAppTitle" name="apple-mobile-web-app-title" content="随便吧" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <title>随便吧</title>
-    <link id="appManifest" rel="manifest" href="./manifest-zh.webmanifest?v=1.1.1-pwa-r5" />
+    <link id="appManifest" rel="manifest" href="./manifest-zh.webmanifest?v=1.1.1-pwa-r7" />
     <script>
       (() => {
+        const root = document.documentElement;
         const supportedLanguages = ["zh", "en", "ja", "kk"];
         const browserLanguage = (navigator.languages || [navigator.language || "en"])
           .map((language) => String(language).toLowerCase().split("-")[0])
           .find((language) => supportedLanguages.includes(language)) || "en";
         let language = browserLanguage;
+        let savedSettings = {};
 
         try {
-          const saved = JSON.parse(localStorage.getItem("meh-app-settings-v2") || "{}");
-          if (supportedLanguages.includes(saved.language)) language = saved.language;
+          savedSettings = JSON.parse(localStorage.getItem("meh-app-settings-v2") || "{}");
+          if (supportedLanguages.includes(savedSettings.language)) language = savedSettings.language;
         } catch {
           // Keep the browser-derived language when storage is unavailable or invalid.
         }
+
+        const isAndroidWebView = Boolean(window.MehAndroid?.getSafeAreaInsets);
+        const isStandalone = window.matchMedia?.("(display-mode: standalone)").matches || navigator.standalone === true;
+        root.dataset.runtime = isAndroidWebView ? "android-webview" : isStandalone ? "pwa-standalone" : "browser-tab";
+        root.classList.add(isAndroidWebView ? "android-webview" : isStandalone ? "pwa-standalone" : "browser-tab");
+
+        if (isAndroidWebView) {
+          try {
+            const nativeInsets = JSON.parse(window.MehAndroid.getSafeAreaInsets());
+            for (const side of ["top", "right", "bottom", "left"]) {
+              root.style.setProperty(`--native-safe-${side}`, `${Number(nativeInsets[side]) || 0}px`);
+            }
+          } catch (error) {
+            console.warn("[Meh] Native safe-area bootstrap failed:", error);
+          }
+        }
+
+        const normalizeHex = (value, fallback) => /^#[0-9a-f]{6}$/i.test(String(value)) ? String(value) : fallback;
+        const mixHex = (from, to, amount) => {
+          const channels = (hex) => [1, 3, 5].map((start) => Number.parseInt(hex.slice(start, start + 2), 16));
+          const a = channels(from);
+          const b = channels(to);
+          return `#${a.map((value, index) => Math.round(value * (1 - amount) + b[index] * amount).toString(16).padStart(2, "0")).join("")}`;
+        };
+        const background = normalizeHex(savedSettings.primaryThemeColor || savedSettings.themeColor, "#6b9c94");
+        const accent = normalizeHex(savedSettings.secondaryThemeColor || savedSettings.themeColor, "#6750a4");
+        const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+        const isDark = savedSettings.darkMode === "dark" || (savedSettings.darkMode !== "light" && prefersDark);
+        const surface = isDark ? mixHex(background, "#111014", 0.82) : mixHex(background, "#ffffff", 0.72);
+        const surfaceContainer = isDark ? mixHex(background, "#1d1b20", 0.72) : mixHex(background, "#ffffff", 0.58);
+        const surfaceContainerHigh = isDark ? mixHex(background, "#24212a", 0.66) : mixHex(background, "#ffffff", 0.48);
+        root.classList.toggle("theme-dark", isDark);
+        root.style.colorScheme = isDark ? "dark" : "light";
+        root.style.setProperty("--primary", accent);
+        root.style.setProperty("--surface", surface);
+        root.style.setProperty("--surface-container", surfaceContainer);
+        root.style.setProperty("--surface-container-high", surfaceContainerHigh);
+        document.querySelector("#themeColorMeta").content = surface;
 
         const isChinese = language === "zh";
         const appName = isChinese ? "随便吧" : "Meh";
@@ -41,18 +81,18 @@
     <link
       rel="icon"
       type="image/x-icon"
-      href="./favicon.ico?v=1.1.1-pwa-r5"
+      href="./favicon.ico?v=1.1.1-pwa-r7"
     />
     <link
       rel="shortcut icon"
       type="image/x-icon"
-      href="./favicon.ico?v=1.1.1-pwa-r5"
+      href="./favicon.ico?v=1.1.1-pwa-r7"
     />
     <link
       rel="apple-touch-icon"
-      href="./icons/meh_icon.png?v=1.1.1-pwa-r5"
+      href="./icons/meh_icon.png?v=1.1.1-pwa-r7"
     />
-    <link rel="stylesheet" href="./style.css?v=1.1.1-pwa-r5" />
+    <link rel="stylesheet" href="./style.css?v=1.1.1-pwa-r7" />
   </head>
   <body>
     <div class="phone-frame">
@@ -245,9 +285,9 @@
 
         <div class="setting-row" style="margin-top: 14px;">
           <label class="setting-title" for="topHeightRange" data-i18n="topHeight">顶部高度</label>
-          <span class="setting-value" id="topHeightValue">16</span>
+          <span class="setting-value" id="topHeightValue">0</span>
         </div>
-        <input class="range-input" id="topHeightRange" type="range" min="0" max="56" step="1" value="16" />
+        <input class="range-input" id="topHeightRange" type="range" min="0" max="56" step="1" value="0" />
 
         <div class="setting-row" style="margin-top: 14px;">
           <label class="setting-title" for="dockThicknessRange" data-i18n="dockThickness">竖向厚度</label>
@@ -326,7 +366,8 @@
         </div>
         <div class="version-details">
           <span><span data-i18n="webVersion">Web 版本</span>：1.1.1</span>
-          <span><span data-i18n="buildVersion">构建</span>：<span id="pwaBuildValue">1.1.1-pwa-r5</span></span>
+          <span><span data-i18n="buildVersion">构建</span>：<span id="pwaBuildValue">1.1.1-pwa-r7</span></span>
+          <span id="androidVersionDetail" hidden>Android：<span id="androidVersionValue"></span></span>
         </div>
         <button class="small-pill-button full-width" id="checkUpdateButton" type="button" data-i18n="checkUpdate">检查更新</button>
         <p class="update-status" id="pwaUpdateStatus" role="status" aria-live="polite"></p>
@@ -410,7 +451,7 @@
       <button class="save-preset-button" id="saveNumberSettingsButton" type="button" data-i18n="settings">设置</button>
     </aside>
 
-    <script src="./pwa-update.js?v=1.1.1-pwa-r5" defer></script>
-    <script src="./app.js?v=1.1.1-pwa-r5" defer></script>
+    <script src="./pwa-update.js?v=1.1.1-pwa-r7" defer></script>
+    <script src="./app.js?v=1.1.1-pwa-r7" defer></script>
   </body>
 </html>

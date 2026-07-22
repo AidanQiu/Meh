@@ -1,3 +1,11 @@
 <resources>
     <string name="app_name">Meh</string>
+    <string name="update_available_title">New version available</string>
+    <string name="update_dialog_message">Current version: %1$s\nLatest version: %2$s\n\nRelease notes:\n%3$s</string>
+    <string name="update_notes_empty">No release notes provided.</string>
+    <string name="update_later">Not now</string>
+    <string name="update_open_release">View update</string>
+    <string name="update_latest">You already have the latest version.</string>
+    <string name="update_check_failed">Update check failed. Check your network and try again.</string>
+    <string name="update_open_failed">Unable to open the update page.</string>
 </resources>

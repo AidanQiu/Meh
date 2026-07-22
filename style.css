@@ -4,7 +4,7 @@
 
 @font-face {
   font-family: "Material Symbols Rounded";
-  src: url("./fonts/material-symbols-rounded.woff2?v=1.1.1-pwa-r6") format("woff2");
+  src: url("./fonts/material-symbols-rounded.woff2?v=1.1.1-pwa-r7") format("woff2");
   font-display: block;
   font-style: normal;
   font-weight: 100 700;
@@ -13,13 +13,13 @@
 :root {
   color-scheme: light;
   --ui-scale: 1;
-  --primary: #7d5260;
+  --primary: #6750a4;
   --on-primary: #ffffff;
-  --primary-container: #ffd9e3;
-  --on-primary-container: #31101d;
-  --surface: #fffbff;
-  --surface-container: #f4eff3;
-  --surface-container-high: #eee8ed;
+  --primary-container: #ded9eb;
+  --on-primary-container: #1d1b20;
+  --surface: #d6e3e1;
+  --surface-container: #c1d5d2;
+  --surface-container-high: #b2cbc7;
   --on-surface: #1d1b20;
   --on-surface-variant: #4d444c;
   --outline: #7f747c;
@@ -35,22 +35,44 @@
     linear-gradient(180deg, var(--surface) 0%, var(--surface-container) 100%);
   --app-background-size: auto;
   --app-background-position: center;
-  --top-extra: 16px;
+  --top-extra: 0px;
   --dock-thickness: 58px;
   --dock-side-gap: 28px;
   --dock-bottom-gap: 18px;
-  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
-  --dock-bottom-offset: max(var(--dock-bottom-gap), var(--safe-area-bottom));
-  --gesture-safe-bottom: 0px;
+  --browser-safe-top: env(safe-area-inset-top, 0px);
+  --browser-safe-right: env(safe-area-inset-right, 0px);
+  --browser-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --browser-safe-left: env(safe-area-inset-left, 0px);
+  --native-safe-top: 0px;
+  --native-safe-right: 0px;
+  --native-safe-bottom: 0px;
+  --native-safe-left: 0px;
+  --app-safe-top: var(--browser-safe-top);
+  --app-safe-right: var(--browser-safe-right);
+  --app-safe-bottom: var(--browser-safe-bottom);
+  --app-safe-left: var(--browser-safe-left);
+  --dock-bottom-offset: calc(var(--dock-bottom-gap) + var(--app-safe-bottom));
   --app-height: 100dvh;
+}
+
+:root.android-webview {
+  --app-safe-top: var(--native-safe-top);
+  --app-safe-right: var(--native-safe-right);
+  --app-safe-bottom: var(--native-safe-bottom);
+  --app-safe-left: var(--native-safe-left);
 }
 
 * {
   box-sizing: border-box;
 }
 html {
+  width: 100%;
   min-height: 100%;
-  background: var(--surface-container);
+  margin: 0;
+  padding: 0;
+  background: var(--app-background);
+  background-size: var(--app-background-size);
+  background-position: var(--app-background-position);
 }
 
 body {
@@ -63,6 +85,7 @@ body {
   height: var(--app-height);
   min-height: var(--app-height);
   margin: 0;
+  padding: 0;
   background: var(--app-background);
   background-size: var(--app-background-size);
   background-position: var(--app-background-position);
@@ -113,40 +136,30 @@ p {
   z-index: 1;
   /* 修改结束 */
   width: min(100vw, 480px);
-  min-height: 100vh;
+  min-height: var(--app-height);
   margin: 0 auto;
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  background: transparent;
   box-shadow: 0 0 0 1px rgba(127, 116, 124, 0.14), var(--shadow-2);
   overflow: hidden;
 }
-/* 原代码 */
-/* .app {
-  min-height: 100vh;
-  padding-top: calc(18px * var(--ui-scale) + env(safe-area-inset-top, 0px));
-  padding: calc(18px * var(--ui-scale)) calc(18px * var(--ui-scale)) calc(188px * var(--ui-scale));
-} */
-
-/* 使用gemini修改 */
 .app {
   min-height: var(--app-height);
-  padding-top: calc(env(safe-area-inset-top, 0px) + var(--top-extra));
+  padding-top: calc(var(--app-safe-top) + var(--top-extra));
 
   padding-left: max(
     calc(18px * var(--ui-scale)),
-    env(safe-area-inset-left, 0px)
+    var(--app-safe-left)
   );
 
   padding-right: max(
     calc(18px * var(--ui-scale)),
-    env(safe-area-inset-right, 0px)
+    var(--app-safe-right)
   );
 
-  padding-bottom: calc(188px * var(--ui-scale) + var(--safe-area-bottom));
+  padding-bottom: calc(188px * var(--ui-scale) + var(--app-safe-bottom));
   position: relative;
   z-index: 2;
 }
- /* 修改结束 */
-
  .top-bar {
   display: grid;
   grid-template-columns: calc(44px * var(--ui-scale)) 1fr calc(44px * var(--ui-scale));
@@ -1016,7 +1029,7 @@ p {
 .page-actions {
   position: fixed;
   left: 50%;
-  bottom: calc(146px * var(--ui-scale) + env(safe-area-inset-bottom, 0px));
+  bottom: calc(146px * var(--ui-scale) + var(--app-safe-bottom));
   z-index: 6;
   display: grid;
   width: min(calc(100vw - 56px), 396px);
@@ -1061,7 +1074,7 @@ p {
   --dock-indicator-w: 0px;
   position: fixed;
   left: 50%;
-  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(12px + var(--app-safe-bottom));
   z-index: 6;
   display: grid;
   width: min(calc(100vw - 56px), 448px);
@@ -1153,13 +1166,13 @@ p {
   width: min(100vw, 480px);
   border-radius: 34px 34px 0 0;
   background: color-mix(in srgb, var(--surface) 94%, var(--primary-container));
-  max-height: calc(var(--app-height) - max(calc(28px * var(--ui-scale)), env(safe-area-inset-top, 28px)));
+  max-height: calc(var(--app-height) - max(calc(28px * var(--ui-scale)), var(--app-safe-top)));
   overflow-y: auto;
-  padding: 10px 18px max(28px, calc(env(safe-area-inset-bottom, 0px) + 24px));
+  padding: 10px 18px max(28px, calc(var(--app-safe-bottom) + 24px));
   box-shadow: 0 -18px 42px rgba(29, 27, 32, 0.22);
   transform: translate(50%, 105%);
   transition: transform 260ms var(--ease);
-  scroll-padding-bottom: max(88px, calc(env(safe-area-inset-bottom, 0px) + 72px));
+  scroll-padding-bottom: max(88px, calc(var(--app-safe-bottom) + 72px));
   -webkit-overflow-scrolling: touch;
 }
 
@@ -1180,7 +1193,7 @@ p {
   max-height: min(85vh, 740px);
   overflow-y: auto;
   /* 使用适度安全区留白，避免移动端小白条遮挡底部按钮，同时不撑出大片空白 */
-  padding-bottom: max(28px, calc(env(safe-area-inset-bottom, 0px) + 24px)) !important;
+  padding-bottom: max(28px, calc(var(--app-safe-bottom) + 24px)) !important;
   -webkit-overflow-scrolling: touch;
 }
 /* 修改结束 */
@@ -1188,7 +1201,7 @@ p {
 .settings-sheet {
   max-height: min(85vh, 740px);
   overflow-y: auto;
-  padding-bottom: max(28px, calc(env(safe-area-inset-bottom, 0px) + 24px)) !important;
+  padding-bottom: max(28px, calc(var(--app-safe-bottom) + 24px)) !important;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -1902,7 +1915,7 @@ p {
 }
 
 
-@media (min-width: 481px) {
+@media (min-width: 481px) and (hover: hover) and (pointer: fine) {
   body {
     padding: 18px 0;
   }
@@ -1921,24 +1934,16 @@ p {
 /* 使用gemini修改 */
 /* 独立的自定义背景图图层 */
 #customBgLayer {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  z-index: 1;
+  z-index: 0;
+  background-repeat: no-repeat;
   background-size: cover;
   background-position: center;
   opacity: var(--bg-opacity, 1);
   pointer-events: none;
   transition: opacity 150ms ease;
 }
-/* 底部安全区交给面板 padding 处理，避免强制撑出大片空白 */
-.settings-sheet::after,
-.editor-sheet::after {
-  content: "";
-  display: block;
-  height: max(18px, env(safe-area-inset-bottom, 0px));
-  pointer-events: none;
-}
-
 /* Final clean motion layer for coin and dice. Keep this block last. */
 .coin.is-flipping {
   animation-duration: 1350ms;
@@ -2044,33 +2049,33 @@ p {
 
 /* 设置界面：和转盘编辑界面同高 */
 #settingsSheet {
-  max-height: min(calc(var(--app-height) - env(safe-area-inset-top, 0px) - 28px), 720px) !important;
-  padding-bottom: max(28px, calc(env(safe-area-inset-bottom, 0px) + 24px)) !important;
+  max-height: min(calc(var(--app-height) - var(--app-safe-top) - 28px), 720px) !important;
+  padding-bottom: max(28px, calc(var(--app-safe-bottom) + 24px)) !important;
 }
 
 /* 转盘二级菜单：和设置界面同高 */
 #wheelEditorSheet {
-  max-height: min(calc(var(--app-height) - env(safe-area-inset-top, 0px) - 28px), 720px) !important;
-  padding-bottom: max(28px, calc(env(safe-area-inset-bottom, 0px) + 24px)) !important;
+  max-height: min(calc(var(--app-height) - var(--app-safe-top) - 28px), 720px) !important;
+  padding-bottom: max(28px, calc(var(--app-safe-bottom) + 24px)) !important;
 }
 
 /* 随机数菜单：单独矮一点 */
 #numberSettingsSheet {
-  max-height: min(calc(var(--app-height) - env(safe-area-inset-top, 0px) - 96px), 640px) !important;
-  padding-bottom: max(22px, calc(env(safe-area-inset-bottom, 0px) + 22px)) !important;
+  max-height: min(calc(var(--app-height) - var(--app-safe-top) - 96px), 640px) !important;
+  padding-bottom: max(22px, calc(var(--app-safe-bottom) + 22px)) !important;
 }
 
 /* 如果之前 JS 留下了 is-expanded，也强制不改变高度 */
 #settingsSheet.is-expanded {
-  max-height: min(calc(var(--app-height) - env(safe-area-inset-top, 0px) - 28px), 720px) !important;
+  max-height: min(calc(var(--app-height) - var(--app-safe-top) - 28px), 720px) !important;
 }
 
 #wheelEditorSheet.is-expanded {
-  max-height: min(calc(var(--app-height) - env(safe-area-inset-top, 0px) - 28px), 720px) !important;
+  max-height: min(calc(var(--app-height) - var(--app-safe-top) - 28px), 720px) !important;
 }
 
 #numberSettingsSheet.is-expanded {
-  max-height: min(calc(var(--app-height) - env(safe-area-inset-top, 0px) - 96px), 640px) !important;
+  max-height: min(calc(var(--app-height) - var(--app-safe-top) - 96px), 640px) !important;
 }
 
 /* ===== 手机端底部导航栏：再降低一点 ===== */
@@ -2162,57 +2167,6 @@ body.sheet-open {
   content: "" !important;
   opacity: 0.38 !important;
   transform: translateX(-50%) !important;
-}
-
-/* ===== Final PWA/mobile interaction fixes ===== */
-html,
-body {
-  width: 100%;
-  height: 100%;
-  min-height: 100%;
-  margin: 0 !important;
-  overflow: hidden !important;
-  overscroll-behavior: none !important;
-  background: var(--app-background) !important;
-  background-size: var(--app-background-size) !important;
-  background-position: var(--app-background-position) !important;
-}
-
-body {
-  position: fixed !important;
-  inset: 0 !important;
-  min-height: 100%;
-}
-
-.phone-frame {
-  position: fixed;
-  z-index: 1;
-  top: 0;
-  right: auto;
-  bottom: 0;
-  left: 50%;
-  width: min(100vw, 480px) !important;
-  height: auto !important;
-  min-height: 0 !important;
-  max-height: none !important;
-  margin: 0 !important;
-  background: var(--app-background) !important;
-  background-size: var(--app-background-size) !important;
-  background-position: var(--app-background-position) !important;
-  box-shadow: none !important;
-  overflow: hidden;
-  transform: translateX(-50%);
-}
-
-.app {
-  height: 100% !important;
-  min-height: 0 !important;
-  overflow: hidden !important;
-  padding-bottom: calc(
-    var(--dock-bottom-gap)
-    + calc(var(--dock-thickness) * var(--ui-scale))
-    + calc(116px * var(--ui-scale))
-  ) !important;
 }
 
 .top-stats.is-empty {
@@ -2465,6 +2419,8 @@ body {
   position: static !important;
   inset: auto !important;
   min-height: 100vh !important;
+  min-height: 100dvh !important;
+  min-height: var(--app-height) !important;
   height: auto !important;
   margin: 0 !important;
   overflow: hidden !important;
@@ -2482,12 +2438,11 @@ body {
   z-index: 1 !important;
   width: min(100vw, 480px) !important;
   min-height: 100vh !important;
+  min-height: var(--app-height) !important;
   height: auto !important;
   max-height: none !important;
   margin: 0 auto !important;
-  background: var(--app-background) !important;
-  background-size: var(--app-background-size) !important;
-  background-position: var(--app-background-position) !important;
+  background: transparent !important;
   box-shadow: 0 0 0 1px rgba(127, 116, 124, 0.14), var(--shadow-2) !important;
   overflow: hidden !important;
   transform: none !important;
@@ -2499,7 +2454,36 @@ body {
   height: auto !important;
   background: transparent !important;
   overflow: hidden !important;
-  padding-bottom: calc(188px * var(--ui-scale) + var(--safe-area-bottom)) !important;
+  padding-bottom: calc(188px * var(--ui-scale) + var(--app-safe-bottom)) !important;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .phone-frame {
+    width: 100vw !important;
+    max-width: none !important;
+  }
+}
+
+:root.pwa-standalone body,
+:root.android-webview body {
+  padding: 0 !important;
+}
+
+:root.pwa-standalone .phone-frame,
+:root.android-webview .phone-frame {
+  width: 100vw !important;
+  max-width: none !important;
+}
+
+@media (display-mode: standalone) {
+  body {
+    padding: 0 !important;
+  }
+
+  .phone-frame {
+    width: 100vw !important;
+    max-width: none !important;
+  }
 }
 
 @media (max-width: 480px) {

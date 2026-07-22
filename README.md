@@ -107,7 +107,9 @@ PWA 会在首次启动、从后台恢复到前台、网络恢复以及持续打�
 
 请通过本地 HTTP 服务运行网页，例如 VS Code Live Server；不要直接双击打开 [index.html](index.html)。Service Worker 通常需要 `localhost` 或 HTTPS 才能注册。
 
-根目录网页文件是网页资源的主版本。修改后，维护者可运行 `powershell -ExecutionPolicy Bypass -File scripts/sync-web-assets.ps1`，将共享文件安全复制到 [android/app/src/main/assets/www/](android/app/src/main/assets/www/)；脚本不会删除目标目录中的未知文件。
+根目录网页文件是网页资源的主版本。Android 的 Gradle `preBuild` 会先运行 `syncWebAssets`，把主版本精确同步到 [android/app/src/main/assets/www/](android/app/src/main/assets/www/) 并清理过期资源；也可手动运行 `powershell -ExecutionPolicy Bypass -File scripts/sync-web-assets.ps1` 完成同样的同步。
+
+系统栏和安全区的责任链、诊断方式及真机验证边界记录在 [SYSTEM_BARS_AUDIT.md](SYSTEM_BARS_AUDIT.md)。
 
 ## 项目结构
 
