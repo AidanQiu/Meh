@@ -652,7 +652,6 @@ init();
 
 async function init() {
   requestPersistentStorage();
-  syncAppHeight();
 
   const isStandalone = window.matchMedia?.("(display-mode: standalone)").matches || navigator.standalone === true;
   const runtime = window.MehAndroid ? "Android WebView" : isStandalone ? "PWA standalone" : "browser";
@@ -746,12 +745,11 @@ function bindEvents() {
   });
   if (window.MehPwaUpdate?.status) setPwaUpdateStatus(window.MehPwaUpdate.status);
   window.addEventListener("resize", () => {
-    syncAppHeight();
     updateDockIndicator();
     scheduleLayoutDiagnostics("window-resize");
   });
   if (window.visualViewport) {
-    window.visualViewport.addEventListener("resize", syncAppHeight);
+    window.visualViewport.addEventListener("resize", () => scheduleLayoutDiagnostics("visual-viewport-resize"));
   }
   window.addEventListener("orientationchange", () => scheduleLayoutDiagnostics("orientation-change"));
   window.addEventListener("pageshow", () => scheduleLayoutDiagnostics("page-show"));
@@ -768,17 +766,6 @@ async function requestPersistentStorage() {
   } catch (error) {
     console.warn("Persistent storage request failed:", error);
   }
-}
-
-function syncAppHeight() {
-  const viewportHeight = window.visualViewport?.height
-    || window.innerHeight
-    || document.documentElement.clientHeight
-    || 0;
-  if (!viewportHeight) return;
-
-  els.root.style.setProperty("--app-height", `${Math.round(viewportHeight)}px`);
-  scheduleLayoutDiagnostics("viewport-height");
 }
 
 function isLayoutDiagnosticsEnabled() {
@@ -818,8 +805,11 @@ function logLayoutDiagnostics(reason = "manual") {
     runtime: els.root.dataset.runtime || "unknown",
     displayModeStandalone: Boolean(window.matchMedia?.("(display-mode: standalone)").matches),
     navigatorStandalone: navigator.standalone === true,
+    screenHeight: window.screen.height,
     innerHeight: window.innerHeight,
+    documentClientHeight: document.documentElement.clientHeight,
     visualViewportHeight: window.visualViewport?.height ?? null,
+    visualViewportOffsetTop: window.visualViewport?.offsetTop ?? null,
     devicePixelRatio: window.devicePixelRatio,
     browserSafeArea: {
       top: variable("--browser-safe-top"),
@@ -856,6 +846,11 @@ function logLayoutDiagnostics(reason = "manual") {
     },
     bottomOffset: bottomStyle?.bottom || null,
     appHeight: variable("--app-height"),
+    canvasHeight: {
+      html: document.documentElement.getBoundingClientRect().height,
+      body: document.body.getBoundingClientRect().height,
+      root: frame?.getBoundingClientRect().height || null,
+    },
     build,
   };
   const signature = JSON.stringify({ ...payload, reason: undefined });
@@ -3060,7 +3055,6 @@ function openSheet(sheet) {
   if (!sheet) return;
   const alreadyHasOpenSheet = Boolean(document.querySelector(".settings-sheet.is-open, .editor-sheet.is-open"));
   window.clearTimeout(sheetCloseTimer);
-  syncAppHeight();
   lockPageScroll();
   els.scrim.hidden = false;
   document.body.classList.add("sheet-open");

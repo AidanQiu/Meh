@@ -1,6 +1,13 @@
 # iOS PWA / Android WebView 系统栏专项审计
 
-构建标识：`1.1.1-pwa-r7`
+构建标识：`1.1.1-pwa-r8`
+
+## r8 iOS 真机截图复盘
+
+- r7 把 `visualViewport.height` 直接写入全屏根变量 `--app-height`。WebKit standalone 在 `viewport-fit=cover` 下可能返回已扣除顶部和底部安全区的 visual viewport；因此 `body/.phone-frame/.app` 一起缩成中间内容区，截图底部新增的白带由这条 r7 高度覆盖直接创建。
+- r8 删除所有 JavaScript 对 `--app-height` 的写入。普通浏览器和 Android WebView 由 CSS `100dvh` 管理画布；iOS standalone 单独使用 `100vh`，`visualViewport` 只参与诊断，不再控制背景或根布局。
+- r7 的 `html/body` 只设置了渐变 `background`，其 computed `background-color` 仍可能是透明。r8 将实色 `--surface` 与渐变背景图拆开设置，并在外部 CSS 前提供相同的内联首帧色，避免 iOS 宿主栏、启动退场和 overscroll 取到默认白色。
+- 2026-07-20 的 WebKit 301994 最新复现记录指出，iOS 26.5.2 standalone 可能在 DOM 之外保留约 62 CSS px 顶部系统区域；DOM 无法绘制进入该区域。这与截图顶部白带形态一致，但必须读取真机 iOS 版本和 r8 诊断值才能最终确认是否命中该系统缺陷。r8 能修复网页画布缩短与透明回退，不能伪造一个 DOM 无法访问的系统区域。
 
 ## 架构结论
 
@@ -55,7 +62,7 @@
 - Android WebView：原生读取 `systemBars | displayCutout`，按 density 从物理 px 转成 CSS px，写入 `--native-safe-*`；`.android-webview` 只把这些变量映射为 `--app-safe-*`，不再叠加 `env()`。
 - 顶部 inset 只由 `.app` 的内容 padding 使用一次；默认非系统顶部间距已改为 0。r6 若曾把旧默认 16px 写入本地设置，r7 会做一次版本化迁移，避免旧值继续制造空段；用户主动设置的其他数值保留。
 - 底部背景不缩进；`.floating-dock`、`.page-actions` 和共用 sheet 的交互内容分别使用同一个 `--app-safe-bottom` 来源完成必要避让。
-- IME inset 仅记录诊断，不会保存为 bottom safe-area。WebView 使用 `adjustResize`，网页高度优先跟随 `visualViewport.height`，键盘收起后自然恢复。
+- IME inset 仅记录诊断，不会保存为 bottom safe-area。WebView 使用 `adjustResize`；全屏背景高度始终由 CSS viewport 单位负责，`visualViewport` 只记录诊断，避免 iOS standalone 将扣过 safe-area 的值错误应用到根画布。
 
 ## Android Window 最终配置
 
@@ -73,7 +80,7 @@
 - 最终 HTML 只有一条 `theme-color`，启动脚本在 CSS 加载前按已保存主题同步其实际 surface 色。
 - 保留 `apple-mobile-web-app-capable=yes`、`apple-mobile-web-app-status-bar-style=black-translucent`，并补齐 `mobile-web-app-capable=yes`。
 - Service Worker 对导航继续使用 network-first；入口 HTML不会被长期 cache-first 固定。
-- r7 使用新的 shell/runtime cache 名称，activate 时删除旧 `meh-*` cache，`skipWaiting + clients.claim` 保持启用。
+- r8 使用新的 shell/runtime cache 名称，activate 时删除旧 `meh-*` cache，`skipWaiting + clients.claim` 保持启用。
 
 ## 诊断入口
 

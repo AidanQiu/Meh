@@ -129,15 +129,22 @@ try {
       bodyPadding: [body.paddingTop, body.paddingBottom],
       framePadding: [frame.paddingTop, frame.paddingBottom],
       frameBackground: frame.backgroundColor,
+      htmlBackground: html.backgroundColor,
+      bodyBackground: body.backgroundColor,
+      inlineAppHeight: document.documentElement.style.getPropertyValue('--app-height'),
+      canvasHeight: [document.body.getBoundingClientRect().height, document.querySelector('.phone-frame').getBoundingClientRect().height],
       finalTop: html.getPropertyValue('--app-safe-top').trim(),
       finalBottom: html.getPropertyValue('--app-safe-bottom').trim(),
     };
   })()`);
-  check(base.build === "1.1.1-pwa-r7", "browser loaded the wrong build");
+  check(base.build === "1.1.1-pwa-r8", "browser loaded the wrong build");
   check(base.viewport[0] === 390, `portrait viewport width was ${base.viewport[0]}, expected 390`);
   check(base.bodyPadding.join(",") === "0px,0px", "visual body must not consume safe-area padding");
   check(base.framePadding.join(",") === "0px,0px", "visual root must not consume safe-area padding");
   check(base.frameBackground === "rgba(0, 0, 0, 0)", "content root must remain transparent over the visual background");
+  check(base.htmlBackground !== "rgba(0, 0, 0, 0)" && base.bodyBackground !== "rgba(0, 0, 0, 0)", "system fallback canvas background must not be transparent");
+  check(base.inlineAppHeight === "", "JavaScript wrote an inline full-screen app height");
+  check(base.canvasHeight.every((height) => height >= 844), `portrait visual canvas did not cover the viewport: ${base.canvasHeight.join(",")}`);
 
   const pages = await evaluate(`(async () => {
     const results = [];
@@ -183,6 +190,17 @@ try {
   })()`);
   check(migration.savedTop === 0 && migration.version === 2 && migration.renderedTopExtra === "0px", "r6 persisted 16px top spacer was not migrated to the r7 zero default");
 
+  const viewportOwnership = await evaluate(`(() => {
+    window.dispatchEvent(new Event('resize'));
+    window.visualViewport?.dispatchEvent(new Event('resize'));
+    return {
+      inlineAppHeight: document.documentElement.style.getPropertyValue('--app-height'),
+      computedAppHeight: getComputedStyle(document.documentElement).getPropertyValue('--app-height').trim(),
+    };
+  })()`);
+  check(viewportOwnership.inlineAppHeight === "", "viewport events overwrote the CSS-owned full-screen height");
+  check(viewportOwnership.computedAppHeight === "100dvh", `browser-tab canvas height source was ${viewportOwnership.computedAppHeight}, expected 100dvh`);
+
   const iosSimulation = await evaluate(`(() => {
     const root = document.documentElement;
     root.classList.remove('android-webview');
@@ -192,11 +210,12 @@ try {
     const app = getComputedStyle(document.querySelector('.app'));
     const dock = getComputedStyle(document.querySelector('.floating-dock'));
     const body = getComputedStyle(document.body);
-    return { appTop: app.paddingTop, dockBottom: dock.bottom, bodyTop: body.paddingTop, bodyBottom: body.paddingBottom };
+    return { appTop: app.paddingTop, dockBottom: dock.bottom, bodyTop: body.paddingTop, bodyBottom: body.paddingBottom, appHeight: getComputedStyle(root).getPropertyValue('--app-height').trim() };
   })()`);
   check(iosSimulation.appTop === "59px", `simulated iOS top inset was applied ${iosSimulation.appTop}, expected once as 59px`);
   check(iosSimulation.dockBottom === "52px", `simulated iOS dock offset was ${iosSimulation.dockBottom}, expected 18px + 34px`);
   check(iosSimulation.bodyTop === "0px" && iosSimulation.bodyBottom === "0px", "simulated iOS visual background was inset");
+  check(iosSimulation.appHeight === "100vh", `simulated iOS standalone canvas used ${iosSimulation.appHeight}, expected 100vh`);
 
   const androidSimulation = await evaluate(`(() => {
     const root = document.documentElement;

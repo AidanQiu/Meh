@@ -43,7 +43,9 @@ check(css.includes("#customBgLayer {\n  position: fixed;\n  inset: 0;"), "custom
 check(css.includes(".phone-frame") && css.includes("background: transparent !important"), "content root must reveal the full-screen background layer");
 check(app.includes("topHeight: 0"), "default non-system top spacing must be zero");
 check(app.includes('document.body.insertBefore(bgLayer, document.body.firstChild)'), "custom background must live at the visual root");
-check(app.includes("window.visualViewport?.height\n    || window.innerHeight"), "viewport height must prioritize the visual viewport for IME resizing");
+check(!app.includes('setProperty("--app-height"'), "JavaScript must not size the full-screen canvas from visualViewport");
+check(css.includes(":root.pwa-standalone") && css.includes("--app-height: 100vh"), "iOS standalone must use the full-screen vh canvas instead of WebKit's inset dvh/visualViewport height");
+check(css.includes("background-color: var(--surface) !important") && css.includes("background-image: var(--app-background) !important"), "root canvas needs a non-transparent system fallback color behind its visual background");
 check(app.includes("window.MehLayoutDiagnostics"), "web inset diagnostics are missing");
 
 check((activity.match(/WindowCompat\.setDecorFitsSystemWindows\(window, false\)/g) || []).length === 1, "decorFitsSystemWindows=false must be configured exactly once");

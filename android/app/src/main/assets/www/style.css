@@ -4,7 +4,7 @@
 
 @font-face {
   font-family: "Material Symbols Rounded";
-  src: url("./fonts/material-symbols-rounded.woff2?v=1.1.1-pwa-r7") format("woff2");
+  src: url("./fonts/material-symbols-rounded.woff2?v=1.1.1-pwa-r8") format("woff2");
   font-display: block;
   font-style: normal;
   font-weight: 100 700;
@@ -55,6 +55,11 @@
   --app-height: 100dvh;
 }
 
+:root.pwa-standalone {
+  /* WebKit standalone may subtract safe areas from dvh/visualViewport; vh keeps the visual canvas full-screen. */
+  --app-height: 100vh;
+}
+
 :root.android-webview {
   --app-safe-top: var(--native-safe-top);
   --app-safe-right: var(--native-safe-right);
@@ -70,7 +75,8 @@ html {
   min-height: 100%;
   margin: 0;
   padding: 0;
-  background: var(--app-background);
+  background-color: var(--surface);
+  background-image: var(--app-background);
   background-size: var(--app-background-size);
   background-position: var(--app-background-position);
 }
@@ -86,7 +92,8 @@ body {
   min-height: var(--app-height);
   margin: 0;
   padding: 0;
-  background: var(--app-background);
+  background-color: var(--surface);
+  background-image: var(--app-background);
   background-size: var(--app-background-size);
   background-position: var(--app-background-position);
   color: var(--on-surface);
@@ -2410,7 +2417,8 @@ html {
   min-height: 100% !important;
   height: auto !important;
   overflow: hidden !important;
-  background: var(--app-background) !important;
+  background-color: var(--surface) !important;
+  background-image: var(--app-background) !important;
   background-size: var(--app-background-size) !important;
   background-position: var(--app-background-position) !important;
 }
@@ -2424,7 +2432,8 @@ body {
   height: auto !important;
   margin: 0 !important;
   overflow: hidden !important;
-  background: var(--app-background) !important;
+  background-color: var(--surface) !important;
+  background-image: var(--app-background) !important;
   background-size: var(--app-background-size) !important;
   background-position: var(--app-background-position) !important;
 }
@@ -2476,6 +2485,10 @@ body {
 }
 
 @media (display-mode: standalone) {
+  :root {
+    --app-height: 100vh;
+  }
+
   body {
     padding: 0 !important;
   }
