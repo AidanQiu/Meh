@@ -78,7 +78,7 @@ const app = read("app.js");
 const updater = read("pwa-update.js");
 const worker = read("service-worker.js");
 const syncScript = read("scripts/sync-web-assets.ps1");
-const currentBuild = "1.1.1-pwa-r3";
+const currentBuild = "1.1.1-pwa-r4";
 const iconPath = `./icons/meh_icon.png?v=${currentBuild}`;
 const expectedIcons = ["icon_monochrome.svg", "meh_background.svg", "meh_foreground.svg", "meh_icon.png"];
 
@@ -190,7 +190,7 @@ const productionBuildFiles = [
   "index.html", "style.css", "service-worker.js", "version.json",
   "manifest.webmanifest", "manifest-meh.webmanifest", "manifest-zh.webmanifest",
 ];
-const oldBuild = "1.1.1-pwa-" + "r2";
+const oldBuild = "1.1.1-pwa-" + "r3";
 for (const path of productionBuildFiles) check(!read(path).includes(oldBuild), `old PWA build remains in ${path}`);
 
 const walk = (directory) => readdirSync(join(root, directory), { withFileTypes: true }).flatMap((entry) => {
