@@ -78,7 +78,7 @@ const app = read("app.js");
 const updater = read("pwa-update.js");
 const worker = read("service-worker.js");
 const syncScript = read("scripts/sync-web-assets.ps1");
-const currentBuild = "1.1.1-pwa-r4";
+const currentBuild = "1.1.1-pwa-r5";
 const iconPath = `./icons/meh_icon.png?v=${currentBuild}`;
 const expectedIcons = ["icon_monochrome.svg", "meh_background.svg", "meh_foreground.svg", "meh_icon.png"];
 
@@ -147,6 +147,7 @@ check(updater.includes("registration.update()"), "frontend lacks registration.up
 check(updater.includes('addEventListener("updatefound"'), "frontend lacks updatefound handling");
 check(updater.includes('addEventListener("controllerchange"'), "frontend lacks controllerchange handling");
 check(updater.includes("RELOAD_GUARD_KEY") && updater.includes("sessionStorage.setItem"), "frontend lacks reload loop protection");
+check(updater.includes("scheduleReloadFallback") && updater.includes("window.setTimeout"), "frontend lacks stalled-update reload fallback");
 check(updater.includes('addEventListener("online"'), "frontend lacks online update check");
 check(updater.includes("30 * 60 * 1000") && updater.includes("5 * 60 * 1000"), "periodic interval or throttle is missing");
 
@@ -190,7 +191,7 @@ const productionBuildFiles = [
   "index.html", "style.css", "service-worker.js", "version.json",
   "manifest.webmanifest", "manifest-meh.webmanifest", "manifest-zh.webmanifest",
 ];
-const oldBuild = "1.1.1-pwa-" + "r3";
+const oldBuild = "1.1.1-pwa-" + "r4";
 for (const path of productionBuildFiles) check(!read(path).includes(oldBuild), `old PWA build remains in ${path}`);
 
 const walk = (directory) => readdirSync(join(root, directory), { withFileTypes: true }).flatMap((entry) => {

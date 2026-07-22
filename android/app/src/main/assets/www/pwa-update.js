@@ -17,6 +17,8 @@
   let registrationPromise = null;
   let lastCheckAt = 0;
   let controllerChangeHandled = false;
+  let pendingRemoteBuild = "";
+  let fallbackReloadTimer = 0;
   let lastStatus = "";
 
   function publishStatus(status, detail = {}) {
@@ -31,6 +33,37 @@
     publishStatus("updating");
     worker.postMessage({ type: "SKIP_WAITING" });
     return true;
+  }
+
+  function reloadForBuild(targetBuild) {
+    if (controllerChangeHandled) return false;
+    const build = String(targetBuild || pendingRemoteBuild || "");
+    if (build && build === CURRENT_BUILD) {
+      publishStatus("latest");
+      return false;
+    }
+
+    const guardValue = `${CURRENT_BUILD}->${build || "controllerchange"}`;
+    try {
+      if (sessionStorage.getItem(RELOAD_GUARD_KEY) === guardValue) return false;
+      sessionStorage.setItem(RELOAD_GUARD_KEY, guardValue);
+    } catch {
+      // The in-memory guard below still prevents repeated reloads in this page.
+    }
+
+    controllerChangeHandled = true;
+    if (fallbackReloadTimer) window.clearTimeout(fallbackReloadTimer);
+    location.reload();
+    return true;
+  }
+
+  function scheduleReloadFallback(remoteBuild) {
+    if (!remoteBuild || remoteBuild === CURRENT_BUILD || fallbackReloadTimer) return;
+    pendingRemoteBuild = remoteBuild;
+    fallbackReloadTimer = window.setTimeout(() => {
+      fallbackReloadTimer = 0;
+      reloadForBuild(remoteBuild);
+    }, 3000);
   }
 
   function watchInstallingWorker(worker) {
@@ -84,7 +117,10 @@
       if (!registration) throw new Error("Service worker registration is unavailable");
       const remote = await fetchRemoteVersion();
       const isNewBuild = typeof remote.build === "string" && remote.build !== CURRENT_BUILD;
-      if (isNewBuild) publishStatus("updating", { remoteBuild: remote.build });
+      if (isNewBuild) {
+        publishStatus("updating", { remoteBuild: remote.build });
+        scheduleReloadFallback(remote.build);
+      }
 
       if (!skipRegistrationUpdate) await updateRegistration();
       if (askWaitingWorkerToActivate()) {
@@ -119,17 +155,14 @@
   }
 
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (controllerChangeHandled) return;
-    controllerChangeHandled = true;
-
+    const activeScript = registration?.active?.scriptURL;
+    let activeBuild = "";
     try {
-      if (sessionStorage.getItem(RELOAD_GUARD_KEY) === CURRENT_BUILD) return;
-      sessionStorage.setItem(RELOAD_GUARD_KEY, CURRENT_BUILD);
+      activeBuild = activeScript ? new URL(activeScript).searchParams.get("v") || "" : "";
     } catch {
-      // The in-memory guard above still prevents repeated reloads in this page.
+      // Fall back to the build reported by version.json.
     }
-
-    location.reload();
+    reloadForBuild(pendingRemoteBuild || activeBuild);
   });
 
   registrationPromise = navigator.serviceWorker

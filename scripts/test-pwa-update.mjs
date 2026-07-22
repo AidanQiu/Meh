@@ -24,6 +24,7 @@ const serviceWorkerHub = new EventHub();
 const registrationHub = new EventHub();
 const installingHub = new EventHub();
 const statuses = [];
+const fallbackReloads = [];
 let updateCalls = 0;
 let reloadCalls = 0;
 let registerArgs = null;
@@ -32,6 +33,11 @@ let skipWaitingMessages = 0;
 
 windowHub.addEventListener("meh:pwa-update-status", (event) => statuses.push(event.detail.status));
 windowHub.setInterval = () => 1;
+windowHub.setTimeout = (callback) => {
+  fallbackReloads.push(callback);
+  return fallbackReloads.length;
+};
+windowHub.clearTimeout = () => {};
 
 const localData = new Map([
   ["meh-wheel-presets-v1", "presets"],
@@ -44,7 +50,6 @@ const waitingWorker = {
   postMessage(message) {
     if (message.type !== "SKIP_WAITING") return;
     skipWaitingMessages += 1;
-    setTimeout(() => serviceWorkerHub.dispatchEvent({ type: "controllerchange" }), 0);
   },
 };
 const installingWorker = Object.assign(installingHub, { state: "installing" });
@@ -75,7 +80,7 @@ const navigatorMock = {
 const documentMock = Object.assign(documentHub, {
   visibilityState: "visible",
   querySelector(selector) {
-    return selector === 'meta[name="meh-build"]' ? { content: "1.1.1-pwa-r3" } : null;
+    return selector === 'meta[name="meh-build"]' ? { content: "1.1.1-pwa-r4" } : null;
   },
 });
 const locationMock = {
@@ -91,7 +96,7 @@ const context = vm.createContext({
   document: documentMock,
   fetch: async (url, options) => {
     versionFetch = { url, options };
-    return { ok: true, json: async () => ({ version: "1.1.1", build: "1.1.1-pwa-r4" }) };
+    return { ok: true, json: async () => ({ version: "1.1.1", build: "1.1.1-pwa-r5" }) };
   },
   indexedDB: fakeIndexedDb,
   localStorage: {
@@ -118,14 +123,17 @@ const assert = (condition, message) => {
   if (!condition) throw new Error(message);
 };
 
-assert(registerArgs?.url === "./service-worker.js?v=1.1.1-pwa-r3", "registration URL did not use the page build");
+assert(registerArgs?.url === "./service-worker.js?v=1.1.1-pwa-r4", "registration URL did not use the page build");
 assert(registerArgs?.options?.updateViaCache === "none", "updateViaCache was not disabled");
 assert(updateCalls >= 1, "registration.update() was not called");
 assert(versionFetch?.url.startsWith("./version.json?t="), "version.json timestamp was missing");
 assert(versionFetch?.options?.cache === "no-store", "version.json did not bypass HTTP cache");
 assert(skipWaitingMessages >= 1, "waiting worker did not receive SKIP_WAITING");
+assert(reloadCalls === 0, "page reloaded before the controllerchange fallback");
+assert(fallbackReloads.length === 1, "missing fallback reload for a stalled controllerchange");
+fallbackReloads[0]();
 assert(reloadCalls === 1, "controllerchange did not reload exactly once");
-assert(sessionData.get("meh-sw-reloaded-for-build") === "1.1.1-pwa-r3", "reload guard was not stored");
+assert(sessionData.get("meh-sw-reloaded-for-build") === "1.1.1-pwa-r4->1.1.1-pwa-r5", "reload guard was not stored for the target build");
 
 serviceWorkerHub.dispatchEvent({ type: "controllerchange" });
 assert(reloadCalls === 1, "a repeated controllerchange caused an extra reload");
@@ -155,7 +163,7 @@ for (const localLocation of [
     CustomEvent: class CustomEvent { constructor(type, init) { this.type = type; this.detail = init?.detail; } },
     Date,
     document: {
-      querySelector: () => ({ content: "1.1.1-pwa-r4" }),
+      querySelector: () => ({ content: "1.1.1-pwa-r5" }),
     },
     location: { ...localLocation, reload() {} },
     navigator: localNavigator,
@@ -166,4 +174,4 @@ for (const localLocation of [
   assert(localRegisterCalls === 0, `Service Worker registered for local Android context ${localLocation.protocol}//${localLocation.hostname}`);
 }
 
-console.log("PWA r3 -> r4 simulation passed: one reload, preserved local data, safe offline fallback, no Android-local registration.");
+console.log("PWA r4 -> r5 simulation passed: stalled controllerchange recovered, one reload, preserved local data, safe offline fallback, no Android-local registration.");

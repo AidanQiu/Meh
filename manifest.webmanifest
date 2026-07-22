@@ -2,7 +2,7 @@
   "name": "Meh",
   "short_name": "Meh",
   "description": "A small offline decision helper for coins, dice, wheels, and random numbers.",
-  "start_url": "./index.html?v=1.1.1-pwa-r4",
+  "start_url": "./index.html?v=1.1.1-pwa-r5",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
@@ -10,7 +10,7 @@
   "theme_color": "#e8e3e8",
   "icons": [
     {
-      "src": "./icons/meh_icon.png?v=1.1.1-pwa-r4",
+      "src": "./icons/meh_icon.png?v=1.1.1-pwa-r5",
       "sizes": "1254x1254",
       "type": "image/png",
       "purpose": "any"
