@@ -2,13 +2,13 @@
   "name": "Meh",
   "short_name": "Meh",
   "description": "A small offline decision helper for coins, dice, wheels, and random numbers.",
-  "start_url": "./index.html?v=1.1.1-pwa-r17",
+  "start_url": "./index.html?v=1.1.1-pwa-r18",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#d6e3e1",
   "theme_color": "#d6e3e1",
   "icons": [
-    { "src": "./icons/meh_icon.png?v=1.1.1-pwa-r17", "sizes": "1254x1254", "type": "image/png", "purpose": "any" }
+    { "src": "./icons/meh_icon.png?v=1.1.1-pwa-r18", "sizes": "1254x1254", "type": "image/png", "purpose": "any" }
   ]
 }

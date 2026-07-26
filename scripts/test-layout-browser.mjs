@@ -153,7 +153,7 @@ try {
       finalBottom: html.getPropertyValue('--app-safe-bottom').trim(),
     };
   })()`);
-  check(base.build === "1.1.1-pwa-r17", "browser loaded the wrong build");
+  check(base.build === "1.1.1-pwa-r18", "browser loaded the wrong build");
   check(base.viewport[0] === 390, `portrait viewport width was ${base.viewport[0]}, expected 390`);
   check(base.bodyPadding.join(",") === "0px,0px", "visual body must not consume safe-area padding");
   check(base.framePadding.join(",") === "0px,0px", "visual root must not consume safe-area padding");
@@ -256,6 +256,7 @@ try {
     const dock = getComputedStyle(document.querySelector('.floating-dock'));
     const surface = getComputedStyle(document.querySelector('.floating-dock-surface'));
     const indicator = getComputedStyle(document.querySelector('.dock-indicator'));
+    const indicatorRect = document.querySelector('.dock-indicator').getBoundingClientRect();
     const body = getComputedStyle(document.body);
     const dockRect = document.querySelector('.floating-dock').getBoundingClientRect();
     const surfaceRect = document.querySelector('.bottom-nav-surface').getBoundingClientRect();
@@ -276,6 +277,8 @@ try {
       surfacePaddingTop: surface.paddingTop,
       surfacePaddingBottom: surface.paddingBottom,
       indicatorBottom: indicator.bottom,
+      indicatorHeight: Math.round(indicatorRect.height),
+      indicatorCenterOffset: Math.round(((indicatorRect.top + indicatorRect.bottom) - (surfaceRect.top + surfaceRect.bottom)) * 10) / 20,
       dockHeight: Math.round(dockRect.height),
       itemCenterOffset: Math.round(((itemRect.top + itemRect.bottom) - (surfaceRect.top + surfaceRect.bottom)) * 10) / 20,
       physicalGap: Math.round(innerHeight - dockRect.bottom),
@@ -289,14 +292,15 @@ try {
   check(iosSimulation.dockBottom === "0px" && iosSimulation.physicalGap === 0, `simulated iOS dock did not reach the physical bottom edge: ${JSON.stringify(iosSimulation)}`);
   check(iosSimulation.dockPaddingBottom === "0px", `simulated iOS positioner consumed safe-area padding: ${iosSimulation.dockPaddingBottom}`);
   check(iosSimulation.surfacePaddingTop === "6px" && iosSimulation.surfacePaddingBottom === "6px", `simulated iOS surface padding became asymmetric: ${iosSimulation.surfacePaddingTop}/${iosSimulation.surfacePaddingBottom}`);
-  check(iosSimulation.indicatorBottom === "0px", `simulated iOS indicator bottom was ${iosSimulation.indicatorBottom}, expected 0px inside the content layer`);
+  check(iosSimulation.indicatorHeight === 48, `simulated iOS indicator height was ${iosSimulation.indicatorHeight}px, expected the fixed 48px pill`);
+  check(Math.abs(iosSimulation.indicatorCenterOffset) <= 1, `simulated iOS indicator was not vertically centered: ${iosSimulation.indicatorCenterOffset}px`);
   check(iosSimulation.dockHeight === 72, `simulated iOS dock height was ${iosSimulation.dockHeight}, expected the fixed 72px surface height`);
   check(Math.abs(iosSimulation.itemCenterOffset) <= 1, `simulated iOS dock item was not vertically centered: ${iosSimulation.itemCenterOffset}px`);
   check(iosSimulation.dockWidths.map((entry) => entry.width).join(",") === "366,334,262", `side-gap control produced wrong dock widths: ${iosSimulation.dockWidths.map((entry) => entry.width).join(",")}`);
   check(iosSimulation.dockWidths.every((entry) => entry.left === entry.gap && entry.right === entry.gap), `side-gap control did not keep symmetric physical margins: ${JSON.stringify(iosSimulation.dockWidths)}`);
   check(iosSimulation.bodyTop === "0px" && iosSimulation.bodyBottom === "0px", "simulated iOS visual background was inset");
   check(iosSimulation.appHeight === "100dvh", `simulated iOS standalone canvas used ${iosSimulation.appHeight}, expected CSS-owned 100dvh`);
-  await captureScreenshot("system-bars-r17-ios-portrait.png");
+  await captureScreenshot("system-bars-r18-ios-portrait.png");
 
   const androidSimulation = await evaluate(`(() => {
     const root = document.documentElement;
