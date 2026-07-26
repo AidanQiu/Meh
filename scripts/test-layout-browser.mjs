@@ -160,7 +160,7 @@ try {
       ],
     };
   })()`);
-  check(base.build === "1.1.1-pwa-r18", "browser loaded the wrong build");
+  check(base.build === "1.1.1-pwa-r19", "browser loaded the wrong build");
   check(base.platform === "platform-browser" && base.finalTop === "0px" && base.finalBottom === "0px", "browser fallback platform or zero-inset policy is wrong");
   check(base.viewport[0] === 390, `portrait viewport width was ${base.viewport[0]}, expected 390`);
   check(base.bodyPadding.join(",") === "0px,0px", "visual body must not consume safe-area padding");
@@ -297,7 +297,7 @@ try {
   check(iosSimulation.dockBottom === "0px" && iosSimulation.physicalGap === 0, `simulated iOS dock did not reach the physical bottom edge: ${JSON.stringify(iosSimulation)}`);
   check(iosSimulation.dockPaddingBottom === "0px", `simulated iOS positioner consumed safe-area padding: ${iosSimulation.dockPaddingBottom}`);
   check(iosSimulation.surfacePaddingTop === "6px" && iosSimulation.surfacePaddingBottom === "6px", `simulated iOS surface padding became asymmetric: ${iosSimulation.surfacePaddingTop}/${iosSimulation.surfacePaddingBottom}`);
-  check(iosSimulation.indicatorHeight === 48, `simulated iOS indicator height was ${iosSimulation.indicatorHeight}px, expected the fixed 48px pill`);
+  check(iosSimulation.indicatorHeight === 58, `simulated iOS indicator height was ${iosSimulation.indicatorHeight}px, expected the 58px padded inner height`);
   check(Math.abs(iosSimulation.indicatorCenterOffset) <= 1, `simulated iOS indicator was not vertically centered: ${iosSimulation.indicatorCenterOffset}px`);
   check(iosSimulation.dockHeight === 72, `simulated iOS dock height was ${iosSimulation.dockHeight}, expected the fixed 72px surface height`);
   check(Math.abs(iosSimulation.itemCenterOffset) <= 1, `simulated iOS dock item was not vertically centered: ${iosSimulation.itemCenterOffset}px`);

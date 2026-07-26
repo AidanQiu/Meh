@@ -49,8 +49,8 @@ check(css.includes("bottom: var(--dock-bottom-offset) !important"), "dock positi
 check(css.includes("--bottom-nav-height: calc(") && css.includes("height: var(--bottom-nav-height) !important"), "dock positioner must have a safe-area-independent fixed height");
 check(css.includes(".floating-dock-surface {\n  padding: 6px") || css.includes("padding: 6px !important"), "dock surface must retain symmetric internal padding");
 check(!/floating-dock-surface[\s\S]{0,300}content-inset-bottom/.test(css), "dock surface still consumes bottom inset");
-check(css.includes("--dock-pill-height: 48px") && css.includes("height: var(--dock-pill-height) !important"), "active dock pill must keep its own fixed visual height");
-check(css.includes("top: 50% !important") && css.includes("bottom: auto !important"), "active dock pill must be vertically centered instead of stretched");
+check(css.includes(".dock-item {\n  min-height: 0 !important;\n  height: 100% !important;"), "dock items must fill the padded inner surface");
+check(css.includes("top: 0 !important") && css.includes("bottom: 0 !important"), "active dock pill must fill the padded inner surface");
 check(html.includes('class="floating-dock-surface bottom-nav-surface"') && html.includes('class="floating-dock-content bottom-nav-content"'), "dock position, surface, and content layers must remain separate");
 check(/<\/div>\s*<div class="page-actions"[\s\S]*?<nav class="floating-dock bottom-nav-positioner"/.test(html), "fixed actions and dock must be body-level siblings of #app");
 check(app.includes('els.dock.style.setProperty("bottom", `${dockBottomGap}px`, "important")'), "JavaScript must not add safe-area to the user dock offset");
