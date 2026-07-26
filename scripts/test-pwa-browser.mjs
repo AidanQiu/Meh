@@ -207,7 +207,7 @@ try {
     build: document.querySelector('meta[name="meh-build"]')?.content || "",
     controlled: Boolean(navigator.serviceWorker.controller),
     stylesheetLoaded: Array.from(document.styleSheets).some((sheet) => sheet.href?.includes("style.css?v=${build}")),
-    background: getComputedStyle(document.documentElement).backgroundImage,
+    background: getComputedStyle(document.querySelector('#viewport-background')).backgroundImage,
   })`);
   if (offline.build !== build || !offline.controlled || !offline.stylesheetLoaded || offline.background === "none") {
     throw new Error(`Offline reopen failed: ${JSON.stringify(offline)}`);

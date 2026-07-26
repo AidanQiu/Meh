@@ -167,7 +167,7 @@ try {
   check(base.framePadding.join(",") === "0px,0px", "visual root must not consume safe-area padding");
   check(base.frameBackground === "rgba(0, 0, 0, 0)", "content root must remain transparent over the visual background");
   check(base.htmlBackground !== "rgba(0, 0, 0, 0)" && base.bodyBackground === "rgba(0, 0, 0, 0)", "html must own the canvas while body remains transparent");
-  check(base.backgroundImage !== "none" && base.viewportBackgroundImage === "none", "html must be the only production background painter");
+  check(base.backgroundImage === "none" && base.viewportBackgroundImage !== "none", "the fixed viewport layer must be the only production background painter");
   check(base.backgroundRect[0] <= -1 && base.backgroundRect[1] >= 845, `viewport diagnostic marker did not cover the layout viewport: ${JSON.stringify(base.backgroundRect)}`);
   check(base.backgroundParentIsBody && base.dockParentIsBody, "viewport background or fixed dock is not a direct body child");
   check(base.inlineAppHeight === "", "JavaScript wrote an inline full-screen app height");
@@ -187,8 +187,8 @@ try {
   check(safeAreaDiagnostics.snapshot.metaInfo.viewport === "width=device-width, initial-scale=1, viewport-fit=cover", "runtime diagnostics read the wrong viewport meta");
   check(safeAreaDiagnostics.snapshot.metaInfo.appleMobileWebAppCapable === "yes", "runtime diagnostics read the wrong standalone capability meta");
   check(safeAreaDiagnostics.snapshot.metaInfo.appleMobileWebAppStatusBarStyle === "black-translucent", "runtime diagnostics read the wrong status bar meta");
-  check(safeAreaDiagnostics.wallpaperVariable.includes("cross-fade") || safeAreaDiagnostics.wallpaperVariable.includes("url("), "custom wallpaper was not assigned to the root background");
-  check(safeAreaDiagnostics.htmlBackground.includes("url(") && safeAreaDiagnostics.viewportBackground === "none", "custom wallpaper did not remain exclusively on html");
+  check(safeAreaDiagnostics.wallpaperVariable.includes("cross-fade") || safeAreaDiagnostics.wallpaperVariable.includes("url("), "custom wallpaper was not assigned to the shared background variable");
+  check(safeAreaDiagnostics.htmlBackground === "none" && safeAreaDiagnostics.viewportBackground.includes("url("), "custom wallpaper did not remain exclusively on the fixed viewport layer");
 
   const pages = await evaluate(`(async () => {
     const results = [];

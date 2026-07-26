@@ -2438,14 +2438,12 @@ body.sheet-open {
 
 /* Final viewport ownership: the background fills the viewport; content alone consumes insets. */
 html {
-  min-height: 100vh !important;
-  min-height: 100dvh !important;
+  height: 100% !important;
+  min-height: 100% !important;
   overflow-x: hidden !important;
+  overflow-y: auto !important;
   background-color: var(--surface) !important;
-  background-image: var(--app-background) !important;
-  background-size: var(--app-background-size) !important;
-  background-position: var(--app-background-position) !important;
-  background-repeat: var(--app-background-repeat) !important;
+  background-image: none !important;
 }
 
 #viewport-background {
@@ -2454,7 +2452,12 @@ html {
   z-index: 0 !important;
   width: auto !important;
   height: auto !important;
-  background: transparent !important;
+  background-color: transparent !important;
+  background-image: var(--app-background) !important;
+  background-size: var(--app-background-size) !important;
+  background-position: var(--app-background-position) !important;
+  background-repeat: var(--app-background-repeat) !important;
+  pointer-events: none !important;
   transform: none !important;
   filter: none !important;
   contain: none !important;
