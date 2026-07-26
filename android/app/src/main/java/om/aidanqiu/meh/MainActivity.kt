@@ -75,7 +75,7 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("SetJavaScriptEnabled", "AddJavascriptInterface")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        configureEdgeToEdgeWindow()
+        if (EDGE_TO_EDGE_ENABLED) configureEdgeToEdgeWindow()
         setContentView(R.layout.activity_main)
 
         rootContainer = findViewById(R.id.rootContainer)
@@ -161,9 +161,13 @@ class MainActivity : AppCompatActivity() {
             val systemGestures = windowInsets.getInsets(WindowInsetsCompat.Type.systemGestures())
             val displayCutout = windowInsets.getInsets(WindowInsetsCompat.Type.displayCutout())
             val ime = windowInsets.getInsets(WindowInsetsCompat.Type.ime())
-            val safeArea = windowInsets.getInsets(
-                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
-            )
+            val safeArea = if (EDGE_TO_EDGE_ENABLED) {
+                windowInsets.getInsets(
+                    WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+                )
+            } else {
+                androidx.core.graphics.Insets.NONE
+            }
             val snapshot = InsetsSnapshot(
                 leftPx = safeArea.left,
                 topPx = safeArea.top,
@@ -215,10 +219,11 @@ class MainActivity : AppCompatActivity() {
             (() => {
               const insets = JSON.parse(${JSONObject.quote(payload)});
               const root = document.documentElement;
-              root.classList.add('android-webview');
-              root.dataset.runtime = 'android-webview';
+              root.classList.remove('platform-ios-pwa', 'platform-android-app', 'platform-browser');
+              root.classList.add('platform-android-app');
+              root.dataset.runtime = 'platform-android-app';
               for (const side of ['top', 'right', 'bottom', 'left']) {
-                root.style.setProperty(`--native-safe-${'$'}{side}`, `${'$'}{Number(insets[side]) || 0}px`);
+                root.style.setProperty(`--android-inset-${'$'}{side}`, `${'$'}{Number(insets[side]) || 0}px`);
               }
               window.dispatchEvent(new CustomEvent('meh:native-insets', { detail: insets }));
             })();
@@ -556,6 +561,7 @@ class MainActivity : AppCompatActivity() {
             .put("systemGesturePx", gestureBottomPx)
             .put("displayCutoutPx", cutoutTopPx)
             .put("imePx", imeBottomPx)
+            .put("edgeToEdge", EDGE_TO_EDGE_ENABLED)
 
         private fun toCssPx(value: Int): Double {
             val safeDensity = max(density.toDouble(), 0.1)
@@ -572,6 +578,7 @@ class MainActivity : AppCompatActivity() {
         private const val APP_URL = "https://appassets.androidplatform.net/assets/www/index.html"
         private const val ANDROID_BRIDGE_NAME = "MehAndroid"
         private const val DEFAULT_SURFACE_COLOR = "#D6E3E1"
+        private const val EDGE_TO_EDGE_ENABLED = true
         private const val GITHUB_OWNER = "AidanQiu"
         private const val GITHUB_REPOSITORY = "Meh"
         private const val GITHUB_LATEST_RELEASE_API =

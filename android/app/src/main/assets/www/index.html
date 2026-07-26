@@ -67,16 +67,24 @@
           // Keep the browser-derived language when storage is unavailable or invalid.
         }
 
-        const isAndroidWebView = Boolean(window.MehAndroid?.getSafeAreaInsets);
+        const isAndroidApp = Boolean(window.MehAndroid?.getSafeAreaInsets);
         const isStandalone = window.matchMedia?.("(display-mode: standalone)").matches || navigator.standalone === true;
-        root.dataset.runtime = isAndroidWebView ? "android-webview" : isStandalone ? "pwa-standalone" : "browser-tab";
-        root.classList.add(isAndroidWebView ? "android-webview" : isStandalone ? "pwa-standalone" : "browser-tab");
+        const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent)
+          || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+        const platformClass = isAndroidApp
+          ? "platform-android-app"
+          : isIos && isStandalone
+            ? "platform-ios-pwa"
+            : "platform-browser";
+        root.classList.remove("platform-ios-pwa", "platform-android-app", "platform-browser");
+        root.classList.add(platformClass);
+        root.dataset.runtime = platformClass;
 
-        if (isAndroidWebView) {
+        if (isAndroidApp) {
           try {
             const nativeInsets = JSON.parse(window.MehAndroid.getSafeAreaInsets());
             for (const side of ["top", "right", "bottom", "left"]) {
-              root.style.setProperty(`--native-safe-${side}`, `${Number(nativeInsets[side]) || 0}px`);
+              root.style.setProperty(`--android-inset-${side}`, `${Number(nativeInsets[side]) || 0}px`);
             }
           } catch (error) {
             console.warn("[Meh] Native safe-area bootstrap failed:", error);

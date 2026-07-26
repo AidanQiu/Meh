@@ -29,26 +29,32 @@ check(themeTags.length === 1, `expected one theme-color meta, found ${themeTags.
 check(html.includes('name="apple-mobile-web-app-capable" content="yes"'), "missing Apple standalone capability meta");
 check(html.includes('name="apple-mobile-web-app-status-bar-style" content="black-translucent"'), "Apple status bar must be black-translucent");
 check(html.includes('name="mobile-web-app-capable" content="yes"'), "missing generic standalone capability meta");
-check(html.includes('classList.add(isAndroidWebView ? "android-webview"'), "runtime class must be established before CSS loads");
+for (const platformClass of ["platform-ios-pwa", "platform-android-app", "platform-browser"]) {
+  check(html.includes(`"${platformClass}"`), `missing explicit ${platformClass} runtime class`);
+}
 
 const directSafeAreaUses = [...css.matchAll(/env\(safe-area-inset-(top|right|bottom|left),\s*0px\)/g)];
-check(directSafeAreaUses.length === 4, `safe-area env() must have exactly four canonical sources, found ${directSafeAreaUses.length}`);
+check(directSafeAreaUses.length === 4, `iOS safe-area adapter must have exactly four env() sources, found ${directSafeAreaUses.length}`);
+const iosAdapter = css.match(/:root\.platform-ios-pwa\s*\{([\s\S]*?)\}/)?.[1] || "";
+check((iosAdapter.match(/env\(safe-area-inset-/g) || []).length === 4, "all safe-area env() reads must be inside platform-ios-pwa");
+check(!css.replace(iosAdapter, "").includes("env(safe-area-inset-"), "safe-area env() leaked outside platform-ios-pwa");
 check(!css.includes("constant(safe-area"), "legacy constant(safe-area...) handling must not coexist");
-check(css.includes(":root.android-webview") && css.includes("--app-safe-top: max(var(--browser-safe-top), var(--native-safe-top))"), "Android must use the larger WebView/native safe-area value");
-check(css.includes("padding-top: calc(var(--app-safe-top) + var(--top-extra))"), "top content must consume the unified top inset once");
+check(css.includes(":root.platform-android-app") && css.includes("--content-inset-top: var(--android-inset-top)"), "Android must consume native WindowInsets only");
+check(!css.includes("--browser-safe-") && !css.includes("--native-safe-") && !css.includes("--app-safe-"), "legacy cross-platform safe-area variables remain");
+check(css.includes("padding-top: calc(var(--content-inset-top) + var(--top-extra))"), "top content must consume the platform inset once");
 check(css.includes("--dock-bottom-offset: var(--dock-bottom-gap)"), "dock position must equal the configured physical edge distance");
 check(css.includes("left: var(--dock-inline-start) !important") && css.includes("right: var(--dock-inline-end) !important"), "dock width must respect both side safe areas");
 check(css.includes("max-width: 448px !important"), "wide viewports must not stretch the dock past its design width");
 check(css.includes("bottom: var(--dock-bottom-offset) !important"), "dock positioner must use the exact configured gap");
 check(css.includes("--bottom-nav-height: calc(") && css.includes("height: var(--bottom-nav-height) !important"), "dock positioner must have a safe-area-independent fixed height");
 check(css.includes(".floating-dock-surface {\n  padding: 6px") || css.includes("padding: 6px !important"), "dock surface must retain symmetric internal padding");
-check(!/floating-dock-surface[\s\S]{0,300}app-safe-bottom/.test(css), "dock surface still consumes bottom safe-area");
+check(!/floating-dock-surface[\s\S]{0,300}content-inset-bottom/.test(css), "dock surface still consumes bottom inset");
 check(css.includes("--dock-pill-height: 48px") && css.includes("height: var(--dock-pill-height) !important"), "active dock pill must keep its own fixed visual height");
 check(css.includes("top: 50% !important") && css.includes("bottom: auto !important"), "active dock pill must be vertically centered instead of stretched");
 check(html.includes('class="floating-dock-surface bottom-nav-surface"') && html.includes('class="floating-dock-content bottom-nav-content"'), "dock position, surface, and content layers must remain separate");
 check(/<\/div>\s*<div class="page-actions"[\s\S]*?<nav class="floating-dock bottom-nav-positioner"/.test(html), "fixed actions and dock must be body-level siblings of #app");
 check(app.includes('els.dock.style.setProperty("bottom", `${dockBottomGap}px`, "important")'), "JavaScript must not add safe-area to the user dock offset");
-check(!app.includes("`calc(${dockBottomGap}px + var(--app-safe-bottom))`"), "JavaScript still adds safe-area to the user dock offset");
+check(!app.includes("`calc(${dockBottomGap}px + var(--content-inset-bottom))`"), "JavaScript still adds an inset to the user dock offset");
 check(!css.includes(".settings-sheet::after") && !css.includes(".editor-sheet::after"), "bottom sheet safe-area spacer pseudo-elements must be absent");
 check(!/--top-extra:\s*(20|24|44|47|59)px/.test(css), "fixed status-bar-sized top spacer found");
 check(html.includes('<div id="viewport-background" aria-hidden="true">') && css.includes("#viewport-background {\n  position: fixed;\n  inset: -1px;"), "body-level full-window background is missing");
@@ -82,7 +88,8 @@ check(activity.includes("window.statusBarColor = Color.TRANSPARENT"), "status ba
 check(activity.includes("window.navigationBarColor = Color.TRANSPARENT"), "navigation bar must be transparent");
 check(activity.includes("window.isNavigationBarContrastEnforced = false"), "navigation bar contrast enforcement must be disabled on supported APIs");
 check(activity.includes("isAppearanceLightStatusBars") && activity.includes("isAppearanceLightNavigationBars"), "system bar icon appearance must be explicit");
-check(activity.includes("getSafeAreaInsets") && activity.includes("--native-safe-${'$'}{side}"), "native-to-CSS inset bridge is missing");
+check(activity.includes("getSafeAreaInsets") && activity.includes("--android-inset-${'$'}{side}"), "native-to-CSS inset bridge is missing");
+check(activity.includes("EDGE_TO_EDGE_ENABLED") && activity.includes('.put("edgeToEdge", EDGE_TO_EDGE_ENABLED)'), "Android inset policy is not tied to native edge-to-edge state");
 check(activity.includes("cacheMode = WebSettings.LOAD_NO_CACHE"), "packaged Android web assets must bypass stale WebView caches");
 check(!activity.includes("webView.restoreState(savedInstanceState)"), "Android must not restore an old packaged page after an incremental reinstall");
 check(layout.includes('android:layout_width="match_parent"') && layout.includes('android:layout_height="match_parent"'), "root and WebView must fill the window");

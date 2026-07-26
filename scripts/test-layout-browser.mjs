@@ -134,6 +134,8 @@ try {
     const background = document.querySelector('#viewport-background');
     const backgroundRect = background.getBoundingClientRect();
     const dock = document.querySelector('.bottom-nav-positioner');
+    const activeDockItemRect = document.querySelector('.dock-item.is-active').getBoundingClientRect();
+    const dockIndicatorRect = document.querySelector('.dock-indicator').getBoundingClientRect();
     return {
       build: document.querySelector('meta[name="meh-build"]').content,
       viewport: [innerWidth, innerHeight],
@@ -149,11 +151,17 @@ try {
       viewportBackgroundImage: getComputedStyle(background).backgroundImage,
       backgroundParentIsBody: background.parentElement === document.body,
       dockParentIsBody: dock.parentElement === document.body,
-      finalTop: html.getPropertyValue('--app-safe-top').trim(),
-      finalBottom: html.getPropertyValue('--app-safe-bottom').trim(),
+      platform: document.documentElement.dataset.runtime,
+      finalTop: html.getPropertyValue('--content-inset-top').trim(),
+      finalBottom: html.getPropertyValue('--content-inset-bottom').trim(),
+      dockIndicatorDelta: [
+        dockIndicatorRect.left - activeDockItemRect.left,
+        dockIndicatorRect.width - activeDockItemRect.width,
+      ],
     };
   })()`);
   check(base.build === "1.1.1-pwa-r18", "browser loaded the wrong build");
+  check(base.platform === "platform-browser" && base.finalTop === "0px" && base.finalBottom === "0px", "browser fallback platform or zero-inset policy is wrong");
   check(base.viewport[0] === 390, `portrait viewport width was ${base.viewport[0]}, expected 390`);
   check(base.bodyPadding.join(",") === "0px,0px", "visual body must not consume safe-area padding");
   check(base.framePadding.join(",") === "0px,0px", "visual root must not consume safe-area padding");
@@ -164,6 +172,7 @@ try {
   check(base.backgroundParentIsBody && base.dockParentIsBody, "viewport background or fixed dock is not a direct body child");
   check(base.inlineAppHeight === "", "JavaScript wrote an inline full-screen app height");
   check(base.canvasHeight.every((height) => height >= 844), `portrait visual canvas did not cover the viewport: ${base.canvasHeight.join(",")}`);
+  check(base.dockIndicatorDelta.every((delta) => Math.abs(delta) <= 0.5), `dock indicator was not aligned to its active item: ${base.dockIndicatorDelta.join(",")}`);
 
   const safeAreaDiagnostics = await evaluate(`(() => {
     const snapshot = window.MehSafeAreaDiagnostics.snapshot();
@@ -238,16 +247,12 @@ try {
 
   const iosSimulation = await evaluate(`(() => {
     const root = document.documentElement;
-    root.classList.remove('android-webview');
-    root.classList.add('pwa-standalone');
-    root.style.setProperty('--browser-safe-top', '59px');
-    root.style.setProperty('--browser-safe-right', '0px');
-    root.style.setProperty('--browser-safe-bottom', '34px');
-    root.style.setProperty('--browser-safe-left', '0px');
-    root.style.setProperty('--app-safe-top', '59px');
-    root.style.setProperty('--app-safe-right', '0px');
-    root.style.setProperty('--app-safe-bottom', '34px');
-    root.style.setProperty('--app-safe-left', '0px');
+    root.classList.remove('platform-android-app', 'platform-browser');
+    root.classList.add('platform-ios-pwa');
+    root.style.setProperty('--content-inset-top', '59px');
+    root.style.setProperty('--content-inset-right', '0px');
+    root.style.setProperty('--content-inset-bottom', '34px');
+    root.style.setProperty('--content-inset-left', '0px');
     const range = document.querySelector('#dockBottomGapRange');
     range.value = '0';
     range.dispatchEvent(new Event('input', { bubbles: true }));
@@ -304,15 +309,13 @@ try {
 
   const androidSimulation = await evaluate(`(() => {
     const root = document.documentElement;
-    root.classList.remove('pwa-standalone');
-    root.classList.add('android-webview');
+    root.classList.remove('platform-ios-pwa', 'platform-browser');
+    root.classList.add('platform-android-app');
     root.style.removeProperty('--app-height');
-    root.style.removeProperty('--app-safe-top');
-    root.style.removeProperty('--app-safe-bottom');
-    root.style.setProperty('--browser-safe-top', '18px');
-    root.style.setProperty('--browser-safe-bottom', '30px');
-    root.style.setProperty('--native-safe-top', '24px');
-    root.style.setProperty('--native-safe-bottom', '24px');
+    root.style.removeProperty('--content-inset-top');
+    root.style.removeProperty('--content-inset-bottom');
+    root.style.setProperty('--android-inset-top', '24px');
+    root.style.setProperty('--android-inset-bottom', '24px');
     const style = getComputedStyle(root);
     const app = getComputedStyle(document.querySelector('.app'));
     const dock = document.querySelector('.floating-dock');
@@ -338,7 +341,7 @@ try {
     range.value = '0';
     range.dispatchEvent(new Event('change', { bubbles: true }));
     const savedGap = JSON.parse(localStorage.getItem('meh-app-settings-v2')).dockBottomGap;
-    return { finalTop: style.getPropertyValue('--app-safe-top').trim(), finalBottom: style.getPropertyValue('--app-safe-bottom').trim(), appTop: app.paddingTop, savedGap, dockPositions };
+    return { finalTop: style.getPropertyValue('--content-inset-top').trim(), finalBottom: style.getPropertyValue('--content-inset-bottom').trim(), appTop: app.paddingTop, savedGap, dockPositions };
   })()`);
   const [dockAt0, dockAt5, dockAt10, dockAt20] = androidSimulation.dockPositions;
   check(androidSimulation.appTop === "24px", `simulated Android top inset was applied ${androidSimulation.appTop}, expected once`);
@@ -366,10 +369,10 @@ try {
   await delay(150);
   const landscape = await evaluate(`(() => {
     const root = document.documentElement;
-    root.classList.remove('android-webview');
-    root.classList.add('pwa-standalone');
-    root.style.setProperty('--app-safe-left', '59px');
-    root.style.setProperty('--app-safe-right', '59px');
+    root.classList.remove('platform-android-app', 'platform-browser');
+    root.classList.add('platform-ios-pwa');
+    root.style.setProperty('--content-inset-left', '59px');
+    root.style.setProperty('--content-inset-right', '59px');
     const dockRect = document.querySelector('.floating-dock').getBoundingClientRect();
     return {
       viewport: [innerWidth, innerHeight],

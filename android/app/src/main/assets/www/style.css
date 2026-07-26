@@ -43,24 +43,17 @@
   --dock-pill-height: 48px;
   --dock-side-gap: 28px;
   --dock-bottom-gap: 18px;
-  --safe-area-top: env(safe-area-inset-top, 0px);
-  --safe-area-right: env(safe-area-inset-right, 0px);
-  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-area-left: env(safe-area-inset-left, 0px);
-  --browser-safe-top: var(--safe-area-top);
-  --browser-safe-right: var(--safe-area-right);
-  --browser-safe-bottom: var(--safe-area-bottom);
-  --browser-safe-left: var(--safe-area-left);
-  --native-safe-top: 0px;
-  --native-safe-right: 0px;
-  --native-safe-bottom: 0px;
-  --native-safe-left: 0px;
-  --app-safe-top: var(--browser-safe-top);
-  --app-safe-right: var(--browser-safe-right);
-  --app-safe-bottom: var(--browser-safe-bottom);
-  --app-safe-left: var(--browser-safe-left);
-  --dock-inline-start: max(var(--dock-side-gap), var(--app-safe-left));
-  --dock-inline-end: max(var(--dock-side-gap), var(--app-safe-right));
+  /* Shared business UI consumes these neutral variables only. Platform layers own their values. */
+  --content-inset-top: 0px;
+  --content-inset-right: 0px;
+  --content-inset-bottom: 0px;
+  --content-inset-left: 0px;
+  --android-inset-top: 0px;
+  --android-inset-right: 0px;
+  --android-inset-bottom: 0px;
+  --android-inset-left: 0px;
+  --dock-inline-start: max(var(--dock-side-gap), var(--content-inset-left));
+  --dock-inline-end: max(var(--dock-side-gap), var(--content-inset-right));
   /* The user setting is the dock surface's exact physical distance from the viewport edge. */
   --dock-bottom-offset: var(--dock-bottom-gap);
   --bottom-nav-height: calc(
@@ -86,12 +79,28 @@
   }
 }
 
-:root.android-webview {
-  /* Modern WebView exposes env(safe-area-*); the native bridge is a fallback for older engines. */
-  --app-safe-top: max(var(--browser-safe-top), var(--native-safe-top));
-  --app-safe-right: max(var(--browser-safe-right), var(--native-safe-right));
-  --app-safe-bottom: max(var(--browser-safe-bottom), var(--native-safe-bottom));
-  --app-safe-left: max(var(--browser-safe-left), var(--native-safe-left));
+/* iOS standalone PWA adapter: this is the only scope allowed to read WebKit safe-area env(). */
+:root.platform-ios-pwa {
+  --content-inset-top: env(safe-area-inset-top, 0px);
+  --content-inset-right: env(safe-area-inset-right, 0px);
+  --content-inset-bottom: env(safe-area-inset-bottom, 0px);
+  --content-inset-left: env(safe-area-inset-left, 0px);
+}
+
+/* Android WebView adapter: values are zero unless the edge-to-edge native host supplies them. */
+:root.platform-android-app {
+  --content-inset-top: var(--android-inset-top);
+  --content-inset-right: var(--android-inset-right);
+  --content-inset-bottom: var(--android-inset-bottom);
+  --content-inset-left: var(--android-inset-left);
+}
+
+/* Normal browser fallback: no system-bar inset is inferred. */
+:root.platform-browser {
+  --content-inset-top: 0px;
+  --content-inset-right: 0px;
+  --content-inset-bottom: 0px;
+  --content-inset-left: 0px;
 }
 
 * {
@@ -194,16 +203,16 @@ p {
 .app {
   min-height: 100vh;
   min-height: var(--app-height);
-  padding-top: calc(var(--app-safe-top) + var(--top-extra));
+  padding-top: calc(var(--content-inset-top) + var(--top-extra));
 
   padding-left: max(
     calc(18px * var(--ui-scale)),
-    var(--app-safe-left)
+    var(--content-inset-left)
   );
 
   padding-right: max(
     calc(18px * var(--ui-scale)),
-    var(--app-safe-right)
+    var(--content-inset-right)
   );
 
   padding-bottom: var(--app-content-bottom-clearance);
@@ -1230,7 +1239,7 @@ p {
 
 .settings-sheet,
 .editor-sheet {
-  --sheet-bottom-padding: max(28px, calc(var(--app-safe-bottom) + 24px));
+  --sheet-bottom-padding: max(28px, calc(var(--content-inset-bottom) + 24px));
   position: fixed;
   right: 50%;
   bottom: 0;
@@ -1238,13 +1247,13 @@ p {
   width: min(100vw, 480px);
   border-radius: 34px 34px 0 0;
   background: color-mix(in srgb, var(--surface) 94%, var(--primary-container));
-  max-height: calc(var(--app-height) - max(calc(28px * var(--ui-scale)), var(--app-safe-top)));
+  max-height: calc(var(--app-height) - max(calc(28px * var(--ui-scale)), var(--content-inset-top)));
   overflow-y: auto;
   padding: 10px 18px var(--sheet-bottom-padding);
   box-shadow: 0 -18px 42px rgba(29, 27, 32, 0.22);
   transform: translate(50%, 105%);
   transition: transform 260ms var(--ease);
-  scroll-padding-bottom: max(88px, calc(var(--app-safe-bottom) + 72px));
+  scroll-padding-bottom: max(88px, calc(var(--content-inset-bottom) + 72px));
   -webkit-overflow-scrolling: touch;
 }
 
@@ -2105,31 +2114,31 @@ p {
 
 /* 设置界面：和转盘编辑界面同高 */
 #settingsSheet {
-  max-height: min(calc(var(--app-height) - var(--app-safe-top) - 28px), 720px) !important;
+  max-height: min(calc(var(--app-height) - var(--content-inset-top) - 28px), 720px) !important;
 }
 
 /* 转盘二级菜单：和设置界面同高 */
 #wheelEditorSheet {
-  max-height: min(calc(var(--app-height) - var(--app-safe-top) - 28px), 720px) !important;
+  max-height: min(calc(var(--app-height) - var(--content-inset-top) - 28px), 720px) !important;
 }
 
 /* 随机数菜单：单独矮一点 */
 #numberSettingsSheet {
-  --sheet-bottom-padding: max(22px, calc(var(--app-safe-bottom) + 22px));
-  max-height: min(calc(var(--app-height) - var(--app-safe-top) - 96px), 640px) !important;
+  --sheet-bottom-padding: max(22px, calc(var(--content-inset-bottom) + 22px));
+  max-height: min(calc(var(--app-height) - var(--content-inset-top) - 96px), 640px) !important;
 }
 
 /* 如果之前 JS 留下了 is-expanded，也强制不改变高度 */
 #settingsSheet.is-expanded {
-  max-height: min(calc(var(--app-height) - var(--app-safe-top) - 28px), 720px) !important;
+  max-height: min(calc(var(--app-height) - var(--content-inset-top) - 28px), 720px) !important;
 }
 
 #wheelEditorSheet.is-expanded {
-  max-height: min(calc(var(--app-height) - var(--app-safe-top) - 28px), 720px) !important;
+  max-height: min(calc(var(--app-height) - var(--content-inset-top) - 28px), 720px) !important;
 }
 
 #numberSettingsSheet.is-expanded {
-  max-height: min(calc(var(--app-height) - var(--app-safe-top) - 96px), 640px) !important;
+  max-height: min(calc(var(--app-height) - var(--content-inset-top) - 96px), 640px) !important;
 }
 
 /* ===== 弹窗打开时禁止背景跟着滚动 ===== */
@@ -2503,13 +2512,13 @@ body {
   }
 }
 
-:root.pwa-standalone body,
-:root.android-webview body {
+:root.platform-ios-pwa body,
+:root.platform-android-app body {
   padding: 0 !important;
 }
 
-:root.pwa-standalone .phone-frame,
-:root.android-webview .phone-frame {
+:root.platform-ios-pwa .phone-frame,
+:root.platform-android-app .phone-frame {
   width: 100vw !important;
   max-width: none !important;
 }

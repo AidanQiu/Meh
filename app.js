@@ -798,27 +798,14 @@ function readStaticMetaContent(name) {
 }
 
 function measureSafeAreaInsets() {
-  const probe = document.createElement("div");
-  probe.setAttribute("aria-hidden", "true");
-  probe.style.cssText = `
-    position: fixed;
-    visibility: hidden;
-    pointer-events: none;
-    padding-top: env(safe-area-inset-top, 0px);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-    padding-left: env(safe-area-inset-left, 0px);
-    padding-right: env(safe-area-inset-right, 0px);
-  `;
-  document.body.appendChild(probe);
-  const probeStyle = getComputedStyle(probe);
-  const result = {
-    safeTop: probeStyle.paddingTop,
-    safeBottom: probeStyle.paddingBottom,
-    safeLeft: probeStyle.paddingLeft,
-    safeRight: probeStyle.paddingRight,
+  const rootStyle = getComputedStyle(document.documentElement);
+  const read = (side) => rootStyle.getPropertyValue(`--content-inset-${side}`).trim() || "0px";
+  return {
+    safeTop: read("top"),
+    safeBottom: read("bottom"),
+    safeLeft: read("left"),
+    safeRight: read("right"),
   };
-  probe.remove();
-  return result;
 }
 
 function logStandaloneStartupDiagnostics() {
@@ -1075,23 +1062,17 @@ function logLayoutDiagnostics(reason = "manual", force = false) {
     visualViewportHeight: window.visualViewport?.height ?? null,
     visualViewportOffsetTop: window.visualViewport?.offsetTop ?? null,
     devicePixelRatio: window.devicePixelRatio,
-    browserSafeArea: {
-      top: variable("--browser-safe-top"),
-      right: variable("--browser-safe-right"),
-      bottom: variable("--browser-safe-bottom"),
-      left: variable("--browser-safe-left"),
-    },
-    nativeSafeArea: {
-      top: variable("--native-safe-top"),
-      right: variable("--native-safe-right"),
-      bottom: variable("--native-safe-bottom"),
-      left: variable("--native-safe-left"),
+    androidNativeInsets: {
+      top: variable("--android-inset-top"),
+      right: variable("--android-inset-right"),
+      bottom: variable("--android-inset-bottom"),
+      left: variable("--android-inset-left"),
     },
     finalSafeArea: {
-      top: variable("--app-safe-top"),
-      right: variable("--app-safe-right"),
-      bottom: variable("--app-safe-bottom"),
-      left: variable("--app-safe-left"),
+      top: variable("--content-inset-top"),
+      right: variable("--content-inset-right"),
+      bottom: variable("--content-inset-bottom"),
+      left: variable("--content-inset-left"),
     },
     backgrounds: {
       html: htmlStyle.background,
@@ -1115,7 +1096,7 @@ function logLayoutDiagnostics(reason = "manual", force = false) {
       cssVariable: variable("--dock-bottom-gap"),
       computedBottom: bottomStyle?.bottom || null,
       physicalViewportGap: bottomRect ? Math.round(window.innerHeight - bottomRect.bottom) : null,
-      safeAreaBottom: variable("--app-safe-bottom"),
+      safeAreaBottom: variable("--content-inset-bottom"),
       positionerPaddingBottom: bottomStyle?.paddingBottom || null,
       positionerMarginBottom: bottomStyle?.marginBottom || null,
       parentPaddingBottom: bottomParentStyle?.paddingBottom || null,
@@ -1328,12 +1309,13 @@ function bindDockDragGesture() {
 }
 
 function getDockItemSlots() {
-  const dockRect = els.dock.getBoundingClientRect();
+  const dockContent = els.dockIndicator?.parentElement;
+  const dockContentRect = dockContent?.getBoundingClientRect() ?? els.dock.getBoundingClientRect();
   return Array.from(els.dockItems).map((item) => {
     const rect = item.getBoundingClientRect();
     return {
       page: item.dataset.page,
-      x: rect.left - dockRect.left,
+      x: rect.left - dockContentRect.left,
       width: rect.width,
     };
   });
@@ -2774,8 +2756,8 @@ function applyLayoutSettings() {
   // padding belongs to the inner surface so it protects buttons without
   // silently increasing computed bottom.
   if (els.dock) {
-    els.dock.style.setProperty("left", `max(${dockSideGap}px, var(--app-safe-left))`, "important");
-    els.dock.style.setProperty("right", `max(${dockSideGap}px, var(--app-safe-right))`, "important");
+    els.dock.style.setProperty("left", `max(${dockSideGap}px, var(--content-inset-left))`, "important");
+    els.dock.style.setProperty("right", `max(${dockSideGap}px, var(--content-inset-right))`, "important");
     els.dock.style.setProperty("bottom", `${dockBottomGap}px`, "important");
     els.dock.style.setProperty("width", "auto", "important");
     els.dock.style.setProperty("max-width", "448px", "important");
