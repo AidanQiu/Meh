@@ -160,7 +160,7 @@ try {
       ],
     };
   })()`);
-  check(base.build === "1.1.1-pwa-r20", "browser loaded the wrong build");
+  check(base.build === "1.1.1-pwa-r21", "browser loaded the wrong build");
   check(base.platform === "platform-browser" && base.finalTop === "0px" && base.finalBottom === "0px", "browser fallback platform or zero-inset policy is wrong");
   check(base.viewport[0] === 390, `portrait viewport width was ${base.viewport[0]}, expected 390`);
   check(base.bodyPadding.join(",") === "0px,0px", "visual body must not consume safe-area padding");
