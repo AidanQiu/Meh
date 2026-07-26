@@ -487,9 +487,9 @@ const defaultAppSettings = {
   primaryThemeColor: "#6b9c94",
   secondaryThemeColor: "#6750a4",
   uiScale: 1,
-  // r3 used a 16px content offset in iOS standalone mode in addition to the
-  // status-bar safe area. Keep Android edge-to-edge at 0px.
-  topHeight: document.documentElement.classList.contains("pwa-standalone") ? 16 : 0,
+  // The real safe-area inset already clears the status bar. Extra spacing is
+  // purely user-controlled and must not add a second blank strip by default.
+  topHeight: 0,
   dockThickness: 58,
   dockSideGap: 28,
   dockBottomGap: 18,
@@ -498,7 +498,7 @@ const defaultAppSettings = {
   activeWallpaperId: "",
   backgroundOpacity: 0.5,
   language: detectInitialLanguage(),
-  systemBarLayoutVersion: 3,
+  systemBarLayoutVersion: 4,
 };
 // 新增加设置项与控件绑定
 const primarySwatches = ["#e8e3e8", "#c9b0f6", "#94e8bd", "#87c7f4", "#f9aaa5", "#55beb4", "#ffbd4a",  "#ffffff", "#2d7434"];
@@ -2513,11 +2513,16 @@ function applyLayoutSettings() {
   // This keeps the real range-control path authoritative even when an older
   // WebView stylesheet survives an Android Studio incremental reinstall.
   if (els.dock) {
-    els.dock.style.setProperty("bottom", `${dockBottomGap}px`, "important");
-    els.dock.style.setProperty("padding-bottom", "calc(6px + var(--app-safe-bottom))", "important");
+    els.dock.style.setProperty("left", `max(${dockSideGap}px, var(--app-safe-left))`, "important");
+    els.dock.style.setProperty("right", `max(${dockSideGap}px, var(--app-safe-right))`, "important");
+    els.dock.style.setProperty("bottom", `calc(${dockBottomGap}px + var(--app-safe-bottom))`, "important");
+    els.dock.style.setProperty("width", "auto", "important");
+    els.dock.style.setProperty("max-width", "448px", "important");
+    els.dock.style.setProperty("margin-inline", "auto", "important");
+    els.dock.style.setProperty("padding-bottom", "6px", "important");
   }
   if (els.dockIndicator) {
-    els.dockIndicator.style.setProperty("bottom", "calc(6px + var(--app-safe-bottom))", "important");
+    els.dockIndicator.style.setProperty("bottom", "6px", "important");
   }
   if (els.pageActions) {
     els.pageActions.style.setProperty(
@@ -3277,16 +3282,12 @@ function loadAppSettings() {
   const saved = safeReadStorage(APP_SETTINGS_KEY, {});
   const migrated = { ...saved };
   const previousLayoutVersion = Number(migrated.systemBarLayoutVersion) || 0;
-  const needsSystemBarMigration = previousLayoutVersion !== 3;
-  const isPwaStandalone = document.documentElement.classList.contains("pwa-standalone");
-  if (isPwaStandalone && previousLayoutVersion < 3 && Number(migrated.topHeight) === 0) {
-    // Restore the r3 iOS PWA offset that was incorrectly migrated to zero.
-    migrated.topHeight = 16;
-  } else if (!isPwaStandalone && previousLayoutVersion < 2 && Number(migrated.topHeight) === 16) {
-    // Android/browser content already receives the real status-bar inset.
+  const needsSystemBarMigration = previousLayoutVersion !== 4;
+  if (previousLayoutVersion < 4 && Number(migrated.topHeight) === 16) {
+    // v3 persisted an iOS-only default spacer on top of the real safe area.
     migrated.topHeight = 0;
   }
-  migrated.systemBarLayoutVersion = 3;
+  migrated.systemBarLayoutVersion = 4;
   const normalized = normalizeAppSettings({ ...defaultAppSettings, ...migrated });
   if (needsSystemBarMigration) safeWriteStorage(APP_SETTINGS_KEY, normalized);
   return normalized;
@@ -3323,7 +3324,7 @@ function normalizeAppSettings(settings) {
     dockSideGap: clampNumber(settings.dockSideGap, 12, 64, defaultAppSettings.dockSideGap),
     dockBottomGap: clampNumber(settings.dockBottomGap, 0, 40, defaultAppSettings.dockBottomGap),
     darkMode: ["light", "dark", "auto"].includes(settings.darkMode) ? settings.darkMode : defaultAppSettings.darkMode,
-    systemBarLayoutVersion: 3,
+    systemBarLayoutVersion: 4,
   };
 }
 //==================修改结束 ===============

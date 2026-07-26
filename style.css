@@ -4,7 +4,7 @@
 
 @font-face {
   font-family: "Material Symbols Rounded";
-  src: url("./fonts/material-symbols-rounded.woff2?v=1.1.1-pwa-r13") format("woff2");
+  src: url("./fonts/material-symbols-rounded.woff2?v=1.1.1-pwa-r14") format("woff2");
   font-display: block;
   font-style: normal;
   font-weight: 100 700;
@@ -51,12 +51,13 @@
   --app-safe-right: var(--browser-safe-right);
   --app-safe-bottom: var(--browser-safe-bottom);
   --app-safe-left: var(--browser-safe-left);
+  --dock-inline-start: max(var(--dock-side-gap), var(--app-safe-left));
+  --dock-inline-end: max(var(--dock-side-gap), var(--app-safe-right));
   /*
-   * Keep the system-safe padding constant. The user-controlled bottom gap must
-   * move the complete dock instead of being cancelled by a shrinking padding.
+   * Keep the floating pill outside the Home Indicator instead of making the
+   * safe area part of the pill's own height.
    */
-  --dock-safe-padding: var(--app-safe-bottom);
-  --dock-bottom-offset: calc(var(--dock-bottom-gap) + var(--dock-safe-padding));
+  --dock-bottom-offset: calc(var(--dock-bottom-gap) + var(--app-safe-bottom));
   --app-height: 100dvh;
 }
 
@@ -1105,20 +1106,23 @@ p {
   --dock-indicator-x: 8px;
   --dock-indicator-w: 0px;
   position: fixed;
-  left: 50%;
-  bottom: var(--dock-bottom-gap);
+  left: var(--dock-inline-start);
+  right: var(--dock-inline-end);
+  bottom: var(--dock-bottom-offset);
   z-index: 6;
   display: grid;
-  width: min(calc(100vw - 56px), 448px);
+  width: auto;
+  max-width: 448px;
+  margin-inline: auto;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 4px;
   border: 1px solid rgba(127, 116, 124, 0.18);
   border-radius: 999px;
   background: var(--dock-bg);
-  padding: 6px 6px calc(6px + var(--dock-safe-padding));
+  padding: 6px;
   box-shadow: 0 16px 36px rgba(29, 27, 32, 0.22);
   backdrop-filter: blur(18px);
-  transform: translateX(-50%);
+  transform: none;
   touch-action: none;
   user-select: none;
 }
@@ -1154,7 +1158,7 @@ p {
 .dock-indicator {
   position: absolute;
   top: 6px;
-  bottom: calc(6px + var(--dock-safe-padding));
+  bottom: 6px;
   left: 0;
   width: var(--dock-indicator-w);
   border-radius: 999px;
@@ -2532,12 +2536,15 @@ body {
 
 .floating-dock {
   position: fixed !important;
-  left: var(--dock-side-gap) !important;
-  right: var(--dock-side-gap) !important;
-  bottom: var(--dock-bottom-gap) !important;
+  left: var(--dock-inline-start) !important;
+  right: var(--dock-inline-end) !important;
+  bottom: var(--dock-bottom-offset) !important;
   width: auto !important;
+  max-width: 448px !important;
+  margin-right: auto !important;
+  margin-left: auto !important;
   transform: none !important;
-  padding: 6px 6px calc(6px + var(--dock-safe-padding)) !important;
+  padding: 6px !important;
 }
 
 .dock-item {
@@ -2546,7 +2553,7 @@ body {
 
 .dock-indicator {
   top: 6px !important;
-  bottom: calc(6px + var(--dock-safe-padding)) !important;
+  bottom: 6px !important;
 }
 
 .page-actions {

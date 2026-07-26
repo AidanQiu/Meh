@@ -1,6 +1,13 @@
 # iOS PWA / Android WebView 系统栏专项审计
 
-构建标识：`1.1.1-pwa-r13`
+构建标识：`1.1.1-pwa-r14`
+
+## r14 iOS PWA 底栏尺寸与重复留白修复
+
+- `.floating-dock` 的 Home Indicator 安全区从胶囊内部 padding 移到胶囊外部 bottom offset。导航按钮、选中指示器和胶囊本体保持统一的 6px 内边距，不再因为 34px bottom safe-area 形成一段看似无法调掉的内部空白。
+- 底栏宽度重新限制为最多 448px；左右定位同时取用户边距与 `safe-area-inset-left/right` 的较大值。横屏、iPad 和宽视口不再把四项导航强行拉满整屏，刘海与圆角区域也不会压住导航。
+- `topHeight` 默认值恢复为 0，并通过布局版本 4 把 r13 自动写入的 16px 默认值迁移为 0。顶部安全区只避让一次，用户仍可在设置中主动增加额外顶部间距。
+- WebKit 301994 在部分 iOS 26.5.2 Home Screen standalone 环境中会把顶部约 62 CSS px 留在 DOM 画布之外；该系统拥有的区域无法由 CSS 背景、fixed 元素或 JavaScript 高度绘制覆盖。r14 只消除应用自身制造的重复空白，不伪造对系统级缺陷的网页修复。
 
 ## r13 Android / iOS 安全区修复
 
@@ -71,8 +78,8 @@
 
 - 浏览器/iOS：`--app-safe-*` 唯一来源是四个 `env(safe-area-inset-*)` 变量。
 - Android WebView：原生读取 `systemBars | displayCutout`，按 density 从物理 px 转成 CSS px，写入 `--native-safe-*`；`.android-webview` 将它与 WebView 的 `env()` 逐边取较大值，既避免重复相加，也能在其中一个来源暂时为 0 时保留安全区。
-- 顶部 inset 只由 `.app` 的内容 padding 使用一次。Android/浏览器标签页的默认非系统顶部间距为 0；iOS standalone 恢复 r3 的 16px 默认内容间距，迁移仅修复被 r7–r12 错误归零的 PWA 值，之后用户仍可手动调到 0。
-- 底部背景不缩进；`.floating-dock` 始终保留完整的 `--app-safe-bottom` 内边距并由用户距离整体移动，`.page-actions` 和共用 sheet 使用同一个来源完成必要避让。
+- 顶部 inset 只由 `.app` 的内容 padding 使用一次；所有运行环境的默认额外顶部间距均为 0，用户仍可通过设置主动增加。
+- 底部背景不缩进；`.floating-dock` 通过 `bottom = 用户距离 + --app-safe-bottom` 整体避让系统手势区，安全区不再计入胶囊自身高度。`.page-actions` 和共用 sheet 使用同一个来源完成必要避让。
 - IME inset 仅记录诊断，不会保存为 bottom safe-area。WebView 使用 `adjustResize`；Android 与普通浏览器高度由 CSS viewport 单位负责，iOS standalone 使用 r3 的“最大真实 viewport”同步逻辑。
 
 ## Android Window 最终配置

@@ -145,7 +145,7 @@ try {
       finalBottom: html.getPropertyValue('--app-safe-bottom').trim(),
     };
   })()`);
-  check(base.build === "1.1.1-pwa-r13", "browser loaded the wrong build");
+  check(base.build === "1.1.1-pwa-r14", "browser loaded the wrong build");
   check(base.viewport[0] === 390, `portrait viewport width was ${base.viewport[0]}, expected 390`);
   check(base.bodyPadding.join(",") === "0px,0px", "visual body must not consume safe-area padding");
   check(base.framePadding.join(",") === "0px,0px", "visual root must not consume safe-area padding");
@@ -196,7 +196,7 @@ try {
     const saved = JSON.parse(localStorage.getItem('meh-app-settings-v2'));
     return { savedTop: saved.topHeight, version: saved.systemBarLayoutVersion, renderedTopExtra: getComputedStyle(document.documentElement).getPropertyValue('--top-extra').trim() };
   })()`);
-  check(migration.savedTop === 0 && migration.version === 3 && migration.renderedTopExtra === "0px", "legacy browser/Android 16px top spacer was not migrated to zero");
+  check(migration.savedTop === 0 && migration.version === 4 && migration.renderedTopExtra === "0px", "legacy iOS 16px top spacer was not migrated to zero");
 
   const viewportOwnership = await evaluate(`(() => {
     window.dispatchEvent(new Event('resize'));
@@ -214,9 +214,13 @@ try {
     root.classList.remove('android-webview');
     root.classList.add('pwa-standalone');
     root.style.setProperty('--browser-safe-top', '59px');
+    root.style.setProperty('--browser-safe-right', '0px');
     root.style.setProperty('--browser-safe-bottom', '34px');
+    root.style.setProperty('--browser-safe-left', '0px');
     root.style.setProperty('--app-safe-top', '59px');
+    root.style.setProperty('--app-safe-right', '0px');
     root.style.setProperty('--app-safe-bottom', '34px');
+    root.style.setProperty('--app-safe-left', '0px');
     const range = document.querySelector('#dockBottomGapRange');
     range.value = '0';
     range.dispatchEvent(new Event('input', { bubbles: true }));
@@ -225,15 +229,38 @@ try {
     const dock = getComputedStyle(document.querySelector('.floating-dock'));
     const indicator = getComputedStyle(document.querySelector('.dock-indicator'));
     const body = getComputedStyle(document.body);
-    return { appTop: app.paddingTop, dockBottom: dock.bottom, dockPaddingBottom: dock.paddingBottom, indicatorBottom: indicator.bottom, bodyTop: body.paddingTop, bodyBottom: body.paddingBottom, appHeight: getComputedStyle(root).getPropertyValue('--app-height').trim() };
+    const dockRect = document.querySelector('.floating-dock').getBoundingClientRect();
+    const sideRange = document.querySelector('#dockSideGapRange');
+    const dockWidths = [12, 28, 64].map((gap) => {
+      sideRange.value = String(gap);
+      sideRange.dispatchEvent(new Event('input', { bubbles: true }));
+      const rect = document.querySelector('.floating-dock').getBoundingClientRect();
+      return { gap, left: Math.round(rect.left), right: Math.round(innerWidth - rect.right), width: Math.round(rect.width) };
+    });
+    sideRange.value = '28';
+    sideRange.dispatchEvent(new Event('input', { bubbles: true }));
+    return {
+      appTop: app.paddingTop,
+      dockBottom: dock.bottom,
+      dockPaddingBottom: dock.paddingBottom,
+      indicatorBottom: indicator.bottom,
+      dockHeight: Math.round(dockRect.height),
+      dockWidths,
+      bodyTop: body.paddingTop,
+      bodyBottom: body.paddingBottom,
+      appHeight: getComputedStyle(root).getPropertyValue('--app-height').trim(),
+    };
   })()`);
   check(iosSimulation.appTop === "59px", `simulated iOS top inset was applied ${iosSimulation.appTop}, expected once as 59px`);
-  check(iosSimulation.dockBottom === "0px", `simulated iOS dock stopped at ${iosSimulation.dockBottom} instead of reaching the configured physical edge`);
-  check(iosSimulation.dockPaddingBottom === "40px", `simulated iOS dock content padding was ${iosSimulation.dockPaddingBottom}, expected 6px + 34px`);
-  check(iosSimulation.indicatorBottom === "40px", `simulated iOS indicator entered the Home Indicator area: ${iosSimulation.indicatorBottom}`);
+  check(iosSimulation.dockBottom === "34px", `simulated iOS dock bottom was ${iosSimulation.dockBottom}, expected the 34px safe area`);
+  check(iosSimulation.dockPaddingBottom === "6px", `simulated iOS dock retained internal safe-area padding: ${iosSimulation.dockPaddingBottom}`);
+  check(iosSimulation.indicatorBottom === "6px", `simulated iOS indicator bottom was ${iosSimulation.indicatorBottom}, expected 6px`);
+  check(iosSimulation.dockHeight === 72, `simulated iOS dock height was ${iosSimulation.dockHeight}, expected 72px without internal safe-area blank space`);
+  check(iosSimulation.dockWidths.map((entry) => entry.width).join(",") === "366,334,262", `side-gap control produced wrong dock widths: ${iosSimulation.dockWidths.map((entry) => entry.width).join(",")}`);
+  check(iosSimulation.dockWidths.every((entry) => entry.left === entry.gap && entry.right === entry.gap), `side-gap control did not keep symmetric physical margins: ${JSON.stringify(iosSimulation.dockWidths)}`);
   check(iosSimulation.bodyTop === "0px" && iosSimulation.bodyBottom === "0px", "simulated iOS visual background was inset");
   check(iosSimulation.appHeight === "844px", `simulated iOS standalone canvas used ${iosSimulation.appHeight}, expected the r3-style measured 844px height`);
-  await captureScreenshot("system-bars-r13-ios-portrait.png");
+  await captureScreenshot("system-bars-r14-ios-portrait.png");
 
   const androidSimulation = await evaluate(`(() => {
     const root = document.documentElement;
@@ -272,14 +299,14 @@ try {
   const [dockAt0, dockAt18, dockAt40] = androidSimulation.dockPositions;
   check(androidSimulation.appTop === "24px", `simulated Android top inset was applied ${androidSimulation.appTop}, expected once`);
   check(androidSimulation.savedGap === 0, `bottom-gap range did not persist its real value: ${androidSimulation.savedGap}`);
-  check(dockAt0.cssBottom === "0px" && dockAt18.cssBottom === "18px" && dockAt40.cssBottom === "40px", `Android dock did not follow the configured gaps: ${androidSimulation.dockPositions.map((position) => position.cssBottom).join(",")}`);
-  check(androidSimulation.dockPositions.every((position) => position.paddingBottom === "36px"), `Android dock safe padding changed with its gap: ${androidSimulation.dockPositions.map((position) => position.paddingBottom).join(",")}`);
+  check(dockAt0.cssBottom === "30px" && dockAt18.cssBottom === "48px" && dockAt40.cssBottom === "70px", `Android dock did not combine the configured gaps with the safe area: ${androidSimulation.dockPositions.map((position) => position.cssBottom).join(",")}`);
+  check(androidSimulation.dockPositions.every((position) => position.paddingBottom === "6px"), `Android dock retained internal safe-area padding: ${androidSimulation.dockPositions.map((position) => position.paddingBottom).join(",")}`);
   check(androidSimulation.dockPositions.every((position) => position.height === dockAt0.height), `Android dock thickness changed with its gap: ${androidSimulation.dockPositions.map((position) => position.height).join(",")}`);
   check(dockAt0.top - dockAt18.top === 18 && dockAt18.top - dockAt40.top === 22, `Android dock did not move as one piece: top positions ${androidSimulation.dockPositions.map((position) => position.top).join(",")}`);
   check(dockAt0.bottom - dockAt18.bottom === 18 && dockAt18.bottom - dockAt40.bottom === 22, `Android dock bottom edge did not track the slider: ${androidSimulation.dockPositions.map((position) => position.bottom).join(",")}`);
-  await captureScreenshot("system-bars-r13-android-gap-0.png");
+  await captureScreenshot("system-bars-r14-android-gap-0.png");
   await evaluate(`(() => { const range = document.querySelector('#dockBottomGapRange'); range.value = '40'; range.dispatchEvent(new Event('input', { bubbles: true })); })()`);
-  await captureScreenshot("system-bars-r13-android-gap-40.png");
+  await captureScreenshot("system-bars-r14-android-gap-40.png");
   await evaluate(`(() => { const range = document.querySelector('#dockBottomGapRange'); range.value = '0'; range.dispatchEvent(new Event('input', { bubbles: true })); })()`);
 
   await send("Emulation.setDeviceMetricsOverride", {
@@ -291,11 +318,30 @@ try {
     screenHeight: 390,
   });
   await delay(150);
-  const landscape = await evaluate(`(() => ({ viewport: [innerWidth, innerHeight], frameWidth: document.querySelector('.phone-frame').getBoundingClientRect().width, bodyPadding: getComputedStyle(document.body).paddingTop }))()`);
+  const landscape = await evaluate(`(() => {
+    const root = document.documentElement;
+    root.classList.remove('android-webview');
+    root.classList.add('pwa-standalone');
+    root.style.setProperty('--app-safe-left', '59px');
+    root.style.setProperty('--app-safe-right', '59px');
+    const dockRect = document.querySelector('.floating-dock').getBoundingClientRect();
+    return {
+      viewport: [innerWidth, innerHeight],
+      frameWidth: document.querySelector('.phone-frame').getBoundingClientRect().width,
+      bodyPadding: getComputedStyle(document.body).paddingTop,
+      dock: {
+        left: Math.round(dockRect.left),
+        right: Math.round(innerWidth - dockRect.right),
+        width: Math.round(dockRect.width),
+      },
+    };
+  })()`);
   check(landscape.viewport[0] === 844 && landscape.viewport[1] === 390, "landscape viewport did not update");
   check(landscape.frameWidth === 844, `coarse-pointer landscape background root width was ${landscape.frameWidth}, expected 844`);
   check(landscape.bodyPadding === "0px", "landscape visual background gained top padding");
-  await captureScreenshot("system-bars-r13-android-landscape.png");
+  check(landscape.dock.width === 448, `landscape dock width was ${landscape.dock.width}, expected the 448px cap`);
+  check(landscape.dock.left >= 59 && landscape.dock.right >= 59, `landscape dock entered the side safe areas: ${JSON.stringify(landscape.dock)}`);
+  await captureScreenshot("system-bars-r14-ios-landscape.png");
 
   if (failures.length) {
     console.error(failures.map((failure) => `- ${failure}`).join("\n"));
