@@ -4,7 +4,7 @@
 
 @font-face {
   font-family: "Material Symbols Rounded";
-  src: url("./fonts/material-symbols-rounded.woff2?v=1.1.1-pwa-r26") format("woff2");
+  src: url("./fonts/material-symbols-rounded.woff2?v=1.1.1-pwa-r27") format("woff2");
   font-display: block;
   font-style: normal;
   font-weight: 100 700;
@@ -70,6 +70,7 @@
     + calc(70px * var(--ui-scale))
   );
   --app-height: 100vh;
+  --viewport-paint-height: var(--app-height);
 }
 
 @supports (height: 100dvh) {
@@ -2448,10 +2449,10 @@ html {
 
 #viewport-background {
   position: fixed !important;
-  inset: -1px !important;
+  inset: -1px -1px auto !important;
   z-index: 0 !important;
   width: auto !important;
-  height: auto !important;
+  height: calc(var(--viewport-paint-height) + 2px) !important;
   background-color: var(--surface) !important;
   background-image: var(--app-background) !important;
   background-size: var(--app-background-size) !important;
@@ -2475,6 +2476,12 @@ body {
   overflow-x: hidden !important;
   background-color: transparent !important;
   background-image: none !important;
+}
+
+html.page-scroll-locked,
+html.page-scroll-locked body {
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
 }
 
 .phone-frame {

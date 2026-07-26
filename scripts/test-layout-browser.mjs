@@ -161,7 +161,7 @@ try {
       ],
     };
   })()`);
-  check(base.build === "1.1.1-pwa-r26", "browser loaded the wrong build");
+  check(base.build === "1.1.1-pwa-r27", "browser loaded the wrong build");
   check(base.platform === "platform-browser" && base.finalTop === "0px" && base.finalBottom === "0px", "browser fallback platform or zero-inset policy is wrong");
   check(base.viewport[0] === 390, `portrait viewport width was ${base.viewport[0]}, expected 390`);
   check(base.bodyPadding.join(",") === "0px,0px", "visual body must not consume safe-area padding");
@@ -283,10 +283,32 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 50));
     const sheet = document.querySelector('#settingsSheet');
     const style = getComputedStyle(sheet);
-    return { open: sheet.classList.contains('is-open'), paddingBottom: style.paddingBottom, wallpaperGrid: Boolean(document.querySelector('#presetWallpaperGrid')) };
+    return {
+      open: sheet.classList.contains('is-open'),
+      paddingBottom: style.paddingBottom,
+      wallpaperGrid: Boolean(document.querySelector('#presetWallpaperGrid')),
+      rootLocked: document.documentElement.classList.contains('page-scroll-locked'),
+      bodyInlinePosition: document.body.style.position,
+      bodyInlineTop: document.body.style.top,
+    };
   })()`);
   check(settings.open && settings.wallpaperGrid, "settings/custom-background page failed to open");
-  await evaluate(`history.back(); new Promise((resolve) => setTimeout(resolve, 80))`);
+  check(settings.rootLocked && settings.bodyInlinePosition === "" && settings.bodyInlineTop === "", `sheet scroll lock mutated body positioning: ${JSON.stringify(settings)}`);
+  await evaluate(`history.back(); new Promise((resolve) => setTimeout(resolve, 850))`);
+  const historyRecovery = await evaluate(`(() => {
+    const backgroundRect = document.querySelector('#viewport-background').getBoundingClientRect();
+    return {
+      sheetOpen: document.querySelector('#settingsSheet').classList.contains('is-open'),
+      rootLocked: document.documentElement.classList.contains('page-scroll-locked'),
+      bodyInlinePosition: document.body.style.position,
+      bodyInlineTop: document.body.style.top,
+      backgroundBottom: Math.round(backgroundRect.bottom),
+      viewportBottom: innerHeight,
+    };
+  })()`);
+  check(!historyRecovery.sheetOpen && !historyRecovery.rootLocked, `history return did not release the sheet scroll lock: ${JSON.stringify(historyRecovery)}`);
+  check(historyRecovery.bodyInlinePosition === "" && historyRecovery.bodyInlineTop === "", `history return left a body-fixed offset: ${JSON.stringify(historyRecovery)}`);
+  check(historyRecovery.backgroundBottom >= historyRecovery.viewportBottom, `history return exposed the viewport below the background: ${JSON.stringify(historyRecovery)}`);
 
   const editors = await evaluate(`(async () => {
     const result = {};
@@ -302,6 +324,48 @@ try {
     return result;
   })()`);
   check(editors.wheel && editors.number, "preset editor or keyboard-input sheet failed to open");
+
+  const keyboardRecovery = await evaluate(`(async () => {
+    document.documentElement.classList.remove('platform-android-app', 'platform-browser');
+    document.documentElement.classList.add('platform-ios-pwa');
+    syncPwaAppHeight({ resetStable: true, measuredHeight: innerHeight });
+    const fullPaintHeight = document.documentElement.style.getPropertyValue('--viewport-paint-height');
+    syncPwaAppHeight({ measuredHeight: innerHeight - 300 });
+    const keyboardSizedPaintHeight = document.documentElement.style.getPropertyValue('--viewport-paint-height');
+    document.querySelector('[data-page="number"]').click();
+    document.querySelector('#featureButton').click();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const input = document.querySelector('#numberMinInput');
+    input.focus();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const during = {
+      keyboardActive: keyboardViewportActive,
+      paintHeight: document.documentElement.style.getPropertyValue('--viewport-paint-height'),
+      fullPaintHeight,
+      keyboardSizedPaintHeight,
+      bodyInlinePosition: document.body.style.position,
+    };
+    input.blur();
+    await new Promise((resolve) => setTimeout(resolve, 850));
+    history.back();
+    await new Promise((resolve) => setTimeout(resolve, 850));
+    const backgroundRect = document.querySelector('#viewport-background').getBoundingClientRect();
+    return {
+      during,
+      after: {
+        keyboardActive: keyboardViewportActive,
+        rootLocked: document.documentElement.classList.contains('page-scroll-locked'),
+        bodyInlinePosition: document.body.style.position,
+        backgroundBottom: Math.round(backgroundRect.bottom),
+        viewportBottom: innerHeight,
+      },
+    };
+  })()`);
+  check(keyboardRecovery.during.keyboardActive && keyboardRecovery.during.paintHeight, `editable focus did not preserve the iOS viewport paint state: ${JSON.stringify(keyboardRecovery)}`);
+  check(keyboardRecovery.during.fullPaintHeight === keyboardRecovery.during.keyboardSizedPaintHeight, `keyboard-sized viewport replaced the stable canvas height: ${JSON.stringify(keyboardRecovery)}`);
+  check(keyboardRecovery.during.bodyInlinePosition === "", `keyboard sheet used body fixed positioning: ${JSON.stringify(keyboardRecovery)}`);
+  check(!keyboardRecovery.after.keyboardActive && !keyboardRecovery.after.rootLocked, `keyboard dismissal did not settle its viewport state: ${JSON.stringify(keyboardRecovery)}`);
+  check(keyboardRecovery.after.bodyInlinePosition === "" && keyboardRecovery.after.backgroundBottom >= keyboardRecovery.after.viewportBottom, `keyboard dismissal exposed a bottom canvas gap: ${JSON.stringify(keyboardRecovery)}`);
 
   await evaluate(`localStorage.setItem('meh-app-settings-v2', JSON.stringify({ topHeight: 16 })); location.reload(); true`);
   await waitForApp();

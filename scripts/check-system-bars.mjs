@@ -57,7 +57,7 @@ check(app.includes('els.dock.style.setProperty("bottom", `${dockBottomGap}px`, "
 check(!app.includes("`calc(${dockBottomGap}px + var(--content-inset-bottom))`"), "JavaScript still adds an inset to the user dock offset");
 check(!css.includes(".settings-sheet::after") && !css.includes(".editor-sheet::after"), "bottom sheet safe-area spacer pseudo-elements must be absent");
 check(!/--top-extra:\s*(20|24|44|47|59)px/.test(css), "fixed status-bar-sized top spacer found");
-check(html.includes('<div id="viewport-background" aria-hidden="true">') && /#viewport-background\s*\{[\s\S]*?inset:\s*-1px\s*!important;/.test(css), "viewport background must overscan the full layout viewport");
+check(html.includes('<div id="viewport-background" aria-hidden="true">') && /#viewport-background\s*\{[\s\S]*?inset:\s*-1px -1px auto\s*!important;[\s\S]*?height:\s*calc\(var\(--viewport-paint-height\) \+ 2px\)\s*!important;/.test(css), "viewport background must overscan a stable non-keyboard paint height");
 check(/html\s*\{[\s\S]*?background-color:\s*transparent\s*!important;[\s\S]*?background-image:\s*none\s*!important;/.test(css), "html must remain transparent instead of supplying an iOS status-bar color");
 check(/body\s*\{[\s\S]*?background-color:\s*transparent\s*!important;[\s\S]*?background-image:\s*none\s*!important;/.test(css), "body must reveal the dedicated viewport background");
 check(css.includes(".phone-frame") && css.includes("background: transparent !important"), "content root must reveal the full-screen background layer");
@@ -69,6 +69,12 @@ check(/#viewport-background\s*\{[\s\S]*?background-color:\s*var\(--surface\)\s*!
 check(app.includes('els.root.style.setProperty("--app-wallpaper-image", wallpaperLayer)'), "custom wallpapers must update the root canvas background");
 check(app.includes('els.root.style.removeProperty("--app-height")'), "restored sessions must clear stale pixel viewport overrides");
 check(css.includes("--app-height: 100vh") && css.includes("--app-height: 100dvh"), "the full-screen canvas needs vh and dvh fallbacks");
+check(css.includes("--viewport-paint-height: var(--app-height)") && app.includes('els.root.style.setProperty("--viewport-paint-height"'), "iOS keyboard recovery needs a stable viewport paint height");
+check(css.includes("html.page-scroll-locked") && app.includes('classList.add("page-scroll-locked")'), "sheet scroll locking must use an overflow class");
+check(!app.includes('document.body.style.position = "fixed"') && !app.includes("document.body.style.top = `-"), "sheet opening must not put body into iOS fixed positioning");
+check(app.includes('scheduleViewportRecovery("keyboard-dismiss")') && app.includes('scheduleViewportRecovery("history-pop")'), "keyboard dismissal and interactive history return must schedule viewport recovery");
+check(app.includes("isVisualViewportSettled()") && app.includes("viewportRestorePending"), "scroll restoration must wait for visual/layout viewport convergence");
+check(app.includes('scheduleViewportRecovery("visual-viewport-resize")') && app.includes('window.visualViewport.addEventListener("scroll"'), "visual viewport resize/pan recovery listeners are missing");
 check(app.includes('classList.contains("platform-ios-pwa")') && app.includes("meta.remove()"), "iOS standalone theme-color removal is missing");
 check(html.includes('if (platformClass === "platform-ios-pwa")') && html.includes("themeMeta.remove()"), "bootstrap must remove theme-color before the first iOS PWA paint");
 check(app.includes("window.MehLayoutDiagnostics") && app.includes("surfacePhysicalGap") && app.includes("console.table(geometry)"), "real geometry diagnostics are missing");
