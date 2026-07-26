@@ -96,7 +96,7 @@ const context = vm.createContext({
   document: documentMock,
   fetch: async (url, options) => {
     versionFetch = { url, options };
-    return { ok: true, json: async () => ({ version: "1.1.1", build: "1.1.1-pwa-r21" }) };
+    return { ok: true, json: async () => ({ version: "1.1.1", build: "1.1.1-pwa-r22" }) };
   },
   indexedDB: fakeIndexedDb,
   localStorage: {
@@ -133,7 +133,7 @@ assert(reloadCalls === 0, "page reloaded before the controllerchange fallback");
 assert(fallbackReloads.length === 1, "missing fallback reload for a stalled controllerchange");
 fallbackReloads[0]();
 assert(reloadCalls === 1, "controllerchange did not reload exactly once");
-assert(sessionData.get("meh-sw-reloaded-for-build") === "1.1.1-pwa-r4->1.1.1-pwa-r21", "reload guard was not stored for the target build");
+assert(sessionData.get("meh-sw-reloaded-for-build") === "1.1.1-pwa-r4->1.1.1-pwa-r22", "reload guard was not stored for the target build");
 
 serviceWorkerHub.dispatchEvent({ type: "controllerchange" });
 assert(reloadCalls === 1, "a repeated controllerchange caused an extra reload");
@@ -163,7 +163,7 @@ for (const localLocation of [
     CustomEvent: class CustomEvent { constructor(type, init) { this.type = type; this.detail = init?.detail; } },
     Date,
     document: {
-      querySelector: () => ({ content: "1.1.1-pwa-r21" }),
+      querySelector: () => ({ content: "1.1.1-pwa-r22" }),
     },
     location: { ...localLocation, reload() {} },
     navigator: localNavigator,
@@ -174,4 +174,4 @@ for (const localLocation of [
   assert(localRegisterCalls === 0, `Service Worker registered for local Android context ${localLocation.protocol}//${localLocation.hostname}`);
 }
 
-console.log("PWA r4 -> r21 simulation passed: stalled controllerchange recovered, one reload, preserved local data, safe offline fallback, no Android-local registration.");
+console.log("PWA r4 -> r22 simulation passed: stalled controllerchange recovered, one reload, preserved local data, safe offline fallback, no Android-local registration.");

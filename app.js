@@ -2663,9 +2663,14 @@ function applyThemeColor(primaryColor, secondaryColor) {
   els.root.style.setProperty("--dock-bg", isDark ? "rgba(28, 27, 31, 0.88)" : mixHex(background, "#ffffff", 0.56));
 
   const statusColor = surface;
-  document.querySelectorAll("meta[name='theme-color']").forEach((meta) => {
-    meta.setAttribute("content", statusColor);
-  });
+  const isIosPwa = els.root.classList.contains("platform-ios-pwa");
+  if (isIosPwa) {
+    document.querySelectorAll("meta[name='theme-color']").forEach((meta) => meta.remove());
+  } else {
+    document.querySelectorAll("meta[name='theme-color']").forEach((meta) => {
+      meta.setAttribute("content", statusColor);
+    });
+  }
 
   if (window.MehAndroid?.setSystemBarColor) {
     window.MehAndroid.setSystemBarColor(surface, isDark);
