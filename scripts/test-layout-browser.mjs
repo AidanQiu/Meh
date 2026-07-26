@@ -144,7 +144,6 @@ try {
       frameBackground: frame.backgroundColor,
       htmlBackground: html.backgroundColor,
       bodyBackground: body.backgroundColor,
-      themeColor: document.querySelector("meta[name='theme-color']")?.content || "",
       inlineAppHeight: document.documentElement.style.getPropertyValue('--app-height'),
       canvasHeight: [document.body.getBoundingClientRect().height, document.querySelector('.phone-frame').getBoundingClientRect().height],
       backgroundRect: [backgroundRect.top, backgroundRect.bottom],
@@ -161,14 +160,13 @@ try {
       ],
     };
   })()`);
-  check(base.build === "1.1.1-pwa-r22", "browser loaded the wrong build");
+  check(base.build === "1.1.1-pwa-r21", "browser loaded the wrong build");
   check(base.platform === "platform-browser" && base.finalTop === "0px" && base.finalBottom === "0px", "browser fallback platform or zero-inset policy is wrong");
   check(base.viewport[0] === 390, `portrait viewport width was ${base.viewport[0]}, expected 390`);
   check(base.bodyPadding.join(",") === "0px,0px", "visual body must not consume safe-area padding");
   check(base.framePadding.join(",") === "0px,0px", "visual root must not consume safe-area padding");
   check(base.frameBackground === "rgba(0, 0, 0, 0)", "content root must remain transparent over the visual background");
-  check(base.htmlBackground === "rgba(0, 0, 0, 0)" && base.bodyBackground === "rgba(0, 0, 0, 0)", "html and body must remain transparent over the fixed viewport layer");
-  check(Boolean(base.themeColor), "normal browser mode must retain theme-color");
+  check(base.htmlBackground !== "rgba(0, 0, 0, 0)" && base.bodyBackground === "rgba(0, 0, 0, 0)", "html must own the canvas while body remains transparent");
   check(base.backgroundImage === "none" && base.viewportBackgroundImage !== "none", "the fixed viewport layer must be the only production background painter");
   check(base.backgroundRect[0] <= -1 && base.backgroundRect[1] >= 845, `viewport diagnostic marker did not cover the layout viewport: ${JSON.stringify(base.backgroundRect)}`);
   check(base.backgroundParentIsBody && base.dockParentIsBody, "viewport background or fixed dock is not a direct body child");
@@ -255,7 +253,6 @@ try {
     root.style.setProperty('--content-inset-right', '0px');
     root.style.setProperty('--content-inset-bottom', '34px');
     root.style.setProperty('--content-inset-left', '0px');
-    applyThemeColor(appSettings.primaryThemeColor, appSettings.secondaryThemeColor);
     const range = document.querySelector('#dockBottomGapRange');
     range.value = '0';
     range.dispatchEvent(new Event('input', { bubbles: true }));
@@ -293,7 +290,6 @@ try {
       dockWidths,
       bodyTop: body.paddingTop,
       bodyBottom: body.paddingBottom,
-      themeColorPresent: Boolean(document.querySelector("meta[name='theme-color']")),
       appHeight: getComputedStyle(root).getPropertyValue('--app-height').trim(),
     };
   })()`);
@@ -308,7 +304,6 @@ try {
   check(iosSimulation.dockWidths.map((entry) => entry.width).join(",") === "366,334,262", `side-gap control produced wrong dock widths: ${iosSimulation.dockWidths.map((entry) => entry.width).join(",")}`);
   check(iosSimulation.dockWidths.every((entry) => entry.left === entry.gap && entry.right === entry.gap), `side-gap control did not keep symmetric physical margins: ${JSON.stringify(iosSimulation.dockWidths)}`);
   check(iosSimulation.bodyTop === "0px" && iosSimulation.bodyBottom === "0px", "simulated iOS visual background was inset");
-  check(!iosSimulation.themeColorPresent, "simulated iOS PWA retained theme-color");
   check(iosSimulation.appHeight === "100dvh", `simulated iOS standalone canvas used ${iosSimulation.appHeight}, expected CSS-owned 100dvh`);
   await captureScreenshot("system-bars-r18-ios-portrait.png");
 

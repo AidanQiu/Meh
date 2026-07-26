@@ -4,7 +4,7 @@
 
 @font-face {
   font-family: "Material Symbols Rounded";
-  src: url("./fonts/material-symbols-rounded.woff2?v=1.1.1-pwa-r22") format("woff2");
+  src: url("./fonts/material-symbols-rounded.woff2?v=1.1.1-pwa-r21") format("woff2");
   font-display: block;
   font-style: normal;
   font-weight: 100 700;
@@ -2442,7 +2442,7 @@ html {
   min-height: 100% !important;
   overflow-x: hidden !important;
   overflow-y: auto !important;
-  background-color: transparent !important;
+  background-color: var(--surface) !important;
   background-image: none !important;
 }
 
@@ -2452,7 +2452,7 @@ html {
   z-index: 0 !important;
   width: auto !important;
   height: auto !important;
-  background-color: var(--surface) !important;
+  background-color: transparent !important;
   background-image: var(--app-background) !important;
   background-size: var(--app-background-size) !important;
   background-position: var(--app-background-position) !important;
