@@ -57,7 +57,7 @@ check(app.includes('els.dock.style.setProperty("bottom", `${dockBottomGap}px`, "
 check(!app.includes("`calc(${dockBottomGap}px + var(--content-inset-bottom))`"), "JavaScript still adds an inset to the user dock offset");
 check(!css.includes(".settings-sheet::after") && !css.includes(".editor-sheet::after"), "bottom sheet safe-area spacer pseudo-elements must be absent");
 check(!/--top-extra:\s*(20|24|44|47|59)px/.test(css), "fixed status-bar-sized top spacer found");
-check(html.includes('<div id="viewport-background" aria-hidden="true">') && css.includes("#viewport-background {\n  position: fixed;\n  inset: -1px;"), "body-level full-window background is missing");
+check(html.includes('<div id="viewport-background" aria-hidden="true">') && /#viewport-background\s*\{[\s\S]*?inset:\s*0\s*!important;/.test(css), "transparent viewport marker must match the full layout viewport");
 check(css.includes("body {") && css.includes("background: transparent !important"), "body must not paint a competing safe-area background");
 check(css.includes(".phone-frame") && css.includes("background: transparent !important"), "content root must reveal the full-screen background layer");
 check(app.includes("topHeight: 0"), "the real top safe area must not receive a second default spacer");
