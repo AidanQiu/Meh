@@ -4,7 +4,7 @@
 
 @font-face {
   font-family: "Material Symbols Rounded";
-  src: url("./fonts/material-symbols-rounded.woff2?v=1.1.1-pwa-r16") format("woff2");
+  src: url("./fonts/material-symbols-rounded.woff2?v=1.1.1-pwa-r17") format("woff2");
   font-display: block;
   font-style: normal;
   font-weight: 100 700;
@@ -30,11 +30,14 @@
   --shadow-2: 0 18px 42px rgba(29, 27, 32, 0.18);
   --shadow-3: 0 22px 34px rgba(29, 27, 32, 0.18);
   --ease: cubic-bezier(0.2, 0, 0, 1);
+  --app-wallpaper-image: linear-gradient(transparent, transparent);
   --app-background:
+    var(--app-wallpaper-image),
     radial-gradient(circle at 16% 6%, color-mix(in srgb, var(--primary) 18%, transparent), transparent 30%),
     linear-gradient(180deg, var(--surface) 0%, var(--surface-container) 100%);
-  --app-background-size: auto;
-  --app-background-position: center;
+  --app-background-size: cover, auto, auto;
+  --app-background-position: center, center, center;
+  --app-background-repeat: no-repeat, no-repeat, no-repeat;
   --top-extra: 0px;
   --dock-thickness: 58px;
   --dock-side-gap: 28px;
@@ -102,6 +105,7 @@ html {
   background-image: var(--app-background);
   background-size: var(--app-background-size);
   background-position: var(--app-background-position);
+  background-repeat: var(--app-background-repeat);
 }
 
 body {
@@ -128,11 +132,7 @@ body {
   z-index: 0;
   width: auto;
   height: auto;
-  background-color: var(--surface);
-  background-image: var(--app-background);
-  background-size: var(--app-background-size);
-  background-position: var(--app-background-position);
-  background-repeat: no-repeat;
+  background: transparent;
   pointer-events: none;
   transform: none;
   filter: none;
@@ -1998,19 +1998,6 @@ p {
 }
 
 
-/* 使用gemini修改 */
-/* 独立的自定义背景图图层 */
-#customBgLayer {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  background-repeat: no-repeat;
-  background-size: cover;
-  background-position: center;
-  opacity: var(--bg-opacity, 1);
-  pointer-events: none;
-  transition: opacity 150ms ease;
-}
 /* Final clean motion layer for coin and dice. Keep this block last. */
 .coin.is-flipping {
   animation-duration: 1350ms;
@@ -2450,6 +2437,7 @@ html {
   background-image: var(--app-background) !important;
   background-size: var(--app-background-size) !important;
   background-position: var(--app-background-position) !important;
+  background-repeat: var(--app-background-repeat) !important;
 }
 
 #viewport-background {
@@ -2458,11 +2446,7 @@ html {
   z-index: 0 !important;
   width: auto !important;
   height: auto !important;
-  background-color: var(--surface) !important;
-  background-image: var(--app-background) !important;
-  background-size: var(--app-background-size) !important;
-  background-position: var(--app-background-position) !important;
-  background-repeat: no-repeat !important;
+  background: transparent !important;
   transform: none !important;
   filter: none !important;
   contain: none !important;

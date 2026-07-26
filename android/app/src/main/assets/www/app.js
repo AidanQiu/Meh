@@ -655,6 +655,9 @@ let lastLayoutDiagnosticSignature = "";
 init();
 
 async function init() {
+  installSafeAreaDebugMode();
+  logStandaloneStartupDiagnostics();
+  window.setTimeout(() => logServiceWorkerDiagnostics(), 1000);
   requestPersistentStorage();
   syncPwaAppHeight();
 
@@ -789,6 +792,195 @@ function syncPwaAppHeight() {
   // page which measured a safe-area-reduced visualViewport in pixels.
   els.root.style.removeProperty("--app-height");
 }
+
+function readStaticMetaContent(name) {
+  return document.querySelector(`meta[name="${name}"]`)?.content;
+}
+
+function measureSafeAreaInsets() {
+  const probe = document.createElement("div");
+  probe.setAttribute("aria-hidden", "true");
+  probe.style.cssText = `
+    position: fixed;
+    visibility: hidden;
+    pointer-events: none;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  `;
+  document.body.appendChild(probe);
+  const probeStyle = getComputedStyle(probe);
+  const result = {
+    safeTop: probeStyle.paddingTop,
+    safeBottom: probeStyle.paddingBottom,
+    safeLeft: probeStyle.paddingLeft,
+    safeRight: probeStyle.paddingRight,
+  };
+  probe.remove();
+  return result;
+}
+
+function logStandaloneStartupDiagnostics() {
+  const standaloneInfo = {
+    navigatorStandalone: window.navigator.standalone,
+    displayModeStandalone: window.matchMedia("(display-mode: standalone)").matches,
+    displayModeFullscreen: window.matchMedia("(display-mode: fullscreen)").matches,
+    innerWidth: window.innerWidth,
+    innerHeight: window.innerHeight,
+    screenWidth: window.screen.width,
+    screenHeight: window.screen.height,
+    documentClientWidth: document.documentElement.clientWidth,
+    documentClientHeight: document.documentElement.clientHeight,
+    visualViewportWidth: window.visualViewport?.width,
+    visualViewportHeight: window.visualViewport?.height,
+    visualViewportOffsetTop: window.visualViewport?.offsetTop,
+    visualViewportOffsetLeft: window.visualViewport?.offsetLeft,
+  };
+  const metaInfo = {
+    viewport: readStaticMetaContent("viewport"),
+    appleMobileWebAppCapable: readStaticMetaContent("apple-mobile-web-app-capable"),
+    appleMobileWebAppStatusBarStyle: readStaticMetaContent("apple-mobile-web-app-status-bar-style"),
+  };
+  const safeArea = measureSafeAreaInsets();
+  const isStandalone = standaloneInfo.navigatorStandalone === true || standaloneInfo.displayModeStandalone === true;
+
+  console.info("[Meh][SafeArea] Standalone startup diagnostics");
+  console.table(standaloneInfo);
+  console.table(metaInfo);
+  console.table(safeArea);
+  if (!isStandalone) {
+    console.warn("[Meh][SafeArea] This launch is not an iOS/Home Screen standalone session; do not use it to accept safe-area behavior.");
+  }
+  if (isStandalone && safeArea.safeTop === "0px" && safeArea.safeBottom === "0px") {
+    console.warn("[Meh][SafeArea] Both vertical safe-area insets are zero in standalone mode. Check the installed metadata, viewport-fit=cover, cached index.html, and whether the Home Screen app was reinstalled.");
+  }
+
+  return { standaloneInfo, metaInfo, safeArea };
+}
+
+function getSafeAreaDebugMode() {
+  try {
+    const requested = new URLSearchParams(location.search).get("safeAreaDebug");
+    if (requested !== null) return requested;
+    return localStorage.getItem("meh-safe-area-debug") || "";
+  } catch {
+    return "";
+  }
+}
+
+function installSafeAreaDebugMode() {
+  const requestedMode = getSafeAreaDebugMode().toLowerCase();
+  const mode = requestedMode === "1" ? "all" : requestedMode;
+  if (!["all", "html", "body", "app", "viewport"].includes(mode)) return "";
+
+  const layers = {
+    all: `
+      html { background: red !important; }
+      body { background: lime !important; }
+      #app { background: blue !important; }
+      #viewport-background { background: magenta !important; }
+    `,
+    html: `
+      html { background: red !important; }
+      body, #app, #viewport-background { background: transparent !important; }
+    `,
+    body: `
+      html { background: red !important; }
+      body { background: lime !important; }
+      #app, #viewport-background { background: transparent !important; }
+    `,
+    app: `
+      html { background: red !important; }
+      body { background: lime !important; }
+      #app { background: blue !important; }
+      #viewport-background { background: transparent !important; }
+    `,
+    viewport: `
+      html { background: red !important; }
+      body { background: lime !important; }
+      #app { background: transparent !important; }
+      #viewport-background { background: magenta !important; }
+    `,
+  };
+  const style = document.createElement("style");
+  style.id = "safe-area-debug-styles";
+  style.textContent = layers[mode];
+  document.head.appendChild(style);
+  document.documentElement.dataset.safeAreaDebug = mode;
+  console.warn(`[Meh][SafeArea] Temporary background-source debug mode is active: ${mode}`);
+  return mode;
+}
+
+function readHtmlMetaSnapshot(html) {
+  if (!html) return null;
+  const parsed = new DOMParser().parseFromString(html, "text/html");
+  return {
+    build: parsed.querySelector('meta[name="meh-build"]')?.content || null,
+    viewport: parsed.querySelector('meta[name="viewport"]')?.content || null,
+    appleMobileWebAppCapable: parsed.querySelector('meta[name="apple-mobile-web-app-capable"]')?.content || null,
+    appleMobileWebAppStatusBarStyle: parsed.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]')?.content || null,
+    viewportCount: parsed.querySelectorAll('meta[name="viewport"]').length,
+  };
+}
+
+async function logServiceWorkerDiagnostics() {
+  const build = readStaticMetaContent("meh-build") || "unknown";
+  const result = {
+    documentUrl: location.href,
+    documentBuild: build,
+    controllerUrl: navigator.serviceWorker?.controller?.scriptURL || null,
+    controllerState: navigator.serviceWorker?.controller?.state || null,
+    registrations: [],
+    cacheKeys: [],
+    networkIndex: null,
+    cachedIndex: null,
+    error: null,
+  };
+
+  try {
+    if ("serviceWorker" in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      result.registrations = registrations.map((registration) => ({
+        scope: registration.scope,
+        active: registration.active?.scriptURL || null,
+        activeState: registration.active?.state || null,
+        waiting: registration.waiting?.scriptURL || null,
+        installing: registration.installing?.scriptURL || null,
+      }));
+    }
+    if ("caches" in window) {
+      result.cacheKeys = await caches.keys();
+      const shell = await caches.open(`meh-shell-${build}`);
+      const cachedResponse = await shell.match(new URL("./index.html", location.href));
+      if (cachedResponse) result.cachedIndex = readHtmlMetaSnapshot(await cachedResponse.text());
+    }
+    const networkResponse = await fetch(new URL("./index.html", location.href), { cache: "reload" });
+    if (networkResponse.ok) result.networkIndex = readHtmlMetaSnapshot(await networkResponse.text());
+  } catch (error) {
+    result.error = String(error?.message || error);
+  }
+
+  console.info("[Meh][PWA] Loaded build and Service Worker diagnostics", result);
+  if (result.networkIndex) console.table({ source: "network/SW navigation", ...result.networkIndex });
+  if (result.cachedIndex) console.table({ source: "current shell cache", ...result.cachedIndex });
+  return result;
+}
+
+window.MehSafeAreaDiagnostics = {
+  snapshot: logStandaloneStartupDiagnostics,
+  serviceWorker: logServiceWorkerDiagnostics,
+  enableBackgroundDebug(mode = "all") {
+    try { localStorage.setItem("meh-safe-area-debug", mode); } catch {}
+    location.reload();
+  },
+  disableBackgroundDebug() {
+    try { localStorage.removeItem("meh-safe-area-debug"); } catch {}
+    const url = new URL(location.href);
+    url.searchParams.delete("safeAreaDebug");
+    location.replace(url);
+  },
+};
 
 function isLayoutDiagnosticsEnabled() {
   try {
@@ -2618,16 +2810,26 @@ function clampNumber(value, min, max, fallback) {
 function applyBackgroundImage(dataUrl, opacity = defaultAppSettings.backgroundOpacity) {
   const parsedOpacity = Number(opacity);
   const safeOpacity = Number.isFinite(parsedOpacity) ? Math.max(0, Math.min(1, parsedOpacity)) : defaultAppSettings.backgroundOpacity;
-  els.root.style.setProperty("--bg-opacity", safeOpacity);
-  
-  let bgLayer = document.querySelector("#customBgLayer");
-  if (!bgLayer) {
-    bgLayer = document.createElement("div");
-    bgLayer.id = "customBgLayer";
-    document.querySelector("#viewport-background")?.append(bgLayer);
+  const transparentLayer = "linear-gradient(transparent, transparent)";
+  let wallpaperLayer = transparentLayer;
+
+  if (dataUrl && safeOpacity > 0) {
+    const imageUrl = `url(${JSON.stringify(String(dataUrl))})`;
+    const webkitCrossFade = `-webkit-cross-fade(transparent, ${imageUrl}, ${safeOpacity})`;
+    const standardCrossFade = `cross-fade(transparent, ${imageUrl} ${Math.round(safeOpacity * 100)}%)`;
+    if (window.CSS?.supports?.("background-image", webkitCrossFade)) {
+      wallpaperLayer = webkitCrossFade;
+    } else if (window.CSS?.supports?.("background-image", standardCrossFade)) {
+      wallpaperLayer = standardCrossFade;
+    } else {
+      wallpaperLayer = imageUrl;
+      console.warn("[Meh] This browser cannot blend wallpaper opacity on the root canvas; using the full-opacity image fallback.");
+    }
   }
-  
-  bgLayer.style.backgroundImage = dataUrl ? `url("${dataUrl}")` : "none";
+
+  els.root.style.setProperty("--app-wallpaper-image", wallpaperLayer);
+  els.root.style.setProperty("--app-wallpaper-opacity", safeOpacity);
+  scheduleLayoutDiagnostics("background-image");
 }
 
 async function loadWallpapers() {

@@ -49,17 +49,24 @@ check(app.includes('els.dock.style.setProperty("bottom", `${dockBottomGap}px`, "
 check(!app.includes("`calc(${dockBottomGap}px + var(--app-safe-bottom))`"), "JavaScript still adds safe-area to the user dock offset");
 check(!css.includes(".settings-sheet::after") && !css.includes(".editor-sheet::after"), "bottom sheet safe-area spacer pseudo-elements must be absent");
 check(!/--top-extra:\s*(20|24|44|47|59)px/.test(css), "fixed status-bar-sized top spacer found");
-check(css.includes("#customBgLayer {\n  position: absolute;\n  inset: 0;"), "custom background must fill the unified viewport background");
 check(html.includes('<div id="viewport-background" aria-hidden="true">') && css.includes("#viewport-background {\n  position: fixed;\n  inset: -1px;"), "body-level full-window background is missing");
 check(css.includes("body {") && css.includes("background: transparent !important"), "body must not paint a competing safe-area background");
 check(css.includes(".phone-frame") && css.includes("background: transparent !important"), "content root must reveal the full-screen background layer");
 check(app.includes("topHeight: 0"), "the real top safe area must not receive a second default spacer");
 check(app.includes("systemBarLayoutVersion: 6"), "layout settings migration must target the body-level fixed dock model");
-check(html.includes('<div id="customBgLayer"></div>'), "custom wallpaper layer must be owned by the unified viewport background");
+check(!html.includes("customBgLayer") && !css.includes("#customBgLayer"), "an internal wallpaper painter still competes with the root canvas");
+check(css.includes("--app-wallpaper-image: linear-gradient(transparent, transparent)") && css.includes("var(--app-wallpaper-image),"), "the complete theme/wallpaper background must be composed in one root variable");
+check(css.includes("#viewport-background") && css.includes("background: transparent !important"), "the diagnostic viewport marker must not paint a second gradient");
+check(app.includes('els.root.style.setProperty("--app-wallpaper-image", wallpaperLayer)'), "custom wallpapers must update the root canvas background");
 check(app.includes('els.root.style.removeProperty("--app-height")'), "restored sessions must clear stale pixel viewport overrides");
 check(css.includes("--app-height: 100vh") && css.includes("--app-height: 100dvh"), "the full-screen canvas needs vh and dvh fallbacks");
 check(css.includes("background-color: var(--surface) !important") && css.includes("background-image: var(--app-background) !important"), "root canvas needs a non-transparent system fallback color behind its visual background");
 check(app.includes("window.MehLayoutDiagnostics") && app.includes("surfacePhysicalGap") && app.includes("console.table(geometry)"), "real geometry diagnostics are missing");
+check(app.includes("logStandaloneStartupDiagnostics()") && app.includes("measureSafeAreaInsets()"), "standalone/meta/safe-area startup diagnostics are missing");
+check(app.includes("navigatorStandalone: window.navigator.standalone") && app.includes("displayModeFullscreen"), "standalone viewport geometry table is incomplete");
+check(app.includes('readStaticMetaContent("viewport")') && app.includes('readStaticMetaContent("apple-mobile-web-app-capable")') && app.includes('readStaticMetaContent("apple-mobile-web-app-status-bar-style")'), "live meta diagnostics are incomplete");
+check(app.includes('get("safeAreaDebug")') && app.includes("background: red !important") && app.includes("background: magenta !important"), "opt-in background source diagnostics are missing");
+check(worker.includes('cache: "reload"'), "navigation HTML must revalidate through the network before using the cached shell");
 
 check((activity.match(/WindowCompat\.enableEdgeToEdge\(window\)/g) || []).length === 1, "edge-to-edge must be configured exactly once");
 check(activity.indexOf("configureEdgeToEdgeWindow()") < activity.indexOf("setContentView(R.layout.activity_main)"), "edge-to-edge must be configured before the first content frame");

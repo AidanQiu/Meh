@@ -1,6 +1,27 @@
 # iOS PWA / Android WebView 系统栏专项审计
 
-构建标识：`1.1.1-pwa-r16`
+构建标识：`1.1.1-pwa-r17`
+
+## r17 根画布唯一背景（等待重新安装后的真实 iPhone 复验）
+
+- 最新真机截图证明底栏已经到达当前 CSS layout viewport 底部。本轮冻结 `bottom = 用户设置距离`、固定底栏高度、四边 6px 内边距与设置值保存逻辑；没有向底栏加入 `env(safe-area-inset-bottom)`、额外 margin、最小 bottom 或内部增高。
+- r16 仍同时由 `html` 和 `#viewport-background` 分别绘制主题渐变，自定义壁纸只绘制在 `#customBgLayer`。`position: fixed; inset: 0` 只能覆盖当前 layout viewport，不能进入 WebKit 没有分配给 DOM 的上下画布/宿主区域；因此上下回退区域只会显示 `html` 的背景或安装期 `theme-color`，无法显示内部 fixed 层的壁纸。
+- r17 删除内部 `#customBgLayer` 背景所有权。完整主题渐变与自定义壁纸统一合成到根变量 `--app-background`，只有 `html` 绘制；`body`、`#app`、`.app` 和保留作几何诊断的 `#viewport-background` 均透明。这样不会有两份渐变从不同坐标重新开始。
+- 启动时无条件输出 standalone/fullscreen、inner/screen/document/visual viewport、三个 Apple/viewport meta 实际值以及临时 `env(safe-area-inset-*)` probe。若 `navigator.standalone` 与 standalone display-mode 都不是 true，会明确警告该会话不可用于验收；standalone 中上下 inset 同为 0 也会给出缓存/安装元数据排查警告。
+- `MehSafeAreaDiagnostics.serviceWorker()` 输出当前文档构建、controller、全部 registration、cache 名称，并分别解析网络/worker 返回与当前 shell 缓存中的 `index.html` meta。导航请求使用 `cache: reload` 的 network-first，r17 cache 激活时清除旧 `meh-*` cache。
+- 临时来源诊断使用 `?safeAreaDebug=1`，或将值改为 `html`、`body`、`app`、`viewport` 单独检查。该模式只在显式 URL/localStorage 开启时动态注入颜色，正常构建不绘制诊断色；真机定位结束后必须移除参数并执行 `MehSafeAreaDiagnostics.disableBackgroundDebug()`。
+- 当前截图中的纯浅紫色与 `--surface`、静态 manifest/theme-color fallback 一致，且不含内部渐变/壁纸；代码证据可确认它不是底栏或正文内容绘制。它究竟是 `html` 根画布还是 iOS 保存的安装期宿主色，仍必须用 r17 彩色来源诊断截图区分，当前不伪造结论。
+- r17 尚未取得重新安装后的真实 iPhone standalone 截图，因此不宣告 iPhone safe-area 修复完成。
+
+### r17 真机验收步骤
+
+1. 删除 iPhone 主屏幕上的旧 PWA。
+2. Safari 打开最新在线版，并在设置页确认构建为 `1.1.1-pwa-r17`。
+3. 如仍显示旧构建，清理该网站的 Safari 网站数据后重新载入。
+4. 重新“添加到主屏幕”，从新图标启动。
+5. 控制台确认 `navigatorStandalone === true` 或 `displayModeStandalone === true`，记录三个 meta、`safeTop`、`safeBottom`、controller 与 cached/network index build。
+6. 先用正式背景截图；如仍有色带，再分别用 `?safeAreaDebug=1` 与单层模式截图确认来源。
+7. 删除调试参数/存储开关，再拍最终正式截图。旧主屏幕安装不能用于判断新的 `black-translucent` 安装元数据是否生效。
 
 ## r16 真实 iPhone 反馈后的结构修复（等待真机复验）
 

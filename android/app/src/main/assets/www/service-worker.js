@@ -1,4 +1,4 @@
-const SW_VERSION = "1.1.1-pwa-r16";
+const SW_VERSION = "1.1.1-pwa-r17";
 const CACHE_NAME = `meh-shell-${SW_VERSION}`;
 const RUNTIME_CACHE_NAME = `meh-runtime-${SW_VERSION}`;
 
@@ -82,7 +82,9 @@ self.addEventListener("fetch", (event) => {
 async function networkFirstForPage(request) {
   const cache = await caches.open(CACHE_NAME);
   try {
-    const response = await fetch(new Request(request, { cache: "no-cache" }));
+    // Navigation HTML carries the viewport and Apple standalone metadata.
+    // Force an origin revalidation before falling back to the versioned shell.
+    const response = await fetch(new Request(request, { cache: "reload" }));
     if (response?.ok) await cache.put("./index.html", response.clone());
     return response;
   } catch {

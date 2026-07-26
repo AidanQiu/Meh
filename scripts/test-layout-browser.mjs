@@ -145,23 +145,41 @@ try {
       inlineAppHeight: document.documentElement.style.getPropertyValue('--app-height'),
       canvasHeight: [document.body.getBoundingClientRect().height, document.querySelector('.phone-frame').getBoundingClientRect().height],
       backgroundRect: [backgroundRect.top, backgroundRect.bottom],
-      backgroundImage: getComputedStyle(background).backgroundImage,
+      backgroundImage: html.backgroundImage,
+      viewportBackgroundImage: getComputedStyle(background).backgroundImage,
       backgroundParentIsBody: background.parentElement === document.body,
       dockParentIsBody: dock.parentElement === document.body,
       finalTop: html.getPropertyValue('--app-safe-top').trim(),
       finalBottom: html.getPropertyValue('--app-safe-bottom').trim(),
     };
   })()`);
-  check(base.build === "1.1.1-pwa-r16", "browser loaded the wrong build");
+  check(base.build === "1.1.1-pwa-r17", "browser loaded the wrong build");
   check(base.viewport[0] === 390, `portrait viewport width was ${base.viewport[0]}, expected 390`);
   check(base.bodyPadding.join(",") === "0px,0px", "visual body must not consume safe-area padding");
   check(base.framePadding.join(",") === "0px,0px", "visual root must not consume safe-area padding");
   check(base.frameBackground === "rgba(0, 0, 0, 0)", "content root must remain transparent over the visual background");
-  check(base.htmlBackground !== "rgba(0, 0, 0, 0)" && base.bodyBackground === "rgba(0, 0, 0, 0)", "html must own only the fallback while body remains transparent");
-  check(base.backgroundImage !== "none" && base.backgroundRect[0] <= -1 && base.backgroundRect[1] >= 845, `viewport background did not overdraw the full viewport: ${JSON.stringify(base.backgroundRect)}`);
+  check(base.htmlBackground !== "rgba(0, 0, 0, 0)" && base.bodyBackground === "rgba(0, 0, 0, 0)", "html must own the canvas while body remains transparent");
+  check(base.backgroundImage !== "none" && base.viewportBackgroundImage === "none", "html must be the only production background painter");
+  check(base.backgroundRect[0] <= -1 && base.backgroundRect[1] >= 845, `viewport diagnostic marker did not cover the layout viewport: ${JSON.stringify(base.backgroundRect)}`);
   check(base.backgroundParentIsBody && base.dockParentIsBody, "viewport background or fixed dock is not a direct body child");
   check(base.inlineAppHeight === "", "JavaScript wrote an inline full-screen app height");
   check(base.canvasHeight.every((height) => height >= 844), `portrait visual canvas did not cover the viewport: ${base.canvasHeight.join(",")}`);
+
+  const safeAreaDiagnostics = await evaluate(`(() => {
+    const snapshot = window.MehSafeAreaDiagnostics.snapshot();
+    const testWallpaper = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4=';
+    applyBackgroundImage(testWallpaper, 0.5);
+    const wallpaperVariable = document.documentElement.style.getPropertyValue('--app-wallpaper-image');
+    const htmlBackground = getComputedStyle(document.documentElement).backgroundImage;
+    const viewportBackground = getComputedStyle(document.querySelector('#viewport-background')).backgroundImage;
+    applyBackgroundImage('', 0.5);
+    return { snapshot, wallpaperVariable, htmlBackground, viewportBackground };
+  })()`);
+  check(safeAreaDiagnostics.snapshot.metaInfo.viewport === "width=device-width, initial-scale=1, viewport-fit=cover", "runtime diagnostics read the wrong viewport meta");
+  check(safeAreaDiagnostics.snapshot.metaInfo.appleMobileWebAppCapable === "yes", "runtime diagnostics read the wrong standalone capability meta");
+  check(safeAreaDiagnostics.snapshot.metaInfo.appleMobileWebAppStatusBarStyle === "black-translucent", "runtime diagnostics read the wrong status bar meta");
+  check(safeAreaDiagnostics.wallpaperVariable.includes("cross-fade") || safeAreaDiagnostics.wallpaperVariable.includes("url("), "custom wallpaper was not assigned to the root background");
+  check(safeAreaDiagnostics.htmlBackground.includes("url(") && safeAreaDiagnostics.viewportBackground === "none", "custom wallpaper did not remain exclusively on html");
 
   const pages = await evaluate(`(async () => {
     const results = [];
@@ -278,7 +296,7 @@ try {
   check(iosSimulation.dockWidths.every((entry) => entry.left === entry.gap && entry.right === entry.gap), `side-gap control did not keep symmetric physical margins: ${JSON.stringify(iosSimulation.dockWidths)}`);
   check(iosSimulation.bodyTop === "0px" && iosSimulation.bodyBottom === "0px", "simulated iOS visual background was inset");
   check(iosSimulation.appHeight === "100dvh", `simulated iOS standalone canvas used ${iosSimulation.appHeight}, expected CSS-owned 100dvh`);
-  await captureScreenshot("system-bars-r16-ios-portrait.png");
+  await captureScreenshot("system-bars-r17-ios-portrait.png");
 
   const androidSimulation = await evaluate(`(() => {
     const root = document.documentElement;
@@ -328,9 +346,9 @@ try {
   check(androidSimulation.dockPositions.every((position) => position.height === dockAt0.height), `Android dock thickness changed with its gap: ${androidSimulation.dockPositions.map((position) => position.height).join(",")}`);
   check(dockAt0.top - dockAt5.top === 5 && dockAt5.top - dockAt10.top === 5 && dockAt10.top - dockAt20.top === 10, `Android dock did not move as one piece: top positions ${androidSimulation.dockPositions.map((position) => position.top).join(",")}`);
   check(dockAt0.bottom - dockAt5.bottom === 5 && dockAt5.bottom - dockAt10.bottom === 5 && dockAt10.bottom - dockAt20.bottom === 10, `Android dock bottom edge did not track the slider: ${androidSimulation.dockPositions.map((position) => position.bottom).join(",")}`);
-  await captureScreenshot("system-bars-r16-android-gap-0.png");
+  await captureScreenshot("system-bars-r17-android-gap-0.png");
   await evaluate(`(() => { const range = document.querySelector('#dockBottomGapRange'); range.value = '40'; range.dispatchEvent(new Event('input', { bubbles: true })); })()`);
-  await captureScreenshot("system-bars-r16-android-gap-40.png");
+  await captureScreenshot("system-bars-r17-android-gap-40.png");
   await evaluate(`(() => { const range = document.querySelector('#dockBottomGapRange'); range.value = '0'; range.dispatchEvent(new Event('input', { bubbles: true })); })()`);
 
   await send("Emulation.setDeviceMetricsOverride", {
@@ -365,7 +383,7 @@ try {
   check(landscape.bodyPadding === "0px", "landscape visual background gained top padding");
   check(landscape.dock.width === 448, `landscape dock width was ${landscape.dock.width}, expected the 448px cap`);
   check(landscape.dock.left >= 59 && landscape.dock.right >= 59, `landscape dock entered the side safe areas: ${JSON.stringify(landscape.dock)}`);
-  await captureScreenshot("system-bars-r16-ios-landscape.png");
+  await captureScreenshot("system-bars-r17-ios-landscape.png");
 
   if (failures.length) {
     console.error(failures.map((failure) => `- ${failure}`).join("\n"));
