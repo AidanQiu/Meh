@@ -1,19 +1,22 @@
 # iOS PWA / Android WebView 系统栏专项审计
 
-构建标识：`1.1.1-pwa-r11`
+构建标识：`1.1.1-pwa-r13`
 
-## r11 Android / iOS 安全区修复
+## r13 Android / iOS 安全区修复
 
-- 原先底栏使用 `bottom = 用户距离 + bottom safe-area`，所以滑块降到 0 后仍被系统安全区托住。r11 改为底栏外观直接使用用户设置的物理屏幕边距，底栏内部只补偿“尚未被外边距覆盖”的安全区高度；背景可以沉浸到手势条后方，同时按钮和选中指示器仍不会压住 Android 手势条或 iPhone Home Indicator。
+- 底栏外观直接使用用户设置的物理屏幕边距，底栏内部始终保留完整的 bottom safe-area。安全区 padding 不再随“离底部距离”反向缩小，因此滑块会移动整个底栏，而不是改变底栏厚度；背景仍可沉浸到手势条后方，按钮和选中指示器也不会压住 Android 手势条或 iPhone Home Indicator。
+- `applyLayoutSettings()` 会把 range 的最终数值直接写入底栏 `bottom` 与相关安全内边距；回归测试通过真实 `input/change` 事件驱动 0/18/40 三档，不再绕过设置逻辑直接修改 CSS 变量。
+- Android WebView 对 APK 内置页面使用 `LOAD_NO_CACHE`，Activity 启动始终重新加载本地入口，不恢复旧 WebView 页面快照，避免 Android Studio 增量安装继续运行 r11 样式。
 - Android WebView 不再只信任单一 inset 来源。CSS `env(safe-area-inset-*)` 与原生 `WindowInsets` 桥接值逐边取较大值，避免首帧或个别 WebView 版本原生值暂时为 0 时顶部状态栏失去避让。
 - `enableEdgeToEdge()` 在 `setContentView()` 前执行，透明状态栏、透明导航栏及对比度设置从首帧生效；原生容器和 WebView 仍保持全窗口尺寸。
 - 页面增加固定全视口背景层，系统状态栏、手势导航区、普通内容区和自定义壁纸使用连续的视觉画布，不再依赖 WebView 外的纯色回退来拼接。
 - iOS 原生 range 控件同时监听 `input` 与 `change`，解决部分 standalone PWA 只在松手时提交滑块值的问题。
+- iOS standalone 恢复 r3 的两项关键行为：四边直接读取 `env(safe-area-inset-*)`，并由 JavaScript 将根画布同步到最大的真实 viewport 高度。r7–r12 把旧的 16px iOS 内容偏移迁移为 0；r13 只在 PWA standalone 中恢复该值，Android 仍保持 0。
 
-## r8 iOS 真机截图复盘
+## iOS 真机截图复盘
 
 - r7 把 `visualViewport.height` 直接写入全屏根变量 `--app-height`。WebKit standalone 在 `viewport-fit=cover` 下可能返回已扣除顶部和底部安全区的 visual viewport；因此 `body/.phone-frame/.app` 一起缩成中间内容区，截图底部新增的白带由这条 r7 高度覆盖直接创建。
-- r8 删除所有 JavaScript 对 `--app-height` 的写入。普通浏览器和 Android WebView 由 CSS `100dvh` 管理画布；iOS standalone 单独使用 `100vh`，`visualViewport` 只参与诊断，不再控制背景或根布局。
+- r13 按用户确认可用的 r3 规则恢复高度同步，但取 `innerHeight`、`documentElement.clientHeight`、`visualViewport.height` 三者最大值，避免单独采用已扣安全区的 visual viewport 高度。该逻辑只在 `.pwa-standalone` 执行，Android 与浏览器标签页继续由 CSS `100dvh` 管理。
 - r7 的 `html/body` 只设置了渐变 `background`，其 computed `background-color` 仍可能是透明。r8 将实色 `--surface` 与渐变背景图拆开设置，并在外部 CSS 前提供相同的内联首帧色，避免 iOS 宿主栏、启动退场和 overscroll 取到默认白色。
 - 2026-07-20 的 WebKit 301994 最新复现记录指出，iOS 26.5.2 standalone 可能在 DOM 之外保留约 62 CSS px 顶部系统区域；DOM 无法绘制进入该区域。这与截图顶部白带形态一致，但必须读取真机 iOS 版本和 r8 诊断值才能最终确认是否命中该系统缺陷。r8 能修复网页画布缩短与透明回退，不能伪造一个 DOM 无法访问的系统区域。
 
@@ -67,10 +70,10 @@
 ### 内容避让层
 
 - 浏览器/iOS：`--app-safe-*` 唯一来源是四个 `env(safe-area-inset-*)` 变量。
-- Android WebView：原生读取 `systemBars | displayCutout`，按 density 从物理 px 转成 CSS px，写入 `--native-safe-*`；`.android-webview` 只把这些变量映射为 `--app-safe-*`，不再叠加 `env()`。
-- 顶部 inset 只由 `.app` 的内容 padding 使用一次；默认非系统顶部间距已改为 0。r6 若曾把旧默认 16px 写入本地设置，r7 会做一次版本化迁移，避免旧值继续制造空段；用户主动设置的其他数值保留。
-- 底部背景不缩进；`.floating-dock`、`.page-actions` 和共用 sheet 的交互内容分别使用同一个 `--app-safe-bottom` 来源完成必要避让。
-- IME inset 仅记录诊断，不会保存为 bottom safe-area。WebView 使用 `adjustResize`；全屏背景高度始终由 CSS viewport 单位负责，`visualViewport` 只记录诊断，避免 iOS standalone 将扣过 safe-area 的值错误应用到根画布。
+- Android WebView：原生读取 `systemBars | displayCutout`，按 density 从物理 px 转成 CSS px，写入 `--native-safe-*`；`.android-webview` 将它与 WebView 的 `env()` 逐边取较大值，既避免重复相加，也能在其中一个来源暂时为 0 时保留安全区。
+- 顶部 inset 只由 `.app` 的内容 padding 使用一次。Android/浏览器标签页的默认非系统顶部间距为 0；iOS standalone 恢复 r3 的 16px 默认内容间距，迁移仅修复被 r7–r12 错误归零的 PWA 值，之后用户仍可手动调到 0。
+- 底部背景不缩进；`.floating-dock` 始终保留完整的 `--app-safe-bottom` 内边距并由用户距离整体移动，`.page-actions` 和共用 sheet 使用同一个来源完成必要避让。
+- IME inset 仅记录诊断，不会保存为 bottom safe-area。WebView 使用 `adjustResize`；Android 与普通浏览器高度由 CSS viewport 单位负责，iOS standalone 使用 r3 的“最大真实 viewport”同步逻辑。
 
 ## Android Window 最终配置
 

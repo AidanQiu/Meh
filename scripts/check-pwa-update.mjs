@@ -78,7 +78,7 @@ const app = read("app.js");
 const updater = read("pwa-update.js");
 const worker = read("service-worker.js");
 const syncScript = read("scripts/sync-web-assets.ps1");
-const currentBuild = "1.1.1-pwa-r11";
+const currentBuild = "1.1.1-pwa-r13";
 const iconPath = `./icons/meh_icon.png?v=${currentBuild}`;
 const expectedIcons = ["icon_monochrome.svg", "meh_background.svg", "meh_foreground.svg", "meh_icon.png"];
 
@@ -224,8 +224,8 @@ for (const file of ["app.js", "pwa-update.js", "service-worker.js", "scripts/che
 }
 
 const gradle = read("android/app/build.gradle.kts");
-check(gradle.includes("versionCode = 2"), "Android versionCode changed");
-check(gradle.includes('versionName = "1.1.1"'), "Android versionName changed");
+check(gradle.includes("versionCode = 3"), "Android versionCode must be 3");
+check(gradle.includes('versionName = "1.1.2"'), "Android versionName must be 1.1.2");
 
 if (failures.length) {
   console.error(failures.map((failure) => `- ${failure}`).join("\n"));

@@ -133,6 +133,9 @@ class MainActivity : AppCompatActivity() {
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
+            // The application shell is packaged locally. Never restore a stale
+            // stylesheet after an Android Studio incremental reinstall.
+            cacheMode = WebSettings.LOAD_NO_CACHE
             allowFileAccess = false
             allowContentAccess = true
             allowFileAccessFromFileURLs = false
@@ -142,9 +145,7 @@ class MainActivity : AppCompatActivity() {
         webView.setBackgroundColor(DEFAULT_SURFACE_COLOR.toColorInt())
         webView.addJavascriptInterface(AndroidBridge(), ANDROID_BRIDGE_NAME)
 
-        if (savedInstanceState == null || webView.restoreState(savedInstanceState) == null) {
-            webView.loadUrl(APP_URL)
-        }
+        webView.loadUrl(APP_URL)
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {

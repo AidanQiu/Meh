@@ -4,7 +4,7 @@
 
 @font-face {
   font-family: "Material Symbols Rounded";
-  src: url("./fonts/material-symbols-rounded.woff2?v=1.1.1-pwa-r11") format("woff2");
+  src: url("./fonts/material-symbols-rounded.woff2?v=1.1.1-pwa-r13") format("woff2");
   font-display: block;
   font-style: normal;
   font-weight: 100 700;
@@ -51,14 +51,25 @@
   --app-safe-right: var(--browser-safe-right);
   --app-safe-bottom: var(--browser-safe-bottom);
   --app-safe-left: var(--browser-safe-left);
-  --dock-safe-lift: max(0px, calc(var(--app-safe-bottom) - var(--dock-bottom-gap)));
-  --dock-bottom-offset: calc(var(--dock-bottom-gap) + var(--dock-safe-lift));
+  /*
+   * Keep the system-safe padding constant. The user-controlled bottom gap must
+   * move the complete dock instead of being cancelled by a shrinking padding.
+   */
+  --dock-safe-padding: var(--app-safe-bottom);
+  --dock-bottom-offset: calc(var(--dock-bottom-gap) + var(--dock-safe-padding));
   --app-height: 100dvh;
 }
 
 :root.pwa-standalone {
-  /* WebKit standalone may subtract safe areas from dvh/visualViewport; vh keeps the visual canvas full-screen. */
-  --app-height: 100vh;
+  /*
+   * r3 used the real standalone viewport height and direct WebKit safe-area
+   * values. app.js replaces this fallback with the measured pixel height.
+   */
+  --app-height: 100dvh;
+  --app-safe-top: env(safe-area-inset-top, 0px);
+  --app-safe-right: env(safe-area-inset-right, 0px);
+  --app-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --app-safe-left: env(safe-area-inset-left, 0px);
 }
 
 :root.android-webview {
@@ -1104,7 +1115,7 @@ p {
   border: 1px solid rgba(127, 116, 124, 0.18);
   border-radius: 999px;
   background: var(--dock-bg);
-  padding: 6px 6px calc(6px + var(--dock-safe-lift));
+  padding: 6px 6px calc(6px + var(--dock-safe-padding));
   box-shadow: 0 16px 36px rgba(29, 27, 32, 0.22);
   backdrop-filter: blur(18px);
   transform: translateX(-50%);
@@ -1143,7 +1154,7 @@ p {
 .dock-indicator {
   position: absolute;
   top: 6px;
-  bottom: calc(6px + var(--dock-safe-lift));
+  bottom: calc(6px + var(--dock-safe-padding));
   left: 0;
   width: var(--dock-indicator-w);
   border-radius: 999px;
@@ -2500,7 +2511,7 @@ body {
 
 @media (display-mode: standalone) {
   :root {
-    --app-height: 100vh;
+    --app-height: 100dvh;
   }
 
   body {
@@ -2526,7 +2537,7 @@ body {
   bottom: var(--dock-bottom-gap) !important;
   width: auto !important;
   transform: none !important;
-  padding: 6px 6px calc(6px + var(--dock-safe-lift)) !important;
+  padding: 6px 6px calc(6px + var(--dock-safe-padding)) !important;
 }
 
 .dock-item {
@@ -2535,7 +2546,7 @@ body {
 
 .dock-indicator {
   top: 6px !important;
-  bottom: calc(6px + var(--dock-safe-lift)) !important;
+  bottom: calc(6px + var(--dock-safe-padding)) !important;
 }
 
 .page-actions {

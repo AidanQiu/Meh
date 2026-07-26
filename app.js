@@ -487,7 +487,9 @@ const defaultAppSettings = {
   primaryThemeColor: "#6b9c94",
   secondaryThemeColor: "#6750a4",
   uiScale: 1,
-  topHeight: 0,
+  // r3 used a 16px content offset in iOS standalone mode in addition to the
+  // status-bar safe area. Keep Android edge-to-edge at 0px.
+  topHeight: document.documentElement.classList.contains("pwa-standalone") ? 16 : 0,
   dockThickness: 58,
   dockSideGap: 28,
   dockBottomGap: 18,
@@ -496,7 +498,7 @@ const defaultAppSettings = {
   activeWallpaperId: "",
   backgroundOpacity: 0.5,
   language: detectInitialLanguage(),
-  systemBarLayoutVersion: 2,
+  systemBarLayoutVersion: 3,
 };
 // 新增加设置项与控件绑定
 const primarySwatches = ["#e8e3e8", "#c9b0f6", "#94e8bd", "#87c7f4", "#f9aaa5", "#55beb4", "#ffbd4a",  "#ffffff", "#2d7434"];
@@ -652,6 +654,7 @@ init();
 
 async function init() {
   requestPersistentStorage();
+  syncPwaAppHeight();
 
   const isStandalone = window.matchMedia?.("(display-mode: standalone)").matches || navigator.standalone === true;
   const runtime = window.MehAndroid ? "Android WebView" : isStandalone ? "PWA standalone" : "browser";
@@ -745,14 +748,24 @@ function bindEvents() {
   });
   if (window.MehPwaUpdate?.status) setPwaUpdateStatus(window.MehPwaUpdate.status);
   window.addEventListener("resize", () => {
+    syncPwaAppHeight();
     updateDockIndicator();
     scheduleLayoutDiagnostics("window-resize");
   });
   if (window.visualViewport) {
-    window.visualViewport.addEventListener("resize", () => scheduleLayoutDiagnostics("visual-viewport-resize"));
+    window.visualViewport.addEventListener("resize", () => {
+      syncPwaAppHeight();
+      scheduleLayoutDiagnostics("visual-viewport-resize");
+    });
   }
-  window.addEventListener("orientationchange", () => scheduleLayoutDiagnostics("orientation-change"));
-  window.addEventListener("pageshow", () => scheduleLayoutDiagnostics("page-show"));
+  window.addEventListener("orientationchange", () => {
+    syncPwaAppHeight();
+    scheduleLayoutDiagnostics("orientation-change");
+  });
+  window.addEventListener("pageshow", () => {
+    syncPwaAppHeight();
+    scheduleLayoutDiagnostics("page-show");
+  });
   window.addEventListener("meh:native-insets", () => scheduleLayoutDiagnostics("native-insets"));
   bindDocumentScrollLock();
 }
@@ -766,6 +779,20 @@ async function requestPersistentStorage() {
   } catch (error) {
     console.warn("Persistent storage request failed:", error);
   }
+}
+
+function syncPwaAppHeight() {
+  if (!els.root.classList.contains("pwa-standalone")) return;
+  // Match the r3 behavior: use the largest real viewport measurement so iOS
+  // standalone does not shorten the canvas and then place content under the
+  // translucent status bar a second time.
+  const viewportHeight = Math.max(
+    window.innerHeight || 0,
+    document.documentElement.clientHeight || 0,
+    window.visualViewport?.height || 0
+  );
+  if (!viewportHeight) return;
+  els.root.style.setProperty("--app-height", `${Math.round(viewportHeight)}px`);
 }
 
 function isLayoutDiagnosticsEnabled() {
@@ -2482,6 +2509,23 @@ function applyLayoutSettings() {
   els.root.style.setProperty("--dock-thickness", `${dockThickness}px`);
   els.root.style.setProperty("--dock-side-gap", `${dockSideGap}px`);
   els.root.style.setProperty("--dock-bottom-gap", `${dockBottomGap}px`);
+  // Apply the moving edge directly as well as through the shared variable.
+  // This keeps the real range-control path authoritative even when an older
+  // WebView stylesheet survives an Android Studio incremental reinstall.
+  if (els.dock) {
+    els.dock.style.setProperty("bottom", `${dockBottomGap}px`, "important");
+    els.dock.style.setProperty("padding-bottom", "calc(6px + var(--app-safe-bottom))", "important");
+  }
+  if (els.dockIndicator) {
+    els.dockIndicator.style.setProperty("bottom", "calc(6px + var(--app-safe-bottom))", "important");
+  }
+  if (els.pageActions) {
+    els.pageActions.style.setProperty(
+      "bottom",
+      `calc(${dockBottomGap}px + var(--app-safe-bottom) + calc(var(--dock-thickness) * var(--ui-scale)) + 44px)`,
+      "important"
+    );
+  }
 
   if (els.topHeightRange) els.topHeightRange.value = topHeight;
   if (els.topHeightValue) els.topHeightValue.textContent = topHeight;
@@ -3232,12 +3276,17 @@ function saveState() {
 function loadAppSettings() {
   const saved = safeReadStorage(APP_SETTINGS_KEY, {});
   const migrated = { ...saved };
-  const needsSystemBarMigration = Number(migrated.systemBarLayoutVersion) !== 2;
-  if (needsSystemBarMigration && Number(migrated.topHeight) === 16) {
-    // r6 persisted the old default 16px top spacer as a personalization value.
+  const previousLayoutVersion = Number(migrated.systemBarLayoutVersion) || 0;
+  const needsSystemBarMigration = previousLayoutVersion !== 3;
+  const isPwaStandalone = document.documentElement.classList.contains("pwa-standalone");
+  if (isPwaStandalone && previousLayoutVersion < 3 && Number(migrated.topHeight) === 0) {
+    // Restore the r3 iOS PWA offset that was incorrectly migrated to zero.
+    migrated.topHeight = 16;
+  } else if (!isPwaStandalone && previousLayoutVersion < 2 && Number(migrated.topHeight) === 16) {
+    // Android/browser content already receives the real status-bar inset.
     migrated.topHeight = 0;
   }
-  migrated.systemBarLayoutVersion = 2;
+  migrated.systemBarLayoutVersion = 3;
   const normalized = normalizeAppSettings({ ...defaultAppSettings, ...migrated });
   if (needsSystemBarMigration) safeWriteStorage(APP_SETTINGS_KEY, normalized);
   return normalized;
@@ -3274,7 +3323,7 @@ function normalizeAppSettings(settings) {
     dockSideGap: clampNumber(settings.dockSideGap, 12, 64, defaultAppSettings.dockSideGap),
     dockBottomGap: clampNumber(settings.dockBottomGap, 0, 40, defaultAppSettings.dockBottomGap),
     darkMode: ["light", "dark", "auto"].includes(settings.darkMode) ? settings.darkMode : defaultAppSettings.darkMode,
-    systemBarLayoutVersion: 2,
+    systemBarLayoutVersion: 3,
   };
 }
 //==================修改结束 ===============

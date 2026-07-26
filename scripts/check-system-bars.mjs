@@ -32,22 +32,22 @@ check(html.includes('name="mobile-web-app-capable" content="yes"'), "missing gen
 check(html.includes('classList.add(isAndroidWebView ? "android-webview"'), "runtime class must be established before CSS loads");
 
 const directSafeAreaUses = [...css.matchAll(/env\(safe-area-inset-(top|right|bottom|left),\s*0px\)/g)];
-check(directSafeAreaUses.length === 4, `safe-area env() must appear only in four browser source variables, found ${directSafeAreaUses.length}`);
+check(directSafeAreaUses.length === 8, `safe-area env() must appear in the four browser sources and four r3-style iOS standalone overrides, found ${directSafeAreaUses.length}`);
 check(!css.includes("constant(safe-area"), "legacy constant(safe-area...) handling must not coexist");
 check(css.includes(":root.android-webview") && css.includes("--app-safe-top: max(var(--browser-safe-top), var(--native-safe-top))"), "Android must use the larger WebView/native safe-area value");
 check(css.includes("padding-top: calc(var(--app-safe-top) + var(--top-extra))"), "top content must consume the unified top inset once");
-check(css.includes("--dock-safe-lift: max(0px, calc(var(--app-safe-bottom) - var(--dock-bottom-gap)))"), "dock content must only consume the uncovered part of the bottom safe area");
+check(css.includes("--dock-safe-padding: var(--app-safe-bottom)"), "dock safe-area padding must stay constant while its user-controlled gap changes");
 check(css.includes("bottom: var(--dock-bottom-gap) !important"), "dock chrome must respect the user-controlled distance from the physical screen edge");
-check(css.includes("padding: 6px 6px calc(6px + var(--dock-safe-lift)) !important"), "dock controls must remain above the system gesture area");
+check(css.includes("padding: 6px 6px calc(6px + var(--dock-safe-padding)) !important"), "dock controls must remain above the system gesture area");
 check(!css.includes(".settings-sheet::after") && !css.includes(".editor-sheet::after"), "bottom sheet safe-area spacer pseudo-elements must be absent");
 check(!/--top-extra:\s*(20|24|44|47|59)px/.test(css), "fixed status-bar-sized top spacer found");
 check(css.includes("#customBgLayer {\n  position: fixed;\n  inset: 0;"), "custom background must cover the viewport behind system bars");
 check(html.includes('<div class="viewport-backdrop" aria-hidden="true"></div>') && css.includes(".viewport-backdrop {\n  position: fixed;\n  inset: 0;"), "full-window system-bar backdrop is missing");
 check(css.includes(".phone-frame") && css.includes("background: transparent !important"), "content root must reveal the full-screen background layer");
-check(app.includes("topHeight: 0"), "default non-system top spacing must be zero");
+check(app.includes('topHeight: document.documentElement.classList.contains("pwa-standalone") ? 16 : 0'), "iOS standalone must restore the r3 16px content offset without changing Android");
 check(app.includes('document.body.insertBefore(bgLayer, document.body.firstChild)'), "custom background must live at the visual root");
-check(!app.includes('setProperty("--app-height"'), "JavaScript must not size the full-screen canvas from visualViewport");
-check(css.includes(":root.pwa-standalone") && css.includes("--app-height: 100vh"), "iOS standalone must use the full-screen vh canvas instead of WebKit's inset dvh/visualViewport height");
+check(app.includes("function syncPwaAppHeight()") && app.includes('classList.contains("pwa-standalone")'), "r3-style measured viewport height must be limited to iOS standalone");
+check(css.includes(":root.pwa-standalone") && css.includes("--app-height: 100dvh"), "iOS standalone must have a full-screen CSS fallback before the r3-style measured height is applied");
 check(css.includes("background-color: var(--surface) !important") && css.includes("background-image: var(--app-background) !important"), "root canvas needs a non-transparent system fallback color behind its visual background");
 check(app.includes("window.MehLayoutDiagnostics"), "web inset diagnostics are missing");
 
@@ -64,6 +64,8 @@ check(activity.includes("window.navigationBarColor = Color.TRANSPARENT"), "navig
 check(activity.includes("window.isNavigationBarContrastEnforced = false"), "navigation bar contrast enforcement must be disabled on supported APIs");
 check(activity.includes("isAppearanceLightStatusBars") && activity.includes("isAppearanceLightNavigationBars"), "system bar icon appearance must be explicit");
 check(activity.includes("getSafeAreaInsets") && activity.includes("--native-safe-${'$'}{side}"), "native-to-CSS inset bridge is missing");
+check(activity.includes("cacheMode = WebSettings.LOAD_NO_CACHE"), "packaged Android web assets must bypass stale WebView caches");
+check(!activity.includes("webView.restoreState(savedInstanceState)"), "Android must not restore an old packaged page after an incremental reinstall");
 check(layout.includes('android:layout_width="match_parent"') && layout.includes('android:layout_height="match_parent"'), "root and WebView must fill the window");
 check(!layout.includes("fitsSystemWindows") && !layout.includes("paddingTop") && !layout.includes("paddingBottom"), "layout XML must not consume system insets");
 check(manifest.includes('android:windowSoftInputMode="adjustResize"'), "Activity must resize the WebView viewport for the IME");
