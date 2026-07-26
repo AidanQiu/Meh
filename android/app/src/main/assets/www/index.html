@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta id="themeColorMeta" name="theme-color" content="#d6e3e1" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="meh-build" content="1.1.1-pwa-r15" />
+    <meta name="meh-build" content="1.1.1-pwa-r16" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta id="appleWebAppTitle" name="apple-mobile-web-app-title" content="随便吧" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -17,11 +17,15 @@
         min-height: 100%;
         margin: 0;
         padding: 0;
+      }
+
+      html {
         background-color: var(--surface, #d6e3e1);
       }
 
       body {
         min-height: 100vh;
+        background: transparent;
       }
 
       @supports (height: 100dvh) {
@@ -31,7 +35,7 @@
       }
     </style>
     <title>随便吧</title>
-    <link id="appManifest" rel="manifest" href="./manifest-zh.webmanifest?v=1.1.1-pwa-r15" />
+    <link id="appManifest" rel="manifest" href="./manifest-zh.webmanifest?v=1.1.1-pwa-r16" />
     <script>
       (() => {
         const root = document.documentElement;
@@ -101,23 +105,25 @@
     <link
       rel="icon"
       type="image/x-icon"
-      href="./favicon.ico?v=1.1.1-pwa-r15"
+      href="./favicon.ico?v=1.1.1-pwa-r16"
     />
     <link
       rel="shortcut icon"
       type="image/x-icon"
-      href="./favicon.ico?v=1.1.1-pwa-r15"
+      href="./favicon.ico?v=1.1.1-pwa-r16"
     />
     <link
       rel="apple-touch-icon"
-      href="./icons/meh_icon.png?v=1.1.1-pwa-r15"
+      href="./icons/meh_icon.png?v=1.1.1-pwa-r16"
     />
-    <link rel="stylesheet" href="./style.css?v=1.1.1-pwa-r15" />
+    <link rel="stylesheet" href="./style.css?v=1.1.1-pwa-r16" />
   </head>
   <body>
-    <div class="viewport-backdrop" aria-hidden="true"></div>
+    <div id="viewport-background" aria-hidden="true">
+      <div id="customBgLayer"></div>
+    </div>
 
-    <div class="phone-frame">
+    <div class="phone-frame" id="app">
       <main class="app">
         <header class="top-bar" id="topBar">
           <button class="icon-button" id="settingsButton" type="button" aria-label="打开设置">
@@ -141,36 +147,36 @@
 
         <section class="page-card" id="pageContent" aria-live="polite"></section>
       </main>
-
-      <div class="page-actions" id="pageActions" hidden>
-        <button class="pill-button pill-button-tonal" id="resetButton" type="button">清零</button>
-        <button class="pill-button pill-button-filled" id="continueButton" type="button">继续</button>
-      </div>
-
-      <nav class="floating-dock" aria-label="主要功能">
-        <div class="floating-dock-surface">
-          <div class="floating-dock-content">
-            <div class="dock-indicator" id="dockIndicator" aria-hidden="true"></div>
-            <button class="dock-item is-active" type="button" data-page="coin">
-              <span class="material-symbols-rounded" aria-hidden="true">paid</span>
-              <span data-nav-label="coin">抛硬币</span>
-            </button>
-            <button class="dock-item" type="button" data-page="dice">
-              <span class="material-symbols-rounded" aria-hidden="true">casino</span>
-              <span data-nav-label="dice">摇骰子</span>
-            </button>
-            <button class="dock-item" type="button" data-page="wheel">
-              <span class="material-symbols-rounded" aria-hidden="true">data_usage</span>
-              <span data-nav-label="wheel">大转盘</span>
-            </button>
-            <button class="dock-item" type="button" data-page="number">
-              <span class="material-symbols-rounded" aria-hidden="true">tag</span>
-              <span data-nav-label="number">随机数</span>
-            </button>
-          </div>
-        </div>
-      </nav>
     </div>
+
+    <div class="page-actions" id="pageActions" hidden>
+      <button class="pill-button pill-button-tonal" id="resetButton" type="button">清零</button>
+      <button class="pill-button pill-button-filled" id="continueButton" type="button">继续</button>
+    </div>
+
+    <nav class="floating-dock bottom-nav-positioner" aria-label="主要功能">
+      <div class="floating-dock-surface bottom-nav-surface">
+        <div class="floating-dock-content bottom-nav-content">
+          <div class="dock-indicator" id="dockIndicator" aria-hidden="true"></div>
+          <button class="dock-item is-active" type="button" data-page="coin">
+            <span class="material-symbols-rounded" aria-hidden="true">paid</span>
+            <span data-nav-label="coin">抛硬币</span>
+          </button>
+          <button class="dock-item" type="button" data-page="dice">
+            <span class="material-symbols-rounded" aria-hidden="true">casino</span>
+            <span data-nav-label="dice">摇骰子</span>
+          </button>
+          <button class="dock-item" type="button" data-page="wheel">
+            <span class="material-symbols-rounded" aria-hidden="true">data_usage</span>
+            <span data-nav-label="wheel">大转盘</span>
+          </button>
+          <button class="dock-item" type="button" data-page="number">
+            <span class="material-symbols-rounded" aria-hidden="true">tag</span>
+            <span data-nav-label="number">随机数</span>
+          </button>
+        </div>
+      </div>
+    </nav>
 
     <div class="scrim" id="scrim" hidden></div>
 
@@ -392,7 +398,7 @@
         </div>
         <div class="version-details">
           <span><span data-i18n="webVersion">Web 版本</span>：1.1.1</span>
-          <span><span data-i18n="buildVersion">构建</span>：<span id="pwaBuildValue">1.1.1-pwa-r15</span></span>
+          <span><span data-i18n="buildVersion">构建</span>：<span id="pwaBuildValue">1.1.1-pwa-r16</span></span>
           <span id="androidVersionDetail" hidden>Android：<span id="androidVersionValue"></span></span>
         </div>
         <button class="small-pill-button full-width" id="checkUpdateButton" type="button" data-i18n="checkUpdate">检查更新</button>
@@ -477,7 +483,7 @@
       <button class="save-preset-button" id="saveNumberSettingsButton" type="button" data-i18n="settings">设置</button>
     </aside>
 
-    <script src="./pwa-update.js?v=1.1.1-pwa-r15" defer></script>
-    <script src="./app.js?v=1.1.1-pwa-r15" defer></script>
+    <script src="./pwa-update.js?v=1.1.1-pwa-r16" defer></script>
+    <script src="./app.js?v=1.1.1-pwa-r16" defer></script>
   </body>
 </html>

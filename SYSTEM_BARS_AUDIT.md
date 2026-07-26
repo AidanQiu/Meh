@@ -1,8 +1,18 @@
 # iOS PWA / Android WebView 系统栏专项审计
 
-构建标识：`1.1.1-pwa-r15`
+构建标识：`1.1.1-pwa-r16`
 
-## r15 iOS PWA 全视口背景与底栏定位语义修复
+## r16 真实 iPhone 反馈后的结构修复（等待真机复验）
+
+- r15 未通过真实 iPhone standalone 截图验收，不再以模拟 inset、桌面截图或 computed `bottom` 作为完成依据。
+- 截图中的纯浅紫色与代码中的 `--surface` / `theme-color` 回退色一致。r15 同时让 `html`、`body`、`.viewport-backdrop` 和独立 `#customBgLayer` 分别拥有背景；当 iOS 状态栏/Home Indicator 区域回退到根画布或 PWA 宿主色时，显示的是纯色而不是内部背景层的完整渐变。
+- r16 将唯一动态背景改为 body 直接子元素 `#viewport-background`，使用 `position: fixed; inset: -1px; z-index: 0`；基础渐变和自定义壁纸都属于该节点。`body` 改为透明，`#app` 继续透明并只负责正文。
+- r15 的 fixed 底栏仍嵌套在 `overflow: hidden` 的 `.phone-frame` 中。最终样式虽将该祖先的 transform 清为 `none`，但 computed `bottom` 只证明相对 CSS fixed containing block 的声明值，无法证明 visual/physical viewport 差值。r16 将定位器和 page actions 移为 body 直接子元素，祖先链仅为 `body -> html`。
+- 删除 surface 的 `6px + safe-area-bottom`，底栏总高度固定为 `dockThickness × uiScale + 14px`，surface 四边恒为 6px。bottom 仍只等于用户设置，底栏高度不再随设备 safe-area 变化。
+- `MehLayoutDiagnostics.snapshot()` 现在返回并 `console.table()` 输出 `window.innerHeight`、document/visual viewport、app/background/nav/surface 四组 rect、两个 physical gap、完整背景值及 fixed 祖先的 transform/filter/contain/overflow 等属性。
+- r16 尚未取得修改后的真实 iPhone standalone 截图，因此本节不宣告真机修复完成。验收前需删除旧主屏幕安装并由 Safari 重新添加，以确保 `black-translucent` 和新版入口元信息生效。
+
+## r15 iOS PWA 全视口背景与底栏定位语义修复（真实 iPhone 验收失败）
 
 - 直接根因是 r14 同时在 CSS `--dock-bottom-offset` 和 JavaScript `applyLayoutSettings()` 中使用 `用户距离 + --app-safe-bottom`。因此设置值为 0 时，底栏 computed `bottom` 仍等于 Home Indicator inset，无法到达物理屏幕底边。
 - 底栏现拆分为 `.floating-dock` 定位器、`.floating-dock-surface` 背景和 `.floating-dock-content` 按钮内容。定位器最终公式固定为 `bottom = --dock-bottom-gap`；surface 使用 `padding-bottom = 6px + --app-safe-bottom`，背景因此覆盖到用户指定的物理边缘，按钮仍避开 Home Indicator。
@@ -43,7 +53,7 @@
 - `MainActivity` 使用 `Theme.Meh`（Material 3 DayNight、NoActionBar）。根 `FrameLayout` 和 WebView 均为 `match_parent`。
 - WebView 通过 `WebViewAssetLoader` 加载 APK 内的 `android/app/src/main/assets/www/index.html`，实际 URL 为 `https://appassets.androidplatform.net/assets/www/index.html`，不加载远程站点。
 - 网页没有框架构建目录；根目录的 `index.html`、`style.css`、`app.js` 等静态文件是唯一主版本。Gradle `preBuild` 的 `syncWebAssets` 任务会把它们精确同步到 Android assets，并清理旧文件。
-- 网页实际根链路为 `html -> body -> .phone-frame -> main.app`。顶部交互容器为 `.top-bar`；底部交互容器为 `.floating-dock` 和 `.page-actions`；设置、预设编辑及随机数输入均使用共用的 `.settings-sheet/.editor-sheet`。
+- 网页实际根链路为 `html -> body -> #app.phone-frame -> main.app`。`#viewport-background`、`.bottom-nav-positioner` 与 `.page-actions` 均为 body 直接子元素；设置、预设编辑及随机数输入使用共用的 `.settings-sheet/.editor-sheet`。
 
 ## 修改前的实际 inset 链路与根因
 
@@ -89,7 +99,7 @@
 - 浏览器/iOS：`--app-safe-*` 唯一来源是四个 `env(safe-area-inset-*)` 变量。
 - Android WebView：原生读取 `systemBars | displayCutout`，按 density 从物理 px 转成 CSS px，写入 `--native-safe-*`；`.android-webview` 将它与 WebView 的 `env()` 逐边取较大值，既避免重复相加，也能在其中一个来源暂时为 0 时保留安全区。
 - 顶部 inset 只由 `.app` 的内容 padding 使用一次；所有运行环境的默认额外顶部间距均为 0，用户仍可通过设置主动增加。
-- 底部背景不缩进；`.floating-dock` 定位器使用 `bottom = 用户距离`，安全区只进入 `.floating-dock-surface` 内部，避免抬高整个胶囊。`.page-actions` 和共用 sheet 使用同一个来源完成各自的内容避让。
+- 底部背景不缩进；`.bottom-nav-positioner` 使用 `bottom = 用户距离`，圆角 surface 不消费 safe-area，保持固定对称高度。`.page-actions` 与主内容预留独立计算，共用 sheet 仅为自己的可滚动内容消费 bottom safe-area。
 - IME inset 仅记录诊断，不会保存为 bottom safe-area。WebView 使用 `adjustResize`；Android、普通浏览器与 iOS standalone 的高度都由 CSS `100dvh` 负责。
 
 ## Android Window 最终配置

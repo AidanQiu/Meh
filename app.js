@@ -498,7 +498,7 @@ const defaultAppSettings = {
   activeWallpaperId: "",
   backgroundOpacity: 0.5,
   language: detectInitialLanguage(),
-  systemBarLayoutVersion: 5,
+  systemBarLayoutVersion: 6,
 };
 // 新增加设置项与控件绑定
 const primarySwatches = ["#e8e3e8", "#c9b0f6", "#94e8bd", "#87c7f4", "#f9aaa5", "#55beb4", "#ffbd4a",  "#ffffff", "#2d7434"];
@@ -807,18 +807,40 @@ function scheduleLayoutDiagnostics(reason) {
   layoutDiagnosticTimer = window.setTimeout(() => logLayoutDiagnostics(reason), 120);
 }
 
-function logLayoutDiagnostics(reason = "manual") {
-  if (!isLayoutDiagnosticsEnabled()) return;
+function getFixedAncestorDiagnostics(element) {
+  const diagnostics = [];
+  for (let ancestor = element?.parentElement; ancestor; ancestor = ancestor.parentElement) {
+    const style = getComputedStyle(ancestor);
+    diagnostics.push({
+      element: ancestor === document.body ? "body" : ancestor === document.documentElement ? "html" : ancestor.id ? `#${ancestor.id}` : ancestor.className ? `.${String(ancestor.className).trim().replace(/\s+/g, ".")}` : ancestor.tagName.toLowerCase(),
+      transform: style.transform,
+      filter: style.filter,
+      backdropFilter: style.backdropFilter,
+      perspective: style.perspective,
+      contain: style.contain,
+      willChange: style.willChange,
+      contentVisibility: style.contentVisibility,
+      overflow: style.overflow,
+      clipPath: style.clipPath,
+    });
+  }
+  return diagnostics;
+}
+
+function logLayoutDiagnostics(reason = "manual", force = false) {
+  if (!force && !isLayoutDiagnosticsEnabled()) return null;
   const rootStyle = getComputedStyle(els.root);
   const htmlStyle = getComputedStyle(document.documentElement);
   const bodyStyle = getComputedStyle(document.body);
-  const frame = document.querySelector(".phone-frame");
+  const frame = document.querySelector("#app");
   const app = document.querySelector(".app");
+  const background = document.querySelector("#viewport-background");
   const top = document.querySelector(".top-bar");
-  const bottom = document.querySelector(".floating-dock");
-  const bottomSurface = document.querySelector(".floating-dock-surface");
+  const bottom = document.querySelector(".bottom-nav-positioner");
+  const bottomSurface = document.querySelector(".bottom-nav-surface");
   const frameStyle = frame ? getComputedStyle(frame) : null;
   const appStyle = app ? getComputedStyle(app) : null;
+  const backgroundStyle = background ? getComputedStyle(background) : null;
   const topStyle = top ? getComputedStyle(top) : null;
   const bottomStyle = bottom ? getComputedStyle(bottom) : null;
   const bottomSurfaceStyle = bottomSurface ? getComputedStyle(bottomSurface) : null;
@@ -826,7 +848,30 @@ function logLayoutDiagnostics(reason = "manual") {
   const variable = (name) => rootStyle.getPropertyValue(name).trim() || "0px";
   const build = document.querySelector('meta[name="meh-build"]')?.content || "unknown";
   const savedSettings = safeReadStorage(APP_SETTINGS_KEY, {});
+  const frameRect = frame?.getBoundingClientRect();
+  const backgroundRect = background?.getBoundingClientRect();
   const bottomRect = bottom?.getBoundingClientRect();
+  const bottomSurfaceRect = bottomSurface?.getBoundingClientRect();
+  const geometry = {
+    innerHeight: window.innerHeight,
+    documentClientHeight: document.documentElement.clientHeight,
+    visualViewportHeight: window.visualViewport?.height ?? null,
+    visualViewportOffsetTop: window.visualViewport?.offsetTop ?? null,
+    appTop: frameRect?.top ?? null,
+    appBottom: frameRect?.bottom ?? null,
+    backgroundTop: backgroundRect?.top ?? null,
+    backgroundBottom: backgroundRect?.bottom ?? null,
+    navTop: bottomRect?.top ?? null,
+    navBottom: bottomRect?.bottom ?? null,
+    surfaceTop: bottomSurfaceRect?.top ?? null,
+    surfaceBottom: bottomSurfaceRect?.bottom ?? null,
+    navPhysicalGap: bottomRect ? window.innerHeight - bottomRect.bottom : null,
+    surfacePhysicalGap: bottomSurfaceRect ? window.innerHeight - bottomSurfaceRect.bottom : null,
+    computedBottom: bottomStyle?.bottom ?? null,
+    bodyBackground: bodyStyle.background,
+    htmlBackground: htmlStyle.background,
+    viewportBackground: backgroundStyle?.background ?? null,
+  };
   const payload = {
     reason,
     runtime: els.root.dataset.runtime || "unknown",
@@ -857,9 +902,10 @@ function logLayoutDiagnostics(reason = "manual") {
       left: variable("--app-safe-left"),
     },
     backgrounds: {
-      html: htmlStyle.backgroundColor,
-      body: bodyStyle.backgroundColor,
-      root: frameStyle?.backgroundColor || null,
+      html: htmlStyle.background,
+      body: bodyStyle.background,
+      viewport: backgroundStyle?.background || null,
+      root: frameStyle?.background || null,
     },
     padding: {
       bodyTop: bodyStyle.paddingTop,
@@ -884,6 +930,12 @@ function logLayoutDiagnostics(reason = "manual") {
       parentMarginBottom: bottomParentStyle?.marginBottom || null,
       surfacePaddingBottom: bottomSurfaceStyle?.paddingBottom || null,
     },
+    geometry,
+    fixedAncestors: {
+      background: getFixedAncestorDiagnostics(background),
+      nav: getFixedAncestorDiagnostics(bottom),
+      surface: getFixedAncestorDiagnostics(bottomSurface),
+    },
     appHeight: variable("--app-height"),
     canvasHeight: {
       html: document.documentElement.getBoundingClientRect().height,
@@ -893,9 +945,11 @@ function logLayoutDiagnostics(reason = "manual") {
     build,
   };
   const signature = JSON.stringify({ ...payload, reason: undefined });
-  if (signature === lastLayoutDiagnosticSignature && reason !== "manual") return;
+  if (signature === lastLayoutDiagnosticSignature && reason !== "manual" && !force) return payload;
   lastLayoutDiagnosticSignature = signature;
   console.info("[Meh][Insets]", payload);
+  console.table(geometry);
+  return payload;
 }
 
 window.MehLayoutDiagnostics = {
@@ -907,6 +961,9 @@ window.MehLayoutDiagnostics = {
     try { localStorage.removeItem("meh-debug-insets"); } catch {}
   },
   log: logLayoutDiagnostics,
+  snapshot() {
+    return logLayoutDiagnostics("snapshot", true);
+  },
 };
 
 function bindDocumentScrollLock() {
@@ -2567,7 +2624,7 @@ function applyBackgroundImage(dataUrl, opacity = defaultAppSettings.backgroundOp
   if (!bgLayer) {
     bgLayer = document.createElement("div");
     bgLayer.id = "customBgLayer";
-    document.body.insertBefore(bgLayer, document.body.firstChild);
+    document.querySelector("#viewport-background")?.append(bgLayer);
   }
   
   bgLayer.style.backgroundImage = dataUrl ? `url("${dataUrl}")` : "none";
@@ -3287,12 +3344,12 @@ function loadAppSettings() {
   const saved = safeReadStorage(APP_SETTINGS_KEY, {});
   const migrated = { ...saved };
   const previousLayoutVersion = Number(migrated.systemBarLayoutVersion) || 0;
-  const needsSystemBarMigration = previousLayoutVersion !== 5;
-  if (previousLayoutVersion < 5 && Number(migrated.topHeight) === 16) {
+  const needsSystemBarMigration = previousLayoutVersion !== 6;
+  if (previousLayoutVersion < 6 && Number(migrated.topHeight) === 16) {
     // Older builds could persist an iOS-only default spacer on top of the real safe area.
     migrated.topHeight = 0;
   }
-  migrated.systemBarLayoutVersion = 5;
+  migrated.systemBarLayoutVersion = 6;
   const normalized = normalizeAppSettings({ ...defaultAppSettings, ...migrated });
   if (needsSystemBarMigration) safeWriteStorage(APP_SETTINGS_KEY, normalized);
   return normalized;
@@ -3329,7 +3386,7 @@ function normalizeAppSettings(settings) {
     dockSideGap: clampNumber(settings.dockSideGap, 12, 64, defaultAppSettings.dockSideGap),
     dockBottomGap: clampNumber(settings.dockBottomGap, 0, 40, defaultAppSettings.dockBottomGap),
     darkMode: ["light", "dark", "auto"].includes(settings.darkMode) ? settings.darkMode : defaultAppSettings.darkMode,
-    systemBarLayoutVersion: 5,
+    systemBarLayoutVersion: 6,
   };
 }
 //==================修改结束 ===============

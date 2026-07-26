@@ -4,7 +4,7 @@
 
 @font-face {
   font-family: "Material Symbols Rounded";
-  src: url("./fonts/material-symbols-rounded.woff2?v=1.1.1-pwa-r15") format("woff2");
+  src: url("./fonts/material-symbols-rounded.woff2?v=1.1.1-pwa-r16") format("woff2");
   font-display: block;
   font-style: normal;
   font-weight: 100 700;
@@ -59,11 +59,11 @@
   --dock-inline-end: max(var(--dock-side-gap), var(--app-safe-right));
   /* The user setting is the dock surface's exact physical distance from the viewport edge. */
   --dock-bottom-offset: var(--dock-bottom-gap);
-  --dock-outer-height: calc(
+  --bottom-nav-height: calc(
     calc(var(--dock-thickness) * var(--ui-scale))
     + 14px
-    + var(--app-safe-bottom)
   );
+  --dock-outer-height: var(--bottom-nav-height);
   --page-actions-bottom: calc(
     var(--dock-bottom-offset)
     + var(--dock-outer-height)
@@ -116,24 +116,28 @@ body {
   min-height: var(--app-height);
   margin: 0;
   padding: 0;
-  background-color: var(--surface);
-  background-image: var(--app-background);
-  background-size: var(--app-background-size);
-  background-position: var(--app-background-position);
+  background: transparent;
   color: var(--on-surface);
   font-family: "Google Sans", Roboto, system-ui, sans-serif;
   isolation: isolate;
 }
 
-.viewport-backdrop {
+#viewport-background {
   position: fixed;
-  inset: 0;
+  inset: -1px;
   z-index: 0;
+  width: auto;
+  height: auto;
   background-color: var(--surface);
   background-image: var(--app-background);
   background-size: var(--app-background-size);
   background-position: var(--app-background-position);
+  background-repeat: no-repeat;
   pointer-events: none;
+  transform: none;
+  filter: none;
+  contain: none;
+  will-change: auto;
 }
 
 button {
@@ -1123,6 +1127,7 @@ p {
   bottom: var(--dock-bottom-offset);
   z-index: 6;
   width: auto;
+  height: var(--bottom-nav-height);
   max-width: 448px;
   margin-inline: auto;
   padding: 0;
@@ -1132,13 +1137,11 @@ p {
 .floating-dock-surface {
   position: relative;
   width: 100%;
+  height: 100%;
   border: 1px solid rgba(127, 116, 124, 0.18);
   border-radius: 999px;
   background: var(--dock-bg);
-  padding:
-    6px
-    6px
-    calc(6px + var(--app-safe-bottom));
+  padding: 6px;
   box-shadow: 0 16px 36px rgba(29, 27, 32, 0.22);
   backdrop-filter: blur(18px);
   pointer-events: auto;
@@ -1149,7 +1152,10 @@ p {
 .floating-dock-content {
   position: relative;
   display: grid;
+  width: 100%;
+  height: 100%;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: stretch;
   gap: 4px;
 }
 
@@ -1160,7 +1166,8 @@ p {
 .dock-item {
   display: grid;
   min-width: 0;
-  min-height: calc(58px * var(--ui-scale));
+  min-height: 0;
+  height: 100%;
   align-content: center;
   justify-items: center;
   gap: 4px;
@@ -1221,6 +1228,7 @@ p {
 
 .settings-sheet,
 .editor-sheet {
+  --sheet-bottom-padding: max(28px, calc(var(--app-safe-bottom) + 24px));
   position: fixed;
   right: 50%;
   bottom: 0;
@@ -1230,7 +1238,7 @@ p {
   background: color-mix(in srgb, var(--surface) 94%, var(--primary-container));
   max-height: calc(var(--app-height) - max(calc(28px * var(--ui-scale)), var(--app-safe-top)));
   overflow-y: auto;
-  padding: 10px 18px max(28px, calc(var(--app-safe-bottom) + 24px));
+  padding: 10px 18px var(--sheet-bottom-padding);
   box-shadow: 0 -18px 42px rgba(29, 27, 32, 0.22);
   transform: translate(50%, 105%);
   transition: transform 260ms var(--ease);
@@ -1254,8 +1262,6 @@ p {
 .editor-sheet {
   max-height: min(85vh, 740px);
   overflow-y: auto;
-  /* 使用适度安全区留白，避免移动端小白条遮挡底部按钮，同时不撑出大片空白 */
-  padding-bottom: max(28px, calc(var(--app-safe-bottom) + 24px)) !important;
   -webkit-overflow-scrolling: touch;
 }
 /* 修改结束 */
@@ -1263,7 +1269,6 @@ p {
 .settings-sheet {
   max-height: min(85vh, 740px);
   overflow-y: auto;
-  padding-bottom: max(28px, calc(var(--app-safe-bottom) + 24px)) !important;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -1996,9 +2001,9 @@ p {
 /* 使用gemini修改 */
 /* 独立的自定义背景图图层 */
 #customBgLayer {
-  position: fixed;
+  position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: 0;
   background-repeat: no-repeat;
   background-size: cover;
   background-position: center;
@@ -2112,19 +2117,17 @@ p {
 /* 设置界面：和转盘编辑界面同高 */
 #settingsSheet {
   max-height: min(calc(var(--app-height) - var(--app-safe-top) - 28px), 720px) !important;
-  padding-bottom: max(28px, calc(var(--app-safe-bottom) + 24px)) !important;
 }
 
 /* 转盘二级菜单：和设置界面同高 */
 #wheelEditorSheet {
   max-height: min(calc(var(--app-height) - var(--app-safe-top) - 28px), 720px) !important;
-  padding-bottom: max(28px, calc(var(--app-safe-bottom) + 24px)) !important;
 }
 
 /* 随机数菜单：单独矮一点 */
 #numberSettingsSheet {
+  --sheet-bottom-padding: max(22px, calc(var(--app-safe-bottom) + 22px));
   max-height: min(calc(var(--app-height) - var(--app-safe-top) - 96px), 640px) !important;
-  padding-bottom: max(22px, calc(var(--app-safe-bottom) + 22px)) !important;
 }
 
 /* 如果之前 JS 留下了 is-expanded，也强制不改变高度 */
@@ -2441,11 +2444,29 @@ body.sheet-open {
 html {
   min-height: 100% !important;
   height: auto !important;
-  overflow: hidden !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
   background-color: var(--surface) !important;
   background-image: var(--app-background) !important;
   background-size: var(--app-background-size) !important;
   background-position: var(--app-background-position) !important;
+}
+
+#viewport-background {
+  position: fixed !important;
+  inset: -1px !important;
+  z-index: 0 !important;
+  width: auto !important;
+  height: auto !important;
+  background-color: var(--surface) !important;
+  background-image: var(--app-background) !important;
+  background-size: var(--app-background-size) !important;
+  background-position: var(--app-background-position) !important;
+  background-repeat: no-repeat !important;
+  transform: none !important;
+  filter: none !important;
+  contain: none !important;
+  will-change: auto !important;
 }
 
 body {
@@ -2456,11 +2477,9 @@ body {
   min-height: var(--app-height) !important;
   height: auto !important;
   margin: 0 !important;
-  overflow: hidden !important;
-  background-color: var(--surface) !important;
-  background-image: var(--app-background) !important;
-  background-size: var(--app-background-size) !important;
-  background-position: var(--app-background-position) !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  background: transparent !important;
 }
 
 .phone-frame {
@@ -2533,6 +2552,7 @@ body {
   right: var(--dock-inline-end) !important;
   bottom: var(--dock-bottom-offset) !important;
   width: auto !important;
+  height: var(--bottom-nav-height) !important;
   max-width: 448px !important;
   margin-right: auto !important;
   margin-left: auto !important;
@@ -2542,15 +2562,20 @@ body {
 }
 
 .floating-dock-surface {
-  padding:
-    6px
-    6px
-    calc(6px + var(--app-safe-bottom)) !important;
+  width: 100% !important;
+  height: 100% !important;
+  padding: 6px !important;
   pointer-events: auto !important;
 }
 
+.floating-dock-content {
+  width: 100% !important;
+  height: 100% !important;
+}
+
 .dock-item {
-  min-height: calc(var(--dock-thickness) * var(--ui-scale)) !important;
+  min-height: 0 !important;
+  height: 100% !important;
 }
 
 .dock-indicator {
