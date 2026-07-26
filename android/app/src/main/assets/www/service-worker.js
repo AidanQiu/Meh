@@ -1,4 +1,4 @@
-const SW_VERSION = "1.1.1-pwa-r25";
+const SW_VERSION = "1.1.1-pwa-r26";
 const CACHE_NAME = `meh-shell-${SW_VERSION}`;
 const RUNTIME_CACHE_NAME = `meh-runtime-${SW_VERSION}`;
 

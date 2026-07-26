@@ -1,6 +1,14 @@
 # iOS PWA / Android WebView 系统栏专项审计
 
-构建标识：`1.1.1-pwa-r25`
+构建标识：`1.1.1-pwa-r26`
+
+## r26 iOS PWA 透明状态栏实验
+
+- iOS Home Screen standalone 在首屏初始化和主题切换时都会移除 `meta[name="theme-color"]`；普通浏览器和 Android 继续保留并同步该 meta。
+- `html` 与 `body` 均保持透明且不绘制背景图，完整的实色回退、主题渐变和自定义壁纸只由 body 直属的 `#viewport-background` 绘制。
+- `#viewport-background` 使用 `position: fixed; inset: -1px` 略微超出当前 WebView，避免视口边缘出现取整缝隙；它仍不能越过系统未分配给 DOM 的裁剪边界。
+- 状态栏诊断从“theme/html/body 同色”改为按运行环境验证：iOS PWA 要求 theme meta 不存在、根画布透明、viewport 层包含 `--surface` 和完整背景；其他环境要求 theme meta 与 `--surface` 一致。
+- 该策略需要删除旧主屏幕图标、从最新 Safari 页面重新添加后真机验收；仅刷新旧安装不能证明安装期状态栏元数据已更新。
 
 ## r25 iOS PWA 视口所有权自动判定
 

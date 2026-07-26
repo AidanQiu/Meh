@@ -2,13 +2,13 @@
   "name": "随便吧",
   "short_name": "随便吧",
   "description": "一个离线随机决定小工具。",
-  "start_url": "./index.html?v=1.1.1-pwa-r25",
+  "start_url": "./index.html?v=1.1.1-pwa-r26",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#d6e3e1",
   "theme_color": "#d6e3e1",
   "icons": [
-    { "src": "./icons/meh_icon.png?v=1.1.1-pwa-r25", "sizes": "1254x1254", "type": "image/png", "purpose": "any" }
+    { "src": "./icons/meh_icon.png?v=1.1.1-pwa-r26", "sizes": "1254x1254", "type": "image/png", "purpose": "any" }
   ]
 }

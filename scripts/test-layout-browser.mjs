@@ -161,15 +161,15 @@ try {
       ],
     };
   })()`);
-  check(base.build === "1.1.1-pwa-r25", "browser loaded the wrong build");
+  check(base.build === "1.1.1-pwa-r26", "browser loaded the wrong build");
   check(base.platform === "platform-browser" && base.finalTop === "0px" && base.finalBottom === "0px", "browser fallback platform or zero-inset policy is wrong");
   check(base.viewport[0] === 390, `portrait viewport width was ${base.viewport[0]}, expected 390`);
   check(base.bodyPadding.join(",") === "0px,0px", "visual body must not consume safe-area padding");
   check(base.framePadding.join(",") === "0px,0px", "visual root must not consume safe-area padding");
   check(base.frameBackground === "rgba(0, 0, 0, 0)", "content root must remain transparent over the visual background");
-  check(base.htmlBackground !== "rgba(0, 0, 0, 0)" && base.bodyBackground !== "rgba(0, 0, 0, 0)", "html and body must share a non-transparent canvas fallback");
-  check(base.backgroundImage !== "none" && base.bodyBackgroundImage !== "none" && base.viewportBackgroundImage === "none", "html and body must share the production background while the fixed marker stays transparent");
-  check(base.backgroundRect[0] === 0 && base.backgroundRect[1] === 844, `transparent viewport marker did not match the layout viewport: ${JSON.stringify(base.backgroundRect)}`);
+  check(base.htmlBackground === "rgba(0, 0, 0, 0)" && base.bodyBackground === "rgba(0, 0, 0, 0)", "html and body must remain transparent over the dedicated viewport background");
+  check(base.backgroundImage === "none" && base.bodyBackgroundImage === "none" && base.viewportBackgroundImage !== "none", "the dedicated viewport layer does not own the production background");
+  check(base.backgroundRect[0] === -1 && base.backgroundRect[1] === 845, `viewport background did not overscan the layout viewport: ${JSON.stringify(base.backgroundRect)}`);
   check(base.backgroundParentIsBody && base.dockParentIsBody, "viewport background or fixed dock is not a direct body child");
   check(base.inlineAppHeight === "", "JavaScript wrote an inline full-screen app height");
   check(base.canvasHeight.every((height) => height >= 844), `portrait visual canvas did not cover the viewport: ${base.canvasHeight.join(",")}`);
@@ -189,8 +189,31 @@ try {
   check(safeAreaDiagnostics.snapshot.metaInfo.viewport === "width=device-width, initial-scale=1, viewport-fit=cover", "runtime diagnostics read the wrong viewport meta");
   check(safeAreaDiagnostics.snapshot.metaInfo.appleMobileWebAppCapable === "yes", "runtime diagnostics read the wrong standalone capability meta");
   check(safeAreaDiagnostics.snapshot.metaInfo.appleMobileWebAppStatusBarStyle === "black-translucent", "runtime diagnostics read the wrong status bar meta");
+  check(safeAreaDiagnostics.snapshot.statusBarColors.statusBarStrategyValid, `browser status-bar fallback strategy is invalid: ${JSON.stringify(safeAreaDiagnostics.snapshot.statusBarColors)}`);
   check(safeAreaDiagnostics.wallpaperVariable.includes("cross-fade") || safeAreaDiagnostics.wallpaperVariable.includes("url("), "custom wallpaper was not assigned to the shared background variable");
-  check(safeAreaDiagnostics.htmlBackground.includes("url(") && safeAreaDiagnostics.bodyBackground.includes("url(") && safeAreaDiagnostics.viewportBackground === "none", "custom wallpaper was not shared by the html/body canvas pair");
+  check(safeAreaDiagnostics.htmlBackground === "none" && safeAreaDiagnostics.bodyBackground === "none" && safeAreaDiagnostics.viewportBackground.includes("url("), "custom wallpaper was not painted exclusively by the viewport layer");
+
+  const themeColorPolicy = await evaluate(`(() => {
+    const root = document.documentElement;
+    root.classList.remove("platform-browser", "platform-android-app");
+    root.classList.add("platform-ios-pwa");
+    applyThemeColor(appSettings.primaryThemeColor, appSettings.secondaryThemeColor);
+    const removedForIosPwa = !document.querySelector('meta[name="theme-color"]');
+    const iosDiagnostics = getSystemBarColorDiagnostics();
+
+    const restored = document.createElement("meta");
+    restored.id = "themeColorMeta";
+    restored.name = "theme-color";
+    document.head.appendChild(restored);
+    root.classList.remove("platform-ios-pwa", "platform-android-app");
+    root.classList.add("platform-browser");
+    applyThemeColor(appSettings.primaryThemeColor, appSettings.secondaryThemeColor);
+    const restoredForBrowser = Boolean(document.querySelector('meta[name="theme-color"]')?.content);
+    return { removedForIosPwa, iosDiagnostics, restoredForBrowser };
+  })()`);
+  check(themeColorPolicy.removedForIosPwa, "iOS standalone theme-color was not removed");
+  check(themeColorPolicy.iosDiagnostics.statusBarStrategyValid, `iOS transparent status-bar strategy is invalid: ${JSON.stringify(themeColorPolicy.iosDiagnostics)}`);
+  check(themeColorPolicy.restoredForBrowser, "browser theme-color fallback was not restored for the remainder of the test");
 
   const viewportClassification = await evaluate(`(() => {
     const metaInfo = {

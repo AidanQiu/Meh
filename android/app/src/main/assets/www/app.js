@@ -839,26 +839,47 @@ function getSystemBarColorDiagnostics() {
   const rootStyle = getComputedStyle(document.documentElement);
   const htmlColor = getComputedStyle(document.documentElement).backgroundColor;
   const bodyColor = getComputedStyle(document.body).backgroundColor;
+  const viewportStyle = getComputedStyle(document.querySelector("#viewport-background"));
+  const viewportColor = viewportStyle.backgroundColor;
+  const viewportImage = viewportStyle.backgroundImage;
   const themeColor = readStaticMetaContent("theme-color") || "";
   const surfaceColor = rootStyle.getPropertyValue("--surface").trim();
+  const isIosPwa = document.documentElement.classList.contains("platform-ios-pwa");
   const normalized = {
     themeColor: normalizeCssColor(themeColor),
     surfaceColor: normalizeCssColor(surfaceColor),
     htmlBackgroundColor: normalizeCssColor(htmlColor),
     bodyBackgroundColor: normalizeCssColor(bodyColor),
+    viewportBackgroundColor: normalizeCssColor(viewportColor),
   };
+  const transparent = normalizeCssColor("transparent");
+  const htmlIsTransparent = normalized.htmlBackgroundColor === transparent;
+  const bodyIsTransparent = normalized.bodyBackgroundColor === transparent;
+  const viewportMatchesSurface =
+    normalized.viewportBackgroundColor === normalized.surfaceColor
+    && viewportImage !== "none";
+  const themeMatchesSurface =
+    normalized.themeColor !== null
+    && normalized.themeColor === normalized.surfaceColor;
+  const statusBarStrategyValid = isIosPwa
+    ? !themeColor && htmlIsTransparent && bodyIsTransparent && viewportMatchesSurface
+    : themeMatchesSurface && htmlIsTransparent && bodyIsTransparent && viewportMatchesSurface;
 
   return {
+    strategy: isIosPwa ? "ios-transparent-status-bar" : "theme-color-fallback",
+    isIosPwa,
     themeColor,
+    themeColorPresent: Boolean(themeColor),
     surfaceColor,
     htmlBackgroundColor: htmlColor,
     bodyBackgroundColor: bodyColor,
-    fallbackColorsMatch: Boolean(
-      normalized.themeColor
-      && normalized.themeColor === normalized.surfaceColor
-      && normalized.themeColor === normalized.htmlBackgroundColor
-      && normalized.themeColor === normalized.bodyBackgroundColor
-    ),
+    viewportBackgroundColor: viewportColor,
+    viewportBackgroundImage: viewportImage,
+    htmlIsTransparent,
+    bodyIsTransparent,
+    viewportMatchesSurface,
+    statusBarStrategyValid,
+    fallbackColorsMatch: statusBarStrategyValid,
   };
 }
 
@@ -1020,8 +1041,8 @@ function logStandaloneStartupDiagnostics() {
   if (audit.verdict === "webview-excludes-screen-region") {
     console.warn("[Meh][SafeArea] The DOM fills the entire allocated WebView, but the WebView is shorter than screen.height. The missing screen region is outside the DOM paintable area; do not add negative safe-area offsets.");
   }
-  if (!statusBarColors.fallbackColorsMatch) {
-    console.warn("[Meh][SafeArea] theme-color, --surface, html, and body fallback colors do not match.", statusBarColors);
+  if (!statusBarColors.statusBarStrategyValid) {
+    console.warn("[Meh][SafeArea] The status-bar background strategy is inconsistent with this runtime.", statusBarColors);
   }
 
   return { standaloneInfo, metaInfo, safeArea, paintGeometry, statusBarColors, audit };
@@ -2942,9 +2963,14 @@ function applyThemeColor(primaryColor, secondaryColor) {
   els.root.style.setProperty("--dock-bg", isDark ? "rgba(28, 27, 31, 0.88)" : mixHex(background, "#ffffff", 0.56));
 
   const statusColor = surface;
-  document.querySelectorAll("meta[name='theme-color']").forEach((meta) => {
-    meta.setAttribute("content", statusColor);
-  });
+  const isIosPwa = els.root.classList.contains("platform-ios-pwa");
+  if (isIosPwa) {
+    document.querySelectorAll("meta[name='theme-color']").forEach((meta) => meta.remove());
+  } else {
+    document.querySelectorAll("meta[name='theme-color']").forEach((meta) => {
+      meta.setAttribute("content", statusColor);
+    });
+  }
 
   if (window.MehAndroid?.setSystemBarColor) {
     window.MehAndroid.setSystemBarColor(surface, isDark);
