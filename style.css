@@ -2438,10 +2438,9 @@ body.sheet-open {
 
 /* Final viewport ownership: the background fills the viewport; content alone consumes insets. */
 html {
-  height: 100% !important;
-  min-height: 100% !important;
+  min-height: 100vh !important;
+  min-height: 100dvh !important;
   overflow-x: hidden !important;
-  overflow-y: auto !important;
   background-color: var(--surface) !important;
   background-image: var(--app-background) !important;
   background-size: var(--app-background-size) !important;
@@ -2471,7 +2470,6 @@ body {
   height: auto !important;
   margin: 0 !important;
   overflow-x: hidden !important;
-  overflow-y: auto !important;
   background: transparent !important;
 }
 
