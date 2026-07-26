@@ -1,6 +1,15 @@
 # iOS PWA / Android WebView 系统栏专项审计
 
-构建标识：`1.1.1-pwa-r27`
+构建标识：`1.1.1-pwa-r28`
+
+## r28 侧滑闪屏与数字键盘残余空白修复
+
+- `popstate` 不再让设置/编辑面板播放 260ms 关闭动画。历史返回会先添加 `is-history-closing`，立即将面板设为 `display: none`，在面板已经回到屏幕外后再清除该临时类，避免 iOS 交互式侧滑结束时闪回一帧设置界面。
+- 键盘状态不再只依赖 `focusin/focusout`。Visual Viewport resize/scroll 和 window resize 会根据稳定视口与当前可见范围的差值识别键盘遮挡；数字键盘通过“完成”收起但输入框仍保持焦点时，也能判定键盘已经关闭。
+- 键盘遮挡阈值会区分约 300px 的真实键盘与几十像素的 WebKit 残余视口误差。检测到关闭后会设置独立的 viewport nudge，不必等待随机数面板关闭。
+- 恢复脉冲会短暂覆盖弹层的 root overflow/overscroll 锁定，将 html/body/主画布设为键盘前的稳定高度，重新写入原滚动位置并强制背景重合成，随后在两帧内恢复正常锁定。
+- 若受影响 WebKit 永远不再报告 visual/layout viewport 等高，720ms 最终恢复阶段仍会在“键盘几何已消失”的前提下执行脉冲，避免恢复逻辑永久被跳过。
+- 浏览器回归新增两项断言：`popstate` 当帧面板必须 `display:none` 且无 transition；生成数量输入框在不触发 blur 的情况下模拟 300px 键盘遮挡和 68px 残余误差，恢复必须在面板仍打开时完成。
 
 ## r27 iOS 键盘与侧滑返回后的底部画布恢复
 

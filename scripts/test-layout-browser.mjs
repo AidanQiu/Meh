@@ -161,7 +161,7 @@ try {
       ],
     };
   })()`);
-  check(base.build === "1.1.1-pwa-r27", "browser loaded the wrong build");
+  check(base.build === "1.1.1-pwa-r28", "browser loaded the wrong build");
   check(base.platform === "platform-browser" && base.finalTop === "0px" && base.finalBottom === "0px", "browser fallback platform or zero-inset policy is wrong");
   check(base.viewport[0] === 390, `portrait viewport width was ${base.viewport[0]}, expected 390`);
   check(base.bodyPadding.join(",") === "0px,0px", "visual body must not consume safe-area padding");
@@ -294,7 +294,20 @@ try {
   })()`);
   check(settings.open && settings.wallpaperGrid, "settings/custom-background page failed to open");
   check(settings.rootLocked && settings.bodyInlinePosition === "" && settings.bodyInlineTop === "", `sheet scroll lock mutated body positioning: ${JSON.stringify(settings)}`);
-  await evaluate(`history.back(); new Promise((resolve) => setTimeout(resolve, 850))`);
+  const historyImmediate = await evaluate(`new Promise((resolve) => {
+    window.addEventListener('popstate', () => {
+      const sheet = document.querySelector('#settingsSheet');
+      const style = getComputedStyle(sheet);
+      resolve({
+        closingClass: sheet.classList.contains('is-history-closing'),
+        display: style.display,
+        transitionDuration: style.transitionDuration,
+      });
+    }, { once: true });
+    history.back();
+  })`);
+  check(historyImmediate.closingClass && historyImmediate.display === "none" && historyImmediate.transitionDuration === "0s", `history return replayed the sheet close animation: ${JSON.stringify(historyImmediate)}`);
+  await evaluate(`new Promise((resolve) => setTimeout(resolve, 850))`);
   const historyRecovery = await evaluate(`(() => {
     const backgroundRect = document.querySelector('#viewport-background').getBoundingClientRect();
     return {
@@ -335,23 +348,43 @@ try {
     document.querySelector('[data-page="number"]').click();
     document.querySelector('#featureButton').click();
     await new Promise((resolve) => setTimeout(resolve, 50));
-    const input = document.querySelector('#numberMinInput');
+    const input = document.querySelector('#numberCountInput');
     input.focus();
     await new Promise((resolve) => setTimeout(resolve, 30));
+    const openGeometry = reconcileKeyboardViewport('test-open', {
+      visualExtent: innerHeight - 300,
+      bypassGrace: true,
+    });
+    const dismissedGeometry = reconcileKeyboardViewport('test-dismiss', {
+      visualExtent: innerHeight - 68,
+      bypassGrace: true,
+    });
     const during = {
       keyboardActive: keyboardViewportActive,
       paintHeight: document.documentElement.style.getPropertyValue('--viewport-paint-height'),
       fullPaintHeight,
       keyboardSizedPaintHeight,
       bodyInlinePosition: document.body.style.position,
+      openGeometry,
+      dismissedGeometry,
     };
-    input.blur();
     await new Promise((resolve) => setTimeout(resolve, 850));
+    const afterKeyboardDismiss = {
+      keyboardActive: keyboardViewportActive,
+      focusedWithoutBlur: document.activeElement === input,
+      rootLocked: document.documentElement.classList.contains('page-scroll-locked'),
+      nudgePending: viewportNudgePending,
+      recoveryActive: document.documentElement.classList.contains('viewport-recovery-active'),
+      bodyInlinePosition: document.body.style.position,
+      backgroundBottom: Math.round(document.querySelector('#viewport-background').getBoundingClientRect().bottom),
+      viewportBottom: innerHeight,
+    };
     history.back();
     await new Promise((resolve) => setTimeout(resolve, 850));
     const backgroundRect = document.querySelector('#viewport-background').getBoundingClientRect();
     return {
       during,
+      afterKeyboardDismiss,
       after: {
         keyboardActive: keyboardViewportActive,
         rootLocked: document.documentElement.classList.contains('page-scroll-locked'),
@@ -361,9 +394,13 @@ try {
       },
     };
   })()`);
-  check(keyboardRecovery.during.keyboardActive && keyboardRecovery.during.paintHeight, `editable focus did not preserve the iOS viewport paint state: ${JSON.stringify(keyboardRecovery)}`);
+  check(keyboardRecovery.during.openGeometry.visible && keyboardRecovery.during.dismissedGeometry.changed && !keyboardRecovery.during.keyboardActive, `viewport geometry did not recognize number-keyboard dismissal without blur: ${JSON.stringify(keyboardRecovery)}`);
+  check(keyboardRecovery.during.paintHeight, `editable focus did not preserve the iOS viewport paint state: ${JSON.stringify(keyboardRecovery)}`);
   check(keyboardRecovery.during.fullPaintHeight === keyboardRecovery.during.keyboardSizedPaintHeight, `keyboard-sized viewport replaced the stable canvas height: ${JSON.stringify(keyboardRecovery)}`);
   check(keyboardRecovery.during.bodyInlinePosition === "", `keyboard sheet used body fixed positioning: ${JSON.stringify(keyboardRecovery)}`);
+  check(!keyboardRecovery.afterKeyboardDismiss.keyboardActive && keyboardRecovery.afterKeyboardDismiss.focusedWithoutBlur, `number-keyboard recovery still depends on focusout: ${JSON.stringify(keyboardRecovery)}`);
+  check(keyboardRecovery.afterKeyboardDismiss.rootLocked && !keyboardRecovery.afterKeyboardDismiss.nudgePending && !keyboardRecovery.afterKeyboardDismiss.recoveryActive, `keyboard recovery did not finish while the number sheet remained open: ${JSON.stringify(keyboardRecovery)}`);
+  check(keyboardRecovery.afterKeyboardDismiss.backgroundBottom >= keyboardRecovery.afterKeyboardDismiss.viewportBottom, `number-keyboard recovery exposed a bottom canvas gap: ${JSON.stringify(keyboardRecovery)}`);
   check(!keyboardRecovery.after.keyboardActive && !keyboardRecovery.after.rootLocked, `keyboard dismissal did not settle its viewport state: ${JSON.stringify(keyboardRecovery)}`);
   check(keyboardRecovery.after.bodyInlinePosition === "" && keyboardRecovery.after.backgroundBottom >= keyboardRecovery.after.viewportBottom, `keyboard dismissal exposed a bottom canvas gap: ${JSON.stringify(keyboardRecovery)}`);
 

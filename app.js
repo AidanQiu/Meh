@@ -654,8 +654,11 @@ let lastLayoutDiagnosticSignature = "";
 let stableViewportHeight = 0;
 let viewportRecoveryTimers = [];
 let keyboardViewportActive = false;
+let keyboardFocusStartedAt = 0;
 let viewportRestoreScrollY = 0;
 let viewportRestorePending = false;
+let viewportNudgePending = false;
+let viewportNudgeGeneration = 0;
 let orientationRecoveryTimer = 0;
 
 init();
@@ -762,16 +765,19 @@ function bindEvents() {
     syncPwaAppHeight();
     updateDockIndicator();
     scheduleLayoutDiagnostics("window-resize");
+    window.requestAnimationFrame(() => reconcileKeyboardViewport("window-resize"));
     if (!keyboardViewportActive) scheduleViewportRecovery("window-resize");
   });
   if (window.visualViewport) {
     window.visualViewport.addEventListener("resize", () => {
       syncPwaAppHeight();
       scheduleLayoutDiagnostics("visual-viewport-resize");
+      window.requestAnimationFrame(() => reconcileKeyboardViewport("visual-viewport-resize"));
       scheduleViewportRecovery("visual-viewport-resize");
     });
     window.visualViewport.addEventListener("scroll", () => {
       scheduleLayoutDiagnostics("visual-viewport-scroll");
+      window.requestAnimationFrame(() => reconcileKeyboardViewport("visual-viewport-scroll"));
       if (!keyboardViewportActive) scheduleViewportRecovery("visual-viewport-scroll");
     });
   }
@@ -789,12 +795,14 @@ function bindEvents() {
   document.addEventListener("focusin", (event) => {
     if (!isKeyboardEditable(event.target)) return;
     keyboardViewportActive = true;
+    keyboardFocusStartedAt = performance.now();
     syncPwaAppHeight();
     scheduleLayoutDiagnostics("keyboard-open");
   });
   document.addEventListener("focusout", (event) => {
     if (!isKeyboardEditable(event.target)) return;
     keyboardViewportActive = false;
+    viewportNudgePending = true;
     scheduleViewportRecovery("keyboard-dismiss");
   });
   document.addEventListener("visibilitychange", () => {
@@ -825,14 +833,58 @@ function isKeyboardEditable(element) {
 }
 
 function measureAllocatedViewportHeight() {
-  const visualBottom = window.visualViewport
-    ? window.visualViewport.height + Math.max(0, window.visualViewport.offsetTop)
-    : 0;
+  const visualBottom = measureVisualViewportExtent();
   return Math.max(
     window.innerHeight || 0,
     document.documentElement.clientHeight || 0,
     visualBottom || 0
   );
+}
+
+function measureVisualViewportExtent() {
+  return window.visualViewport
+    ? window.visualViewport.height + Math.max(0, window.visualViewport.offsetTop)
+    : window.innerHeight || document.documentElement.clientHeight || 0;
+}
+
+function getKeyboardViewportGeometry(options = {}) {
+  const referenceHeight = Math.max(
+    1,
+    stableViewportHeight || measureAllocatedViewportHeight()
+  );
+  const visualExtent = options.visualExtent != null && Number.isFinite(Number(options.visualExtent))
+    ? Number(options.visualExtent)
+    : measureVisualViewportExtent();
+  const occlusion = Math.max(0, referenceHeight - visualExtent);
+  const visibleThreshold = Math.max(96, Math.min(140, referenceHeight * 0.16));
+  return {
+    referenceHeight,
+    visualExtent,
+    occlusion,
+    visibleThreshold,
+    visible: occlusion >= visibleThreshold,
+  };
+}
+
+function reconcileKeyboardViewport(reason, options = {}) {
+  const geometry = getKeyboardViewportGeometry(options);
+  const focusedEditable = isKeyboardEditable(document.activeElement);
+
+  if (focusedEditable && geometry.visible) {
+    keyboardViewportActive = true;
+    return { ...geometry, changed: false };
+  }
+
+  const focusGraceElapsed = performance.now() - keyboardFocusStartedAt >= 320;
+  if (keyboardViewportActive && !geometry.visible && (options.bypassGrace || focusGraceElapsed)) {
+    keyboardViewportActive = false;
+    viewportNudgePending = true;
+    scheduleViewportRecovery(`keyboard-geometry-dismiss:${reason}`);
+    scheduleLayoutDiagnostics(`keyboard-geometry-dismiss:${reason}`);
+    return { ...geometry, changed: true };
+  }
+
+  return { ...geometry, changed: false };
 }
 
 function syncPwaAppHeight(options = {}) {
@@ -878,10 +930,48 @@ function isVisualViewportSettled() {
   return visualBottom >= layoutHeight - 2;
 }
 
+function nudgeWebKitViewport(restoreY) {
+  const generation = ++viewportNudgeGeneration;
+  const recoveryHeight = Math.max(
+    1,
+    Math.ceil(stableViewportHeight || measureAllocatedViewportHeight())
+  );
+  els.root.style.setProperty("--viewport-recovery-height", `${recoveryHeight}px`);
+  els.root.classList.add("viewport-recovery-active");
+  document.documentElement.getBoundingClientRect();
+
+  window.requestAnimationFrame(() => {
+    if (generation !== viewportNudgeGeneration) return;
+    // Write the same position deliberately. WebKit uses this assignment to
+    // discard a stale keyboard content offset even when scrollY already reads 0.
+    document.documentElement.scrollTop = restoreY;
+    document.body.scrollTop = restoreY;
+    window.scrollTo(0, restoreY);
+    refreshViewportBackgroundLayer();
+
+    window.requestAnimationFrame(() => {
+      if (generation !== viewportNudgeGeneration) return;
+      els.root.classList.remove("viewport-recovery-active");
+      els.root.style.removeProperty("--viewport-recovery-height");
+      document.documentElement.getBoundingClientRect();
+      window.scrollTo(0, restoreY);
+      refreshViewportBackgroundLayer();
+    });
+  });
+}
+
 function restoreViewportAfterInteraction(reason, options = {}) {
   if (options.resetStable) stableViewportHeight = 0;
   const paintHeight = syncPwaAppHeight({ resetStable: options.resetStable });
   const hasOpenSheet = Boolean(document.querySelector(".settings-sheet.is-open, .editor-sheet.is-open"));
+  const viewportSettled = isVisualViewportSettled() || options.forceViewportNudge;
+  let shouldNudgeViewport = false;
+  let restoreY = pageScrollLock.active ? pageScrollLock.y : viewportRestoreScrollY;
+
+  if (!keyboardViewportActive && viewportNudgePending && viewportSettled) {
+    viewportNudgePending = false;
+    shouldNudgeViewport = true;
+  }
 
   if (!pageScrollLock.active && !hasOpenSheet && !keyboardViewportActive) {
     // Clear legacy body-fixed scroll locks before asking WebKit to restore its
@@ -891,19 +981,14 @@ function restoreViewportAfterInteraction(reason, options = {}) {
     document.body.style.left = "";
     document.body.style.right = "";
     document.body.style.width = "";
-    if (viewportRestorePending && isVisualViewportSettled()) {
-      const restoreY = viewportRestoreScrollY;
+    if (viewportRestorePending && viewportSettled) {
+      restoreY = viewportRestoreScrollY;
       viewportRestorePending = false;
-      window.requestAnimationFrame(() => {
-        // Assign even when the numeric position is already correct. This is a
-        // deliberate WebKit relayout nudge after its keyboard inset is gone.
-        document.documentElement.scrollTop = restoreY;
-        document.body.scrollTop = restoreY;
-        window.scrollTo(0, restoreY);
-      });
+      shouldNudgeViewport = true;
     }
   }
 
+  if (shouldNudgeViewport) nudgeWebKitViewport(restoreY);
   refreshViewportBackgroundLayer();
   updateDockIndicator();
   scheduleLayoutDiagnostics(`viewport-recovery:${reason}`);
@@ -913,10 +998,16 @@ function restoreViewportAfterInteraction(reason, options = {}) {
 function scheduleViewportRecovery(reason, options = {}) {
   viewportRecoveryTimers.forEach((timer) => window.clearTimeout(timer));
   const delays = options.resetStable ? [120, 360, 720] : [0, 120, 360, 720];
-  viewportRecoveryTimers = delays.map((delay) =>
+  const keyboardRecovery = reason.includes("keyboard");
+  viewportRecoveryTimers = delays.map((delay, index) =>
     window.setTimeout(() => {
       restoreViewportAfterInteraction(reason, {
         resetStable: Boolean(options.resetStable),
+        // Some affected WebKit builds never report matching visual/layout
+        // heights after the number keyboard closes. The final pass still
+        // performs the relayout pulse once geometry says the keyboard is gone.
+        forceViewportNudge: index === delays.length - 1
+          && (keyboardRecovery || viewportNudgePending),
       });
     }, delay)
   );
@@ -1547,9 +1638,12 @@ function logLayoutDiagnostics(reason = "manual", force = false) {
       stableViewportHeight,
       paintHeight: variable("--viewport-paint-height"),
       keyboardActive: keyboardViewportActive,
+      keyboardGeometry: getKeyboardViewportGeometry(),
       scrollLocked: pageScrollLock.active,
       restoreScrollY: viewportRestoreScrollY,
       restorePending: viewportRestorePending,
+      nudgePending: viewportNudgePending,
+      recoveryActive: els.root.classList.contains("viewport-recovery-active"),
       visualViewportSettled: isVisualViewportSettled(),
     },
     appHeight: variable("--app-height"),
@@ -3799,6 +3893,7 @@ function openSheet(sheet) {
   els.scrim.hidden = false;
   document.body.classList.add("sheet-open");
 
+  sheet.classList.remove("is-history-closing");
   sheet.style.transform = "";
   sheet.classList.add("is-open");
   sheet.setAttribute("aria-hidden", "false");
@@ -3820,11 +3915,24 @@ function closeAllSheets(options = {}) {
     closeDarkModeMenu();
   }
 
+  const focusedEditable = isKeyboardEditable(document.activeElement)
+    ? document.activeElement
+    : null;
+  if (focusedEditable?.closest(".settings-sheet, .editor-sheet")) {
+    focusedEditable.blur();
+  }
+
   [els.settingsSheet, els.wheelEditorSheet, els.numberSettingsSheet].forEach((sheet) => {
     if (!sheet) return;
+    if (options.immediate) sheet.classList.add("is-history-closing");
     sheet.classList.remove("is-open", "is-expanded", "is-dragging");
     sheet.setAttribute("aria-hidden", "true");
     sheet.style.transform = "";
+    if (options.immediate) {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => sheet.classList.remove("is-history-closing"));
+      });
+    }
   });
 
   if (els.scrim) {
@@ -3837,7 +3945,7 @@ function closeAllSheets(options = {}) {
 }
 
 window.addEventListener("popstate", () => {
-  closeAllSheets({ fromHistory: true });
+  closeAllSheets({ fromHistory: true, immediate: true });
   scheduleViewportRecovery("history-pop");
 });
 

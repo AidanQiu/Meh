@@ -75,6 +75,10 @@ check(!app.includes('document.body.style.position = "fixed"') && !app.includes("
 check(app.includes('scheduleViewportRecovery("keyboard-dismiss")') && app.includes('scheduleViewportRecovery("history-pop")'), "keyboard dismissal and interactive history return must schedule viewport recovery");
 check(app.includes("isVisualViewportSettled()") && app.includes("viewportRestorePending"), "scroll restoration must wait for visual/layout viewport convergence");
 check(app.includes('scheduleViewportRecovery("visual-viewport-resize")') && app.includes('window.visualViewport.addEventListener("scroll"'), "visual viewport resize/pan recovery listeners are missing");
+check(app.includes("reconcileKeyboardViewport") && app.includes("visibleThreshold") && app.includes("viewportNudgePending"), "number-keyboard dismissal must be detected from viewport geometry even without blur");
+check(css.includes("html.viewport-recovery-active") && css.includes("--viewport-recovery-height") && app.includes("nudgeWebKitViewport"), "temporary WebKit viewport relayout pulse is missing");
+check(css.includes(".settings-sheet.is-history-closing") && css.includes("display: none !important"), "history-return sheets need an immediate non-animated hidden state");
+check(app.includes("closeAllSheets({ fromHistory: true, immediate: true })"), "popstate must close sheets immediately without replaying the close transition");
 check(app.includes('classList.contains("platform-ios-pwa")') && app.includes("meta.remove()"), "iOS standalone theme-color removal is missing");
 check(html.includes('if (platformClass === "platform-ios-pwa")') && html.includes("themeMeta.remove()"), "bootstrap must remove theme-color before the first iOS PWA paint");
 check(app.includes("window.MehLayoutDiagnostics") && app.includes("surfacePhysicalGap") && app.includes("console.table(geometry)"), "real geometry diagnostics are missing");

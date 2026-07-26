@@ -4,7 +4,7 @@
 
 @font-face {
   font-family: "Material Symbols Rounded";
-  src: url("./fonts/material-symbols-rounded.woff2?v=1.1.1-pwa-r27") format("woff2");
+  src: url("./fonts/material-symbols-rounded.woff2?v=1.1.1-pwa-r28") format("woff2");
   font-display: block;
   font-style: normal;
   font-weight: 100 700;
@@ -2484,6 +2484,23 @@ html.page-scroll-locked body {
   overscroll-behavior: none !important;
 }
 
+html.viewport-recovery-active,
+html.viewport-recovery-active body {
+  overflow-y: auto !important;
+  overscroll-behavior: auto !important;
+}
+
+html.platform-ios-pwa.viewport-recovery-active {
+  height: var(--viewport-recovery-height) !important;
+  min-height: var(--viewport-recovery-height) !important;
+}
+
+html.platform-ios-pwa.viewport-recovery-active body,
+html.platform-ios-pwa.viewport-recovery-active .phone-frame,
+html.platform-ios-pwa.viewport-recovery-active .app {
+  min-height: var(--viewport-recovery-height) !important;
+}
+
 .phone-frame {
   position: relative !important;
   inset: auto !important;
@@ -2603,5 +2620,11 @@ html.page-scroll-locked body {
 
 .settings-sheet.is-dragging,
 .editor-sheet.is-dragging {
+  transition: none !important;
+}
+
+.settings-sheet.is-history-closing,
+.editor-sheet.is-history-closing {
+  display: none !important;
   transition: none !important;
 }
