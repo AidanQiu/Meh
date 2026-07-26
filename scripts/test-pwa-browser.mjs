@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { extname, isAbsolute, join, relative, resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
-const build = "1.1.1-pwa-r24";
+const build = "1.1.1-pwa-r25";
 const browserCandidates = process.platform === "win32"
   ? [
       "C:/Program Files/Google/Chrome/Application/chrome.exe",
@@ -192,6 +192,17 @@ try {
   }
   if (Object.values(online.cached).some((value) => !value)) {
     throw new Error(`App shell is incomplete: ${JSON.stringify(online.cached)}`);
+  }
+
+  const diagnostics = await evaluate(`window.MehSafeAreaDiagnostics.serviceWorker()`);
+  if (diagnostics.controllerVersion !== build) {
+    throw new Error(`Service Worker diagnostics read controller ${diagnostics.controllerVersion}, expected ${build}`);
+  }
+  if (diagnostics.networkIndex?.build !== build || diagnostics.cachedIndex?.build !== build) {
+    throw new Error(`Service Worker diagnostics found mismatched HTML: ${JSON.stringify(diagnostics)}`);
+  }
+  if (diagnostics.consistency?.verdict !== "consistent") {
+    throw new Error(`Service Worker diagnostics returned ${diagnostics.consistency?.verdict}: ${JSON.stringify(diagnostics.consistency)}`);
   }
 
   await send("Network.emulateNetworkConditions", {

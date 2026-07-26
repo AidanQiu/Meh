@@ -1,4 +1,4 @@
-const SW_VERSION = "1.1.1-pwa-r24";
+const SW_VERSION = "1.1.1-pwa-r25";
 const CACHE_NAME = `meh-shell-${SW_VERSION}`;
 const RUNTIME_CACHE_NAME = `meh-runtime-${SW_VERSION}`;
 
@@ -56,6 +56,17 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
 
   const url = new URL(request.url);
+  if (url.origin === self.location.origin && url.searchParams.has("__meh_pwa_diagnostic")) {
+    event.respondWith(
+      fetch(new Request(request, { cache: "no-store" })).catch(() =>
+        new Response(JSON.stringify({ error: "network-unavailable" }), {
+          status: 503,
+          headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+        })
+      )
+    );
+    return;
+  }
   if (url.origin === self.location.origin && url.pathname.endsWith("/version.json")) {
     event.respondWith(fetch(new Request(request, { cache: "no-store" })).catch(() =>
       new Response(JSON.stringify({ error: "offline" }), {

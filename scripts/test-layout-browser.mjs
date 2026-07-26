@@ -161,7 +161,7 @@ try {
       ],
     };
   })()`);
-  check(base.build === "1.1.1-pwa-r24", "browser loaded the wrong build");
+  check(base.build === "1.1.1-pwa-r25", "browser loaded the wrong build");
   check(base.platform === "platform-browser" && base.finalTop === "0px" && base.finalBottom === "0px", "browser fallback platform or zero-inset policy is wrong");
   check(base.viewport[0] === 390, `portrait viewport width was ${base.viewport[0]}, expected 390`);
   check(base.bodyPadding.join(",") === "0px,0px", "visual body must not consume safe-area padding");
@@ -191,6 +191,58 @@ try {
   check(safeAreaDiagnostics.snapshot.metaInfo.appleMobileWebAppStatusBarStyle === "black-translucent", "runtime diagnostics read the wrong status bar meta");
   check(safeAreaDiagnostics.wallpaperVariable.includes("cross-fade") || safeAreaDiagnostics.wallpaperVariable.includes("url("), "custom wallpaper was not assigned to the shared background variable");
   check(safeAreaDiagnostics.htmlBackground.includes("url(") && safeAreaDiagnostics.bodyBackground.includes("url(") && safeAreaDiagnostics.viewportBackground === "none", "custom wallpaper was not shared by the html/body canvas pair");
+
+  const viewportClassification = await evaluate(`(() => {
+    const metaInfo = {
+      viewport: "width=device-width, initial-scale=1, viewport-fit=cover",
+      appleMobileWebAppCapable: "yes",
+      appleMobileWebAppStatusBarStyle: "black-translucent",
+    };
+    const colors = { fallbackColorsMatch: true };
+    const fullPaint = (height) => ({
+      html: { top: 0, bottom: height, height },
+      body: { top: 0, bottom: height, height },
+      appRoot: { top: 0, bottom: height, height },
+      viewportMarker: { top: 0, bottom: height, height },
+    });
+    const classify = window.MehSafeAreaDiagnostics.classify;
+    const external = classify({
+      standaloneInfo: {
+        navigatorStandalone: true,
+        displayModeStandalone: true,
+        screenHeight: 844,
+        innerHeight: 782,
+        documentClientHeight: 782,
+        visualViewportHeight: 782,
+        visualViewportOffsetTop: 0,
+      },
+      metaInfo,
+      safeArea: { safeTop: "0px", safeBottom: "0px" },
+      paintGeometry: fullPaint(782),
+      statusBarColors: colors,
+    });
+    const internalPaint = fullPaint(844);
+    internalPaint.appRoot.top = 59;
+    const internal = classify({
+      standaloneInfo: {
+        navigatorStandalone: true,
+        displayModeStandalone: true,
+        screenHeight: 844,
+        innerHeight: 844,
+        documentClientHeight: 844,
+        visualViewportHeight: 844,
+        visualViewportOffsetTop: 0,
+      },
+      metaInfo,
+      safeArea: { safeTop: "59px", safeBottom: "34px" },
+      paintGeometry: internalPaint,
+      statusBarColors: colors,
+    });
+    return { external, internal };
+  })()`);
+  check(viewportClassification.external.verdict === "webview-excludes-screen-region", `external WebView reservation was classified as ${viewportClassification.external.verdict}`);
+  check(viewportClassification.external.deltas.screenMinusInner === 62, `external viewport delta was ${viewportClassification.external.deltas.screenMinusInner}, expected 62`);
+  check(viewportClassification.internal.verdict === "dom-internal-gap", `internal DOM gap was classified as ${viewportClassification.internal.verdict}`);
 
   const pages = await evaluate(`(async () => {
     const results = [];

@@ -1,6 +1,18 @@
 # iOS PWA / Android WebView 系统栏专项审计
 
-构建标识：`1.1.1-pwa-r17`
+构建标识：`1.1.1-pwa-r25`
+
+## r25 iOS PWA 视口所有权自动判定
+
+- 保留 `viewport-fit=cover`、`black-translucent`、单次 `env(safe-area-inset-*)` 和 CSS `100dvh` 画布，不加入负 margin、负 top、translateY 或扩高视口的伪修复。
+- `MehSafeAreaDiagnostics.snapshot()` 现在同时采集 `screen.height`、`innerHeight`、document/visual viewport、四个根绘制矩形、实际入口 meta 和状态栏回退颜色，并输出明确的 `audit.verdict`。
+- 当 document/visual viewport 与 `innerHeight` 一致、`visualViewport.offsetTop = 0`、所有 DOM 根层覆盖当前视口，但 `screen.height > innerHeight` 时，结论为 `webview-excludes-screen-region`：缺失区域位于 DOM/WebView 外，CSS 不应继续补偿。
+- 该判定对应 [WebKit 301994](https://bugs.webkit.org/show_bug.cgi?id=301994) 的最新真机复现：iOS 26.5.2 Home Screen standalone 中 `screen.height = 874`、其余视口高度为 `812`、`offsetTop = 0`，62px 位于 Web 层之外。
+- 当任一 DOM 根层的 `getBoundingClientRect().top > 2px` 时，结论为 `dom-internal-gap`；只有此结论才进入 CSS 内部布局修复。
+- 其他关键结论包括 `not-standalone`、`metadata-mismatch`、`dom-fills-allocated-viewport` 和 `inconclusive`，避免仅凭截图猜测归因。
+- Service Worker 诊断会读取活动 worker 的真实版本、所有 `meh-shell-*` 中的入口 HTML，并用专用 no-store URL 获取网络入口；`consistency.verdict` 可直接指出 `stale-html-or-worker`、`metadata-mismatch`、`network-unavailable` 或 `consistent`。
+- `theme-color`、`--surface`、`html` 和 `body` 的实色回退会做归一化对比。即使 iOS 宿主区域不可由 DOM 绘制，也不会因为透明或不一致的网页回退色额外产生白色分割带。
+- 本轮静态检查和 Chromium 模拟只验证判定逻辑、缓存链路与 DOM 几何；`webview-excludes-screen-region` 是否命中仍以真实 iPhone 主屏幕 standalone 的 r25 数据为准。
 
 ## r17 根画布唯一背景（等待重新安装后的真实 iPhone 复验）
 

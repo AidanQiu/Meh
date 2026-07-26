@@ -808,6 +808,160 @@ function measureSafeAreaInsets() {
   };
 }
 
+function getViewportPaintGeometry() {
+  const rect = (selector) => {
+    const bounds = document.querySelector(selector)?.getBoundingClientRect();
+    return bounds ? { top: bounds.top, bottom: bounds.bottom, height: bounds.height } : null;
+  };
+
+  const htmlBounds = document.documentElement.getBoundingClientRect();
+  const bodyBounds = document.body.getBoundingClientRect();
+  return {
+    html: { top: htmlBounds.top, bottom: htmlBounds.bottom, height: htmlBounds.height },
+    body: { top: bodyBounds.top, bottom: bodyBounds.bottom, height: bodyBounds.height },
+    appRoot: rect("#app"),
+    viewportMarker: rect("#viewport-background"),
+  };
+}
+
+function normalizeCssColor(value) {
+  if (!value || !window.CSS?.supports?.("color", value)) return null;
+  const probe = document.createElement("span");
+  probe.style.color = value;
+  probe.style.display = "none";
+  document.body.appendChild(probe);
+  const normalized = getComputedStyle(probe).color;
+  probe.remove();
+  return normalized;
+}
+
+function getSystemBarColorDiagnostics() {
+  const rootStyle = getComputedStyle(document.documentElement);
+  const htmlColor = getComputedStyle(document.documentElement).backgroundColor;
+  const bodyColor = getComputedStyle(document.body).backgroundColor;
+  const themeColor = readStaticMetaContent("theme-color") || "";
+  const surfaceColor = rootStyle.getPropertyValue("--surface").trim();
+  const normalized = {
+    themeColor: normalizeCssColor(themeColor),
+    surfaceColor: normalizeCssColor(surfaceColor),
+    htmlBackgroundColor: normalizeCssColor(htmlColor),
+    bodyBackgroundColor: normalizeCssColor(bodyColor),
+  };
+
+  return {
+    themeColor,
+    surfaceColor,
+    htmlBackgroundColor: htmlColor,
+    bodyBackgroundColor: bodyColor,
+    fallbackColorsMatch: Boolean(
+      normalized.themeColor
+      && normalized.themeColor === normalized.surfaceColor
+      && normalized.themeColor === normalized.htmlBackgroundColor
+      && normalized.themeColor === normalized.bodyBackgroundColor
+    ),
+  };
+}
+
+function classifyViewportOwnership({
+  standaloneInfo,
+  metaInfo,
+  safeArea,
+  paintGeometry,
+  statusBarColors,
+}) {
+  const tolerance = 2;
+  const finite = (value) => value !== null && value !== "" && Number.isFinite(Number(value));
+  const near = (left, right) => finite(left) && finite(right) && Math.abs(Number(left) - Number(right)) <= tolerance;
+  const atViewportTop = (rect) => rect && finite(rect.top) && Number(rect.top) <= tolerance;
+  const coversViewportBottom = (rect, viewportHeight) =>
+    rect && finite(rect.bottom) && finite(viewportHeight) && Number(rect.bottom) >= Number(viewportHeight) - tolerance;
+  const isStandalone =
+    standaloneInfo.navigatorStandalone === true
+    || standaloneInfo.displayModeStandalone === true;
+  const metadata = {
+    viewportFitCover: /(?:^|,\s*)viewport-fit\s*=\s*cover(?:\s*,|$)/i.test(metaInfo.viewport || ""),
+    appleCapable: String(metaInfo.appleMobileWebAppCapable || "").toLowerCase() === "yes",
+    translucentStatusBar:
+      String(metaInfo.appleMobileWebAppStatusBarStyle || "").toLowerCase() === "black-translucent",
+  };
+  metadata.valid = metadata.viewportFitCover && metadata.appleCapable && metadata.translucentStatusBar;
+
+  const innerHeight = Number(standaloneInfo.innerHeight);
+  const screenHeight = Number(standaloneInfo.screenHeight);
+  const documentHeight = Number(standaloneInfo.documentClientHeight);
+  const visualHeight = standaloneInfo.visualViewportHeight == null
+    ? null
+    : Number(standaloneInfo.visualViewportHeight);
+  const visualOffsetTop = standaloneInfo.visualViewportOffsetTop == null
+    ? null
+    : Number(standaloneInfo.visualViewportOffsetTop);
+  const screenMinusInner = finite(screenHeight) && finite(innerHeight) ? screenHeight - innerHeight : null;
+  const documentMatchesInner = near(documentHeight, innerHeight);
+  const visualMatchesInner = visualHeight == null || near(visualHeight, innerHeight);
+  const visualStartsAtZero = visualOffsetTop == null || Math.abs(visualOffsetTop) <= tolerance;
+  const requiredRects = [
+    paintGeometry.html,
+    paintGeometry.body,
+    paintGeometry.appRoot,
+    paintGeometry.viewportMarker,
+  ].filter(Boolean);
+  const domStartsAtViewportTop =
+    requiredRects.length >= 3 && requiredRects.every((rect) => atViewportTop(rect));
+  const domCoversAllocatedViewport =
+    domStartsAtViewportTop
+    && requiredRects.every((rect) => coversViewportBottom(rect, innerHeight));
+  const domInternalTopGap = requiredRects.some((rect) => finite(rect.top) && Number(rect.top) > tolerance);
+  const allocatedViewportIsShorterThanScreen =
+    finite(screenMinusInner) && screenMinusInner > tolerance;
+
+  let verdict = "inconclusive";
+  if (!isStandalone) {
+    verdict = "not-standalone";
+  } else if (!metadata.valid) {
+    verdict = "metadata-mismatch";
+  } else if (domInternalTopGap) {
+    verdict = "dom-internal-gap";
+  } else if (
+    allocatedViewportIsShorterThanScreen
+    && documentMatchesInner
+    && visualMatchesInner
+    && visualStartsAtZero
+    && domCoversAllocatedViewport
+  ) {
+    verdict = "webview-excludes-screen-region";
+  } else if (
+    documentMatchesInner
+    && visualStartsAtZero
+    && domCoversAllocatedViewport
+  ) {
+    verdict = "dom-fills-allocated-viewport";
+  }
+
+  return {
+    verdict,
+    isStandalone,
+    metadata,
+    deltas: {
+      screenMinusInner,
+      innerMinusDocument: finite(innerHeight) && finite(documentHeight) ? innerHeight - documentHeight : null,
+      innerMinusVisual: finite(innerHeight) && finite(visualHeight) ? innerHeight - visualHeight : null,
+      visualViewportOffsetTop: visualOffsetTop,
+    },
+    evidence: {
+      documentMatchesInner,
+      visualMatchesInner,
+      visualStartsAtZero,
+      domStartsAtViewportTop,
+      domCoversAllocatedViewport,
+      domInternalTopGap,
+      allocatedViewportIsShorterThanScreen,
+      safeAreaTop: safeArea.safeTop,
+      safeAreaBottom: safeArea.safeBottom,
+      fallbackColorsMatch: statusBarColors.fallbackColorsMatch,
+    },
+  };
+}
+
 function logStandaloneStartupDiagnostics() {
   const standaloneInfo = {
     navigatorStandalone: window.navigator.standalone,
@@ -830,20 +984,47 @@ function logStandaloneStartupDiagnostics() {
     appleMobileWebAppStatusBarStyle: readStaticMetaContent("apple-mobile-web-app-status-bar-style"),
   };
   const safeArea = measureSafeAreaInsets();
-  const isStandalone = standaloneInfo.navigatorStandalone === true || standaloneInfo.displayModeStandalone === true;
+  const paintGeometry = getViewportPaintGeometry();
+  const statusBarColors = getSystemBarColorDiagnostics();
+  const audit = classifyViewportOwnership({
+    standaloneInfo,
+    metaInfo,
+    safeArea,
+    paintGeometry,
+    statusBarColors,
+  });
+  document.documentElement.dataset.viewportOwnership = audit.verdict;
 
   console.info("[Meh][SafeArea] Standalone startup diagnostics");
   console.table(standaloneInfo);
   console.table(metaInfo);
   console.table(safeArea);
-  if (!isStandalone) {
+  console.table(audit.deltas);
+  console.info(`[Meh][SafeArea] Viewport ownership: ${audit.verdict}`, {
+    audit,
+    paintGeometry,
+    statusBarColors,
+  });
+  if (audit.verdict === "not-standalone") {
     console.warn("[Meh][SafeArea] This launch is not an iOS/Home Screen standalone session; do not use it to accept safe-area behavior.");
   }
-  if (isStandalone && safeArea.safeTop === "0px" && safeArea.safeBottom === "0px") {
+  if (audit.verdict === "metadata-mismatch") {
+    console.warn("[Meh][SafeArea] The loaded document is missing required standalone metadata. Check the current index.html, Service Worker diagnostics, and reinstall the Home Screen app.");
+  }
+  if (audit.isStandalone && safeArea.safeTop === "0px" && safeArea.safeBottom === "0px") {
     console.warn("[Meh][SafeArea] Both vertical safe-area insets are zero in standalone mode. Check the installed metadata, viewport-fit=cover, cached index.html, and whether the Home Screen app was reinstalled.");
   }
+  if (audit.verdict === "dom-internal-gap") {
+    console.warn("[Meh][SafeArea] The measured DOM/background roots begin below the allocated viewport top. This is an internal layout gap and may be repaired in CSS after inspecting the reported rects.");
+  }
+  if (audit.verdict === "webview-excludes-screen-region") {
+    console.warn("[Meh][SafeArea] The DOM fills the entire allocated WebView, but the WebView is shorter than screen.height. The missing screen region is outside the DOM paintable area; do not add negative safe-area offsets.");
+  }
+  if (!statusBarColors.fallbackColorsMatch) {
+    console.warn("[Meh][SafeArea] theme-color, --surface, html, and body fallback colors do not match.", statusBarColors);
+  }
 
-  return { standaloneInfo, metaInfo, safeArea };
+  return { standaloneInfo, metaInfo, safeArea, paintGeometry, statusBarColors, audit };
 }
 
 function getSafeAreaDebugMode() {
@@ -918,9 +1099,12 @@ async function logServiceWorkerDiagnostics() {
     documentBuild: build,
     controllerUrl: navigator.serviceWorker?.controller?.scriptURL || null,
     controllerState: navigator.serviceWorker?.controller?.state || null,
+    controllerVersion: null,
     registrations: [],
     cacheKeys: [],
+    cachedIndexes: [],
     networkIndex: null,
+    consistency: null,
     cachedIndex: null,
     error: null,
   };
@@ -935,28 +1119,101 @@ async function logServiceWorkerDiagnostics() {
         waiting: registration.waiting?.scriptURL || null,
         installing: registration.installing?.scriptURL || null,
       }));
+      const controller = navigator.serviceWorker.controller;
+      if (controller) {
+        result.controllerVersion = await new Promise((resolve) => {
+          let settled = false;
+          const finish = (version = null) => {
+            if (settled) return;
+            settled = true;
+            window.clearTimeout(timeout);
+            navigator.serviceWorker.removeEventListener("message", onMessage);
+            resolve(version);
+          };
+          const onMessage = (event) => {
+            if (event.data?.type === "SW_VERSION") finish(event.data.version || null);
+          };
+          const timeout = window.setTimeout(() => finish(null), 1200);
+          navigator.serviceWorker.addEventListener("message", onMessage);
+          controller.postMessage({ type: "GET_VERSION" });
+        });
+      }
     }
     if ("caches" in window) {
       result.cacheKeys = await caches.keys();
-      const shell = await caches.open(`meh-shell-${build}`);
-      const cachedResponse = await shell.match(new URL("./index.html", location.href));
-      if (cachedResponse) result.cachedIndex = readHtmlMetaSnapshot(await cachedResponse.text());
+      for (const cacheName of result.cacheKeys.filter((name) => name.startsWith("meh-shell-"))) {
+        const shell = await caches.open(cacheName);
+        const cachedResponse = await shell.match(new URL("./index.html", location.href));
+        const snapshot = cachedResponse ? readHtmlMetaSnapshot(await cachedResponse.text()) : null;
+        result.cachedIndexes.push({ cacheName, index: snapshot });
+        if (cacheName === `meh-shell-${build}`) result.cachedIndex = snapshot;
+      }
     }
-    const networkResponse = await fetch(new URL("./index.html", location.href), { cache: "reload" });
+    const networkUrl = new URL("./index.html", location.href);
+    networkUrl.searchParams.set("__meh_pwa_diagnostic", `${build}-${Date.now()}`);
+    const networkResponse = await fetch(networkUrl, { cache: "no-store" });
     if (networkResponse.ok) result.networkIndex = readHtmlMetaSnapshot(await networkResponse.text());
   } catch (error) {
     result.error = String(error?.message || error);
   }
 
+  const requiredMetaIsValid = (snapshot) => Boolean(
+    snapshot
+    && /(?:^|,\s*)viewport-fit\s*=\s*cover(?:\s*,|$)/i.test(snapshot.viewport || "")
+    && String(snapshot.appleMobileWebAppCapable || "").toLowerCase() === "yes"
+    && String(snapshot.appleMobileWebAppStatusBarStyle || "").toLowerCase() === "black-translucent"
+    && snapshot.viewportCount === 1
+  );
+  const staleSources = [];
+  if (result.controllerVersion && result.controllerVersion !== build) {
+    staleSources.push(`controller:${result.controllerVersion}`);
+  }
+  if (result.networkIndex?.build && result.networkIndex.build !== build) {
+    staleSources.push(`network-index:${result.networkIndex.build}`);
+  }
+  if (result.cachedIndex?.build && result.cachedIndex.build !== build) {
+    staleSources.push(`current-shell-index:${result.cachedIndex.build}`);
+  }
+  for (const entry of result.cachedIndexes) {
+    if (entry.cacheName !== `meh-shell-${build}`) staleSources.push(`old-cache:${entry.cacheName}`);
+  }
+  const loadedMeta = readHtmlMetaSnapshot(document.documentElement.outerHTML);
+  const metadataSourcesValid = {
+    document: requiredMetaIsValid(loadedMeta),
+    network: result.networkIndex ? requiredMetaIsValid(result.networkIndex) : null,
+    currentShell: result.cachedIndex ? requiredMetaIsValid(result.cachedIndex) : null,
+  };
+  let verdict = "consistent";
+  if (staleSources.length) verdict = "stale-html-or-worker";
+  else if (!metadataSourcesValid.document || metadataSourcesValid.network === false || metadataSourcesValid.currentShell === false) {
+    verdict = "metadata-mismatch";
+  } else if (!result.networkIndex) {
+    verdict = "network-unavailable";
+  } else if (!navigator.serviceWorker?.controller) {
+    verdict = "uncontrolled";
+  }
+  result.consistency = {
+    verdict,
+    expectedBuild: build,
+    staleSources,
+    metadataSourcesValid,
+  };
+
   console.info("[Meh][PWA] Loaded build and Service Worker diagnostics", result);
-  if (result.networkIndex) console.table({ source: "network/SW navigation", ...result.networkIndex });
-  if (result.cachedIndex) console.table({ source: "current shell cache", ...result.cachedIndex });
+  if (result.networkIndex) console.table({ source: "network-only index", ...result.networkIndex });
+  for (const entry of result.cachedIndexes) {
+    if (entry.index) console.table({ source: entry.cacheName, ...entry.index });
+  }
+  if (verdict === "stale-html-or-worker" || verdict === "metadata-mismatch") {
+    console.warn(`[Meh][PWA] ${verdict}`, result.consistency);
+  }
   return result;
 }
 
 window.MehSafeAreaDiagnostics = {
   snapshot: logStandaloneStartupDiagnostics,
   serviceWorker: logServiceWorkerDiagnostics,
+  classify: classifyViewportOwnership,
   enableBackgroundDebug(mode = "all") {
     try { localStorage.setItem("meh-safe-area-debug", mode); } catch {}
     location.reload();
@@ -1031,8 +1288,29 @@ function logLayoutDiagnostics(reason = "manual", force = false) {
   const backgroundRect = background?.getBoundingClientRect();
   const bottomRect = bottom?.getBoundingClientRect();
   const bottomSurfaceRect = bottomSurface?.getBoundingClientRect();
+  const viewportOwnership = classifyViewportOwnership({
+    standaloneInfo: {
+      navigatorStandalone: window.navigator.standalone,
+      displayModeStandalone: Boolean(window.matchMedia?.("(display-mode: standalone)").matches),
+      innerHeight: window.innerHeight,
+      screenHeight: window.screen.height,
+      documentClientHeight: document.documentElement.clientHeight,
+      visualViewportHeight: window.visualViewport?.height ?? null,
+      visualViewportOffsetTop: window.visualViewport?.offsetTop ?? null,
+    },
+    metaInfo: {
+      viewport: readStaticMetaContent("viewport"),
+      appleMobileWebAppCapable: readStaticMetaContent("apple-mobile-web-app-capable"),
+      appleMobileWebAppStatusBarStyle: readStaticMetaContent("apple-mobile-web-app-status-bar-style"),
+    },
+    safeArea: measureSafeAreaInsets(),
+    paintGeometry: getViewportPaintGeometry(),
+    statusBarColors: getSystemBarColorDiagnostics(),
+  });
   const geometry = {
+    screenHeight: window.screen.height,
     innerHeight: window.innerHeight,
+    screenMinusInner: window.screen.height - window.innerHeight,
     documentClientHeight: document.documentElement.clientHeight,
     visualViewportHeight: window.visualViewport?.height ?? null,
     visualViewportOffsetTop: window.visualViewport?.offsetTop ?? null,
@@ -1109,6 +1387,7 @@ function logLayoutDiagnostics(reason = "manual", force = false) {
       nav: getFixedAncestorDiagnostics(bottom),
       surface: getFixedAncestorDiagnostics(bottomSurface),
     },
+    viewportOwnership,
     appHeight: variable("--app-height"),
     canvasHeight: {
       html: document.documentElement.getBoundingClientRect().height,

@@ -73,8 +73,13 @@ check(app.includes("window.MehLayoutDiagnostics") && app.includes("surfacePhysic
 check(app.includes("logStandaloneStartupDiagnostics()") && app.includes("measureSafeAreaInsets()"), "standalone/meta/safe-area startup diagnostics are missing");
 check(app.includes("navigatorStandalone: window.navigator.standalone") && app.includes("displayModeFullscreen"), "standalone viewport geometry table is incomplete");
 check(app.includes('readStaticMetaContent("viewport")') && app.includes('readStaticMetaContent("apple-mobile-web-app-capable")') && app.includes('readStaticMetaContent("apple-mobile-web-app-status-bar-style")'), "live meta diagnostics are incomplete");
+check(app.includes("classifyViewportOwnership") && app.includes('"webview-excludes-screen-region"') && app.includes('"dom-internal-gap"'), "viewport diagnostics do not distinguish WebView-external and DOM-internal gaps");
+check(app.includes("screenMinusInner") && app.includes("domCoversAllocatedViewport"), "viewport ownership evidence is incomplete");
+check(app.includes("fallbackColorsMatch") && app.includes('readStaticMetaContent("theme-color")'), "system-bar fallback color diagnostics are missing");
+check(app.includes("controllerVersion") && app.includes("cachedIndexes") && app.includes("stale-html-or-worker"), "Service Worker HTML consistency diagnostics are incomplete");
 check(app.includes('get("safeAreaDebug")') && app.includes("background: red !important") && app.includes("background: magenta !important"), "opt-in background source diagnostics are missing");
 check(worker.includes('cache: "reload"'), "navigation HTML must revalidate through the network before using the cached shell");
+check(worker.includes('"__meh_pwa_diagnostic"') && worker.includes('cache: "no-store"'), "diagnostic index request must bypass Service Worker and HTTP caches");
 
 check((activity.match(/WindowCompat\.enableEdgeToEdge\(window\)/g) || []).length === 1, "edge-to-edge must be configured exactly once");
 check(activity.indexOf("configureEdgeToEdgeWindow()") < activity.indexOf("setContentView(R.layout.activity_main)"), "edge-to-edge must be configured before the first content frame");
