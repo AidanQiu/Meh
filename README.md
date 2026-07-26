@@ -92,7 +92,7 @@ PWA 会在首次启动、从后台恢复到前台、网络恢复以及持续打�
 
 网页使用 HTML、CSS 和 JavaScript；Android 工程位于 [android/](android/)，使用 Kotlin。它通过 `WebViewAssetLoader` 加载 [android/app/src/main/assets/www/](android/app/src/main/assets/www/) 中的本地网页资源。
 
-当前 Android 配置为：`minSdk 24`、`compileSdk 36`、`targetSdk 36`、`versionCode 2`、`versionName 1.1.1`。构建需要 Android Studio、用于运行 Gradle 的 JDK 17、Android SDK 36 和项目自带的 Gradle Wrapper 8.13；Java/Kotlin 编译目标保持为 11。
+当前 Android 配置为：`minSdk 24`、`compileSdk 36`、`targetSdk 36`、`versionCode 3`、`versionName 1.1.2`。构建需要 Android Studio、用于运行 Gradle 的 JDK 17、Android SDK 36 和项目自带的 Gradle Wrapper 8.13；Java/Kotlin 编译目标保持为 11。
 
 1. 克隆仓库。
 2. 使用 Android Studio 打开 [android/](android/) 文件夹。
@@ -102,6 +102,23 @@ PWA 会在首次启动、从后台恢复到前台、网络恢复以及持续打�
 6. 通过 Build → Generate Signed Bundle / APK 生成正式 APK。
 
 请勿将 keystore、签名密码或本机 `local.properties` 提交到仓库。
+
+### 手动生成可安装的正式 APK
+
+1. 在 Android Studio 中打开仓库内的 [android/](android/) 文件夹，而不是仓库根目录。
+2. 确认 Gradle JDK 使用 Android Studio 自带的 JDK 17，并在 SDK Manager 中安装 Android SDK 36。
+3. 选择 Build → Generate Signed Bundle / APK → APK，然后点击 Next。
+4. 首次打包时创建一个 keystore；以后发布更新时必须继续使用同一个 keystore、alias 和密码，否则无法覆盖安装旧版。
+5. Build Variant 选择 `release`，签名版本同时勾选 V1 和 V2；完成后 APK 通常位于 [android/app/release/](android/app/release/)。
+6. 安装前可在 Android Studio 的 Build → Analyze APK 中确认包名为 `com.aidanqiu.meh`、`versionName` 为 `1.1.2`、`versionCode` 为 `3`。
+
+如果只想在签名前确认工程能否生成 Release 包，可在 [android/](android/) 目录运行：
+
+```powershell
+.\gradlew.bat testDebugUnitTest lintDebug assembleRelease
+```
+
+未配置签名时，命令行产物位于 `android/app/build/outputs/apk/release/`，它只用于构建验证；对外发布请使用 Android Studio 的签名向导生成正式 APK。每次 Gradle 构建都会先自动同步根目录网页资源到 APK，因此不需要手工复制 HTML、CSS 或 JavaScript。
 
 ## 网页开发
 
@@ -176,4 +193,4 @@ PWA 会在启动和恢复前台时自动检查新构建，发现更新后自动�
 
 ## 版本信息
 
-当前 Android 配置版本：`versionName 1.1.1`（`versionCode 2`）。
+当前 Android 配置版本：`versionName 1.1.2`（`versionCode 3`）。

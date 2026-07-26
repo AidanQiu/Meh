@@ -15,8 +15,9 @@ android {
         applicationId = "com.aidanqiu.meh"
         minSdk = 24
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.1.1"
+        // Must increase for every APK that should install over an older release.
+        versionCode = 3
+        versionName = "1.1.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
