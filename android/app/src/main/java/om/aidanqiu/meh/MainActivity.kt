@@ -75,11 +75,11 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("SetJavaScriptEnabled", "AddJavascriptInterface")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        configureEdgeToEdgeWindow()
         setContentView(R.layout.activity_main)
 
         rootContainer = findViewById(R.id.rootContainer)
         webView = findViewById(R.id.webView)
-        configureEdgeToEdgeWindow()
         applySystemBarColor(DEFAULT_SURFACE_COLOR, false)
         applyWindowInsets()
 
@@ -186,16 +186,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun configureEdgeToEdgeWindow() {
-        // The WebView owns the whole window. Insets are forwarded as CSS values; no native
-        // container consumes them as padding or margins.
-        WindowCompat.setDecorFitsSystemWindows(window, false)
+        // Configure edge-to-edge before the first content frame. The WebView owns the whole
+        // window; insets only protect interactive web content and never shrink the native view.
+        WindowCompat.enableEdgeToEdge(window)
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             window.navigationBarDividerColor = Color.TRANSPARENT
             window.attributes = window.attributes.apply {
                 layoutInDisplayCutoutMode =
-                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                    } else {
+                        WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                    }
             }
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

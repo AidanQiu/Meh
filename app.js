@@ -2434,12 +2434,16 @@ function bindLayoutRange(input, valueNode, key) {
   input.value = appSettings[key];
   valueNode.textContent = appSettings[key];
 
-  input.addEventListener("input", () => {
+  const applyRangeValue = () => {
     appSettings[key] = Number(input.value);
     valueNode.textContent = appSettings[key];
     applyLayoutSettings();
     saveAppSettings();
-  });
+  };
+
+  input.addEventListener("input", applyRangeValue);
+  // Some iOS standalone versions only commit the native range control on release.
+  input.addEventListener("change", applyRangeValue);
 }
 
 function renderDarkModeMenu() {

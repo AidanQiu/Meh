@@ -34,12 +34,15 @@ check(html.includes('classList.add(isAndroidWebView ? "android-webview"'), "runt
 const directSafeAreaUses = [...css.matchAll(/env\(safe-area-inset-(top|right|bottom|left),\s*0px\)/g)];
 check(directSafeAreaUses.length === 4, `safe-area env() must appear only in four browser source variables, found ${directSafeAreaUses.length}`);
 check(!css.includes("constant(safe-area"), "legacy constant(safe-area...) handling must not coexist");
-check(css.includes(":root.android-webview") && css.includes("--app-safe-top: var(--native-safe-top)"), "Android must select native safe-area variables");
+check(css.includes(":root.android-webview") && css.includes("--app-safe-top: max(var(--browser-safe-top), var(--native-safe-top))"), "Android must use the larger WebView/native safe-area value");
 check(css.includes("padding-top: calc(var(--app-safe-top) + var(--top-extra))"), "top content must consume the unified top inset once");
-check(css.includes("--dock-bottom-offset: calc(var(--dock-bottom-gap) + var(--app-safe-bottom))"), "bottom dock must consume the unified bottom inset");
+check(css.includes("--dock-safe-lift: max(0px, calc(var(--app-safe-bottom) - var(--dock-bottom-gap)))"), "dock content must only consume the uncovered part of the bottom safe area");
+check(css.includes("bottom: var(--dock-bottom-gap) !important"), "dock chrome must respect the user-controlled distance from the physical screen edge");
+check(css.includes("padding: 6px 6px calc(6px + var(--dock-safe-lift)) !important"), "dock controls must remain above the system gesture area");
 check(!css.includes(".settings-sheet::after") && !css.includes(".editor-sheet::after"), "bottom sheet safe-area spacer pseudo-elements must be absent");
 check(!/--top-extra:\s*(20|24|44|47|59)px/.test(css), "fixed status-bar-sized top spacer found");
 check(css.includes("#customBgLayer {\n  position: fixed;\n  inset: 0;"), "custom background must cover the viewport behind system bars");
+check(html.includes('<div class="viewport-backdrop" aria-hidden="true"></div>') && css.includes(".viewport-backdrop {\n  position: fixed;\n  inset: 0;"), "full-window system-bar backdrop is missing");
 check(css.includes(".phone-frame") && css.includes("background: transparent !important"), "content root must reveal the full-screen background layer");
 check(app.includes("topHeight: 0"), "default non-system top spacing must be zero");
 check(app.includes('document.body.insertBefore(bgLayer, document.body.firstChild)'), "custom background must live at the visual root");
@@ -48,7 +51,9 @@ check(css.includes(":root.pwa-standalone") && css.includes("--app-height: 100vh"
 check(css.includes("background-color: var(--surface) !important") && css.includes("background-image: var(--app-background) !important"), "root canvas needs a non-transparent system fallback color behind its visual background");
 check(app.includes("window.MehLayoutDiagnostics"), "web inset diagnostics are missing");
 
-check((activity.match(/WindowCompat\.setDecorFitsSystemWindows\(window, false\)/g) || []).length === 1, "decorFitsSystemWindows=false must be configured exactly once");
+check((activity.match(/WindowCompat\.enableEdgeToEdge\(window\)/g) || []).length === 1, "edge-to-edge must be configured exactly once");
+check(activity.indexOf("configureEdgeToEdgeWindow()") < activity.indexOf("setContentView(R.layout.activity_main)"), "edge-to-edge must be configured before the first content frame");
+check(!activity.includes("WindowCompat.setDecorFitsSystemWindows"), "manual decor fitting must not compete with enableEdgeToEdge");
 check(!activity.includes("setMargins("), "WebView must not receive native inset margins");
 check(!activity.includes("view.setPadding(") && !activity.includes("webView.setPadding("), "WebView must not receive native inset padding");
 check(activity.includes("WindowInsetsCompat.Type.statusBars()") && activity.includes("WindowInsetsCompat.Type.navigationBars()"), "native status/navigation inset reads are missing");
@@ -87,4 +92,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log("System bar audit checks passed: one inset source per runtime, full-window WebView, transparent bars, synchronized assets.");
+console.log("System bar audit checks passed: runtime-safe inset fallback, full-window WebView, transparent bars, synchronized assets.");

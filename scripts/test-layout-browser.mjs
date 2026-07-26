@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -16,6 +16,7 @@ const candidates = process.platform === "win32"
     ? ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
     : ["/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser"];
 const browser = process.env.MEH_TEST_BROWSER || candidates.find(existsSync);
+const captureDirectory = process.env.MEH_CAPTURE_DIR || "";
 if (!browser) {
   console.error("No supported Chromium browser found; set MEH_TEST_BROWSER to run layout smoke tests.");
   process.exit(2);
@@ -69,6 +70,13 @@ async function evaluate(expression) {
   });
   if (response.exceptionDetails) throw new Error(response.exceptionDetails.text || "Browser evaluation failed");
   return response.result?.value;
+}
+
+async function captureScreenshot(name) {
+  if (!captureDirectory) return;
+  mkdirSync(captureDirectory, { recursive: true });
+  const screenshot = await send("Page.captureScreenshot", { format: "png", fromSurface: true });
+  writeFileSync(join(captureDirectory, name), Buffer.from(screenshot.data, "base64"));
 }
 
 async function waitForApp() {
@@ -137,7 +145,7 @@ try {
       finalBottom: html.getPropertyValue('--app-safe-bottom').trim(),
     };
   })()`);
-  check(base.build === "1.1.1-pwa-r8", "browser loaded the wrong build");
+  check(base.build === "1.1.1-pwa-r11", "browser loaded the wrong build");
   check(base.viewport[0] === 390, `portrait viewport width was ${base.viewport[0]}, expected 390`);
   check(base.bodyPadding.join(",") === "0px,0px", "visual body must not consume safe-area padding");
   check(base.framePadding.join(",") === "0px,0px", "visual root must not consume safe-area padding");
@@ -207,31 +215,38 @@ try {
     root.classList.add('pwa-standalone');
     root.style.setProperty('--browser-safe-top', '59px');
     root.style.setProperty('--browser-safe-bottom', '34px');
+    root.style.setProperty('--dock-bottom-gap', '0px');
     const app = getComputedStyle(document.querySelector('.app'));
     const dock = getComputedStyle(document.querySelector('.floating-dock'));
+    const indicator = getComputedStyle(document.querySelector('.dock-indicator'));
     const body = getComputedStyle(document.body);
-    return { appTop: app.paddingTop, dockBottom: dock.bottom, bodyTop: body.paddingTop, bodyBottom: body.paddingBottom, appHeight: getComputedStyle(root).getPropertyValue('--app-height').trim() };
+    return { appTop: app.paddingTop, dockBottom: dock.bottom, dockPaddingBottom: dock.paddingBottom, indicatorBottom: indicator.bottom, bodyTop: body.paddingTop, bodyBottom: body.paddingBottom, appHeight: getComputedStyle(root).getPropertyValue('--app-height').trim() };
   })()`);
   check(iosSimulation.appTop === "59px", `simulated iOS top inset was applied ${iosSimulation.appTop}, expected once as 59px`);
-  check(iosSimulation.dockBottom === "52px", `simulated iOS dock offset was ${iosSimulation.dockBottom}, expected 18px + 34px`);
+  check(iosSimulation.dockBottom === "0px", `simulated iOS dock stopped at ${iosSimulation.dockBottom} instead of reaching the configured physical edge`);
+  check(iosSimulation.dockPaddingBottom === "40px", `simulated iOS dock content padding was ${iosSimulation.dockPaddingBottom}, expected 6px + 34px`);
+  check(iosSimulation.indicatorBottom === "40px", `simulated iOS indicator entered the Home Indicator area: ${iosSimulation.indicatorBottom}`);
   check(iosSimulation.bodyTop === "0px" && iosSimulation.bodyBottom === "0px", "simulated iOS visual background was inset");
   check(iosSimulation.appHeight === "100vh", `simulated iOS standalone canvas used ${iosSimulation.appHeight}, expected 100vh`);
+  await captureScreenshot("system-bars-r11-ios-portrait.png");
 
   const androidSimulation = await evaluate(`(() => {
     const root = document.documentElement;
     root.classList.add('android-webview');
-    root.style.setProperty('--browser-safe-top', '99px');
-    root.style.setProperty('--browser-safe-bottom', '99px');
+    root.style.setProperty('--browser-safe-top', '18px');
+    root.style.setProperty('--browser-safe-bottom', '30px');
     root.style.setProperty('--native-safe-top', '24px');
     root.style.setProperty('--native-safe-bottom', '24px');
+    root.style.setProperty('--dock-bottom-gap', '0px');
     const style = getComputedStyle(root);
     const app = getComputedStyle(document.querySelector('.app'));
     const dock = getComputedStyle(document.querySelector('.floating-dock'));
-    return { finalTop: style.getPropertyValue('--app-safe-top').trim(), finalBottom: style.getPropertyValue('--app-safe-bottom').trim(), appTop: app.paddingTop, dockBottom: dock.bottom };
+    return { finalTop: style.getPropertyValue('--app-safe-top').trim(), finalBottom: style.getPropertyValue('--app-safe-bottom').trim(), appTop: app.paddingTop, dockBottom: dock.bottom, dockPaddingBottom: dock.paddingBottom };
   })()`);
-  check(androidSimulation.finalTop === "24px" && androidSimulation.finalBottom === "24px", "Android did not exclusively select native inset variables");
   check(androidSimulation.appTop === "24px", `simulated Android top inset was applied ${androidSimulation.appTop}, expected once`);
-  check(androidSimulation.dockBottom === "42px", `simulated Android dock offset was ${androidSimulation.dockBottom}, expected 18px + 24px`);
+  check(androidSimulation.dockBottom === "0px", `simulated Android dock stopped at ${androidSimulation.dockBottom} instead of reaching the configured physical edge`);
+  check(androidSimulation.dockPaddingBottom === "36px", `Android did not choose the larger WebView bottom inset: dock content padding was ${androidSimulation.dockPaddingBottom}, expected 6px + 30px`);
+  await captureScreenshot("system-bars-r11-android-portrait.png");
 
   await send("Emulation.setDeviceMetricsOverride", {
     width: 844,
@@ -246,12 +261,13 @@ try {
   check(landscape.viewport[0] === 844 && landscape.viewport[1] === 390, "landscape viewport did not update");
   check(landscape.frameWidth === 844, `coarse-pointer landscape background root width was ${landscape.frameWidth}, expected 844`);
   check(landscape.bodyPadding === "0px", "landscape visual background gained top padding");
+  await captureScreenshot("system-bars-r11-android-landscape.png");
 
   if (failures.length) {
     console.error(failures.map((failure) => `- ${failure}`).join("\n"));
     process.exitCode = 1;
   } else {
-    console.log("Chromium layout smoke tests passed: all pages/sheets, portrait/landscape, and single-source iOS/Android inset simulations.");
+    console.log("Chromium layout smoke tests passed: all pages/sheets, portrait/landscape, and iOS/Android inset fallback simulations.");
   }
 } finally {
   try { socket?.close(); } catch {}

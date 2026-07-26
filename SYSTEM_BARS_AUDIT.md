@@ -1,6 +1,14 @@
 # iOS PWA / Android WebView 系统栏专项审计
 
-构建标识：`1.1.1-pwa-r8`
+构建标识：`1.1.1-pwa-r11`
+
+## r11 Android / iOS 安全区修复
+
+- 原先底栏使用 `bottom = 用户距离 + bottom safe-area`，所以滑块降到 0 后仍被系统安全区托住。r11 改为底栏外观直接使用用户设置的物理屏幕边距，底栏内部只补偿“尚未被外边距覆盖”的安全区高度；背景可以沉浸到手势条后方，同时按钮和选中指示器仍不会压住 Android 手势条或 iPhone Home Indicator。
+- Android WebView 不再只信任单一 inset 来源。CSS `env(safe-area-inset-*)` 与原生 `WindowInsets` 桥接值逐边取较大值，避免首帧或个别 WebView 版本原生值暂时为 0 时顶部状态栏失去避让。
+- `enableEdgeToEdge()` 在 `setContentView()` 前执行，透明状态栏、透明导航栏及对比度设置从首帧生效；原生容器和 WebView 仍保持全窗口尺寸。
+- 页面增加固定全视口背景层，系统状态栏、手势导航区、普通内容区和自定义壁纸使用连续的视觉画布，不再依赖 WebView 外的纯色回退来拼接。
+- iOS 原生 range 控件同时监听 `input` 与 `change`，解决部分 standalone PWA 只在松手时提交滑块值的问题。
 
 ## r8 iOS 真机截图复盘
 
