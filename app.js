@@ -498,7 +498,7 @@ const defaultAppSettings = {
   activeWallpaperId: "",
   backgroundOpacity: 0.5,
   language: detectInitialLanguage(),
-  systemBarLayoutVersion: 4,
+  systemBarLayoutVersion: 5,
 };
 // 新增加设置项与控件绑定
 const primarySwatches = ["#e8e3e8", "#c9b0f6", "#94e8bd", "#87c7f4", "#f9aaa5", "#55beb4", "#ffbd4a",  "#ffffff", "#2d7434"];
@@ -584,6 +584,8 @@ const els = {
   pageContent: document.querySelector("#pageContent"),
   topStats: document.querySelector("#topStats"),
   dock: document.querySelector(".floating-dock"),
+  dockSurface: document.querySelector(".floating-dock-surface"),
+  dockContent: document.querySelector(".floating-dock-content"),
   dockIndicator: document.querySelector("#dockIndicator"),
   dockItems: document.querySelectorAll(".dock-item"),
   settingsButton: document.querySelector("#settingsButton"),
@@ -782,17 +784,10 @@ async function requestPersistentStorage() {
 }
 
 function syncPwaAppHeight() {
-  if (!els.root.classList.contains("pwa-standalone")) return;
-  // Match the r3 behavior: use the largest real viewport measurement so iOS
-  // standalone does not shorten the canvas and then place content under the
-  // translucent status bar a second time.
-  const viewportHeight = Math.max(
-    window.innerHeight || 0,
-    document.documentElement.clientHeight || 0,
-    window.visualViewport?.height || 0
-  );
-  if (!viewportHeight) return;
-  els.root.style.setProperty("--app-height", `${Math.round(viewportHeight)}px`);
+  // CSS 100dvh owns the visual canvas in every runtime. Removing an inline
+  // value also repairs sessions that were restored from an older standalone
+  // page which measured a safe-area-reduced visualViewport in pixels.
+  els.root.style.removeProperty("--app-height");
 }
 
 function isLayoutDiagnosticsEnabled() {
@@ -821,12 +816,17 @@ function logLayoutDiagnostics(reason = "manual") {
   const app = document.querySelector(".app");
   const top = document.querySelector(".top-bar");
   const bottom = document.querySelector(".floating-dock");
+  const bottomSurface = document.querySelector(".floating-dock-surface");
   const frameStyle = frame ? getComputedStyle(frame) : null;
   const appStyle = app ? getComputedStyle(app) : null;
   const topStyle = top ? getComputedStyle(top) : null;
   const bottomStyle = bottom ? getComputedStyle(bottom) : null;
+  const bottomSurfaceStyle = bottomSurface ? getComputedStyle(bottomSurface) : null;
+  const bottomParentStyle = bottom?.parentElement ? getComputedStyle(bottom.parentElement) : null;
   const variable = (name) => rootStyle.getPropertyValue(name).trim() || "0px";
   const build = document.querySelector('meta[name="meh-build"]')?.content || "unknown";
+  const savedSettings = safeReadStorage(APP_SETTINGS_KEY, {});
+  const bottomRect = bottom?.getBoundingClientRect();
   const payload = {
     reason,
     runtime: els.root.dataset.runtime || "unknown",
@@ -871,7 +871,19 @@ function logLayoutDiagnostics(reason = "manual") {
       topContainer: topStyle?.paddingTop || null,
       bottomContainer: bottomStyle?.paddingBottom || null,
     },
-    bottomOffset: bottomStyle?.bottom || null,
+    dockPosition: {
+      rawUserValue: appSettings.dockBottomGap,
+      savedValue: savedSettings.dockBottomGap ?? null,
+      cssVariable: variable("--dock-bottom-gap"),
+      computedBottom: bottomStyle?.bottom || null,
+      physicalViewportGap: bottomRect ? Math.round(window.innerHeight - bottomRect.bottom) : null,
+      safeAreaBottom: variable("--app-safe-bottom"),
+      positionerPaddingBottom: bottomStyle?.paddingBottom || null,
+      positionerMarginBottom: bottomStyle?.marginBottom || null,
+      parentPaddingBottom: bottomParentStyle?.paddingBottom || null,
+      parentMarginBottom: bottomParentStyle?.marginBottom || null,
+      surfacePaddingBottom: bottomSurfaceStyle?.paddingBottom || null,
+    },
     appHeight: variable("--app-height"),
     canvasHeight: {
       html: document.documentElement.getBoundingClientRect().height,
@@ -2509,27 +2521,19 @@ function applyLayoutSettings() {
   els.root.style.setProperty("--dock-thickness", `${dockThickness}px`);
   els.root.style.setProperty("--dock-side-gap", `${dockSideGap}px`);
   els.root.style.setProperty("--dock-bottom-gap", `${dockBottomGap}px`);
-  // Apply the moving edge directly as well as through the shared variable.
-  // This keeps the real range-control path authoritative even when an older
-  // WebView stylesheet survives an Android Studio incremental reinstall.
+  // The positioner owns the user's exact physical edge distance. Safe-area
+  // padding belongs to the inner surface so it protects buttons without
+  // silently increasing computed bottom.
   if (els.dock) {
     els.dock.style.setProperty("left", `max(${dockSideGap}px, var(--app-safe-left))`, "important");
     els.dock.style.setProperty("right", `max(${dockSideGap}px, var(--app-safe-right))`, "important");
-    els.dock.style.setProperty("bottom", `calc(${dockBottomGap}px + var(--app-safe-bottom))`, "important");
+    els.dock.style.setProperty("bottom", `${dockBottomGap}px`, "important");
     els.dock.style.setProperty("width", "auto", "important");
     els.dock.style.setProperty("max-width", "448px", "important");
     els.dock.style.setProperty("margin-inline", "auto", "important");
-    els.dock.style.setProperty("padding-bottom", "6px", "important");
-  }
-  if (els.dockIndicator) {
-    els.dockIndicator.style.setProperty("bottom", "6px", "important");
   }
   if (els.pageActions) {
-    els.pageActions.style.setProperty(
-      "bottom",
-      `calc(${dockBottomGap}px + var(--app-safe-bottom) + calc(var(--dock-thickness) * var(--ui-scale)) + 44px)`,
-      "important"
-    );
+    els.pageActions.style.setProperty("bottom", "var(--page-actions-bottom)", "important");
   }
 
   if (els.topHeightRange) els.topHeightRange.value = topHeight;
@@ -2545,6 +2549,7 @@ function applyLayoutSettings() {
   if (els.dockBottomGapValue) els.dockBottomGapValue.textContent = dockBottomGap;
 
   updateDockIndicator();
+  scheduleLayoutDiagnostics("layout-setting");
 }
 
 function clampNumber(value, min, max, fallback) {
@@ -3282,12 +3287,12 @@ function loadAppSettings() {
   const saved = safeReadStorage(APP_SETTINGS_KEY, {});
   const migrated = { ...saved };
   const previousLayoutVersion = Number(migrated.systemBarLayoutVersion) || 0;
-  const needsSystemBarMigration = previousLayoutVersion !== 4;
-  if (previousLayoutVersion < 4 && Number(migrated.topHeight) === 16) {
-    // v3 persisted an iOS-only default spacer on top of the real safe area.
+  const needsSystemBarMigration = previousLayoutVersion !== 5;
+  if (previousLayoutVersion < 5 && Number(migrated.topHeight) === 16) {
+    // Older builds could persist an iOS-only default spacer on top of the real safe area.
     migrated.topHeight = 0;
   }
-  migrated.systemBarLayoutVersion = 4;
+  migrated.systemBarLayoutVersion = 5;
   const normalized = normalizeAppSettings({ ...defaultAppSettings, ...migrated });
   if (needsSystemBarMigration) safeWriteStorage(APP_SETTINGS_KEY, normalized);
   return normalized;
@@ -3324,7 +3329,7 @@ function normalizeAppSettings(settings) {
     dockSideGap: clampNumber(settings.dockSideGap, 12, 64, defaultAppSettings.dockSideGap),
     dockBottomGap: clampNumber(settings.dockBottomGap, 0, 40, defaultAppSettings.dockBottomGap),
     darkMode: ["light", "dark", "auto"].includes(settings.darkMode) ? settings.darkMode : defaultAppSettings.darkMode,
-    systemBarLayoutVersion: 4,
+    systemBarLayoutVersion: 5,
   };
 }
 //==================修改结束 ===============

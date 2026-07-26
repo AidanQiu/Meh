@@ -4,7 +4,7 @@
 
 @font-face {
   font-family: "Material Symbols Rounded";
-  src: url("./fonts/material-symbols-rounded.woff2?v=1.1.1-pwa-r14") format("woff2");
+  src: url("./fonts/material-symbols-rounded.woff2?v=1.1.1-pwa-r15") format("woff2");
   font-display: block;
   font-style: normal;
   font-weight: 100 700;
@@ -39,10 +39,14 @@
   --dock-thickness: 58px;
   --dock-side-gap: 28px;
   --dock-bottom-gap: 18px;
-  --browser-safe-top: env(safe-area-inset-top, 0px);
-  --browser-safe-right: env(safe-area-inset-right, 0px);
-  --browser-safe-bottom: env(safe-area-inset-bottom, 0px);
-  --browser-safe-left: env(safe-area-inset-left, 0px);
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --browser-safe-top: var(--safe-area-top);
+  --browser-safe-right: var(--safe-area-right);
+  --browser-safe-bottom: var(--safe-area-bottom);
+  --browser-safe-left: var(--safe-area-left);
   --native-safe-top: 0px;
   --native-safe-right: 0px;
   --native-safe-bottom: 0px;
@@ -53,24 +57,29 @@
   --app-safe-left: var(--browser-safe-left);
   --dock-inline-start: max(var(--dock-side-gap), var(--app-safe-left));
   --dock-inline-end: max(var(--dock-side-gap), var(--app-safe-right));
-  /*
-   * Keep the floating pill outside the Home Indicator instead of making the
-   * safe area part of the pill's own height.
-   */
-  --dock-bottom-offset: calc(var(--dock-bottom-gap) + var(--app-safe-bottom));
-  --app-height: 100dvh;
+  /* The user setting is the dock surface's exact physical distance from the viewport edge. */
+  --dock-bottom-offset: var(--dock-bottom-gap);
+  --dock-outer-height: calc(
+    calc(var(--dock-thickness) * var(--ui-scale))
+    + 14px
+    + var(--app-safe-bottom)
+  );
+  --page-actions-bottom: calc(
+    var(--dock-bottom-offset)
+    + var(--dock-outer-height)
+    + 20px
+  );
+  --app-content-bottom-clearance: calc(
+    var(--page-actions-bottom)
+    + calc(70px * var(--ui-scale))
+  );
+  --app-height: 100vh;
 }
 
-:root.pwa-standalone {
-  /*
-   * r3 used the real standalone viewport height and direct WebKit safe-area
-   * values. app.js replaces this fallback with the measured pixel height.
-   */
-  --app-height: 100dvh;
-  --app-safe-top: env(safe-area-inset-top, 0px);
-  --app-safe-right: env(safe-area-inset-right, 0px);
-  --app-safe-bottom: env(safe-area-inset-bottom, 0px);
-  --app-safe-left: env(safe-area-inset-left, 0px);
+@supports (height: 100dvh) {
+  :root {
+    --app-height: 100dvh;
+  }
 }
 
 :root.android-webview {
@@ -102,7 +111,8 @@ body {
   -webkit-touch-callout: none; /* 禁用 iOS 的长按弹出菜单 */
   overscroll-behavior-y: none;
   /* 修改结束 */
-  height: var(--app-height);
+  width: 100%;
+  min-height: 100vh;
   min-height: var(--app-height);
   margin: 0;
   padding: 0;
@@ -169,6 +179,7 @@ p {
   z-index: 1;
   /* 修改结束 */
   width: min(100vw, 480px);
+  min-height: 100vh;
   min-height: var(--app-height);
   margin: 0 auto;
   background: transparent;
@@ -176,6 +187,7 @@ p {
   overflow: hidden;
 }
 .app {
+  min-height: 100vh;
   min-height: var(--app-height);
   padding-top: calc(var(--app-safe-top) + var(--top-extra));
 
@@ -189,7 +201,7 @@ p {
     var(--app-safe-right)
   );
 
-  padding-bottom: calc(188px * var(--ui-scale) + var(--app-safe-bottom));
+  padding-bottom: var(--app-content-bottom-clearance);
   position: relative;
   z-index: 2;
 }
@@ -1062,7 +1074,7 @@ p {
 .page-actions {
   position: fixed;
   left: 50%;
-  bottom: calc(146px * var(--ui-scale) + var(--app-safe-bottom));
+  bottom: var(--page-actions-bottom);
   z-index: 6;
   display: grid;
   width: min(calc(100vw - 56px), 396px);
@@ -1110,21 +1122,35 @@ p {
   right: var(--dock-inline-end);
   bottom: var(--dock-bottom-offset);
   z-index: 6;
-  display: grid;
   width: auto;
   max-width: 448px;
   margin-inline: auto;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 4px;
+  padding: 0;
+  pointer-events: none;
+}
+
+.floating-dock-surface {
+  position: relative;
+  width: 100%;
   border: 1px solid rgba(127, 116, 124, 0.18);
   border-radius: 999px;
   background: var(--dock-bg);
-  padding: 6px;
+  padding:
+    6px
+    6px
+    calc(6px + var(--app-safe-bottom));
   box-shadow: 0 16px 36px rgba(29, 27, 32, 0.22);
   backdrop-filter: blur(18px);
-  transform: none;
+  pointer-events: auto;
   touch-action: none;
   user-select: none;
+}
+
+.floating-dock-content {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
 }
 
 .floating-dock.is-dragging {
@@ -1157,8 +1183,8 @@ p {
 
 .dock-indicator {
   position: absolute;
-  top: 6px;
-  bottom: 6px;
+  top: 0;
+  bottom: 0;
   left: 0;
   width: var(--dock-indicator-w);
   border-radius: 999px;
@@ -2114,36 +2140,6 @@ p {
   max-height: min(calc(var(--app-height) - var(--app-safe-top) - 96px), 640px) !important;
 }
 
-/* ===== 手机端底部导航栏：再降低一点 ===== */
-.floating-dock {
-  position: absolute !important;
-  left: var(--dock-side-gap) !important;
-  right: var(--dock-side-gap) !important;
-  bottom: var(--dock-bottom-gap) !important;
-  width: auto !important;
-  transform: none !important;
-  padding: 5px !important;
-}
-
-.dock-item {
-  min-height: calc(var(--dock-thickness) * var(--ui-scale)) !important;
-  gap: 3px !important;
-}
-
-.dock-indicator {
-  top: 5px !important;
-  bottom: 5px !important;
-}
-
-.page-actions {
-  bottom: calc(
-    var(--dock-bottom-gap)
-    + calc(var(--dock-thickness) * var(--ui-scale))
-    + 44px
-  ) !important;
-}
-
-
 /* ===== 弹窗打开时禁止背景跟着滚动 ===== */
 body.sheet-open {
   overflow: hidden !important;
@@ -2441,7 +2437,7 @@ body.sheet-open {
     inset 0 -8px 18px rgba(0, 0, 0, 0.22);
 }
 
-/* Final bottom layout reset: keep the original iPhone-safe layout model. */
+/* Final viewport ownership: the background fills the viewport; content alone consumes insets. */
 html {
   min-height: 100% !important;
   height: auto !important;
@@ -2487,12 +2483,13 @@ body {
 }
 
 .app {
+  min-height: 100vh !important;
   min-height: 100dvh !important;
   min-height: var(--app-height) !important;
   height: auto !important;
   background: transparent !important;
   overflow: hidden !important;
-  padding-bottom: calc(188px * var(--ui-scale) + var(--app-safe-bottom)) !important;
+  padding-bottom: var(--app-content-bottom-clearance) !important;
 }
 
 @media (hover: none), (pointer: coarse) {
@@ -2514,10 +2511,6 @@ body {
 }
 
 @media (display-mode: standalone) {
-  :root {
-    --app-height: 100dvh;
-  }
-
   body {
     padding: 0 !important;
   }
@@ -2544,7 +2537,16 @@ body {
   margin-right: auto !important;
   margin-left: auto !important;
   transform: none !important;
-  padding: 6px !important;
+  padding: 0 !important;
+  pointer-events: none !important;
+}
+
+.floating-dock-surface {
+  padding:
+    6px
+    6px
+    calc(6px + var(--app-safe-bottom)) !important;
+  pointer-events: auto !important;
 }
 
 .dock-item {
@@ -2552,17 +2554,13 @@ body {
 }
 
 .dock-indicator {
-  top: 6px !important;
-  bottom: 6px !important;
+  top: 0 !important;
+  bottom: 0 !important;
 }
 
 .page-actions {
   position: fixed !important;
-  bottom: calc(
-    var(--dock-bottom-offset)
-    + calc(var(--dock-thickness) * var(--ui-scale))
-    + 44px
-  ) !important;
+  bottom: var(--page-actions-bottom) !important;
 }
 
 .settings-sheet,

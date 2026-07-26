@@ -1,6 +1,16 @@
 # iOS PWA / Android WebView 系统栏专项审计
 
-构建标识：`1.1.1-pwa-r14`
+构建标识：`1.1.1-pwa-r15`
+
+## r15 iOS PWA 全视口背景与底栏定位语义修复
+
+- 直接根因是 r14 同时在 CSS `--dock-bottom-offset` 和 JavaScript `applyLayoutSettings()` 中使用 `用户距离 + --app-safe-bottom`。因此设置值为 0 时，底栏 computed `bottom` 仍等于 Home Indicator inset，无法到达物理屏幕底边。
+- 底栏现拆分为 `.floating-dock` 定位器、`.floating-dock-surface` 背景和 `.floating-dock-content` 按钮内容。定位器最终公式固定为 `bottom = --dock-bottom-gap`；surface 使用 `padding-bottom = 6px + --app-safe-bottom`，背景因此覆盖到用户指定的物理边缘，按钮仍避开 Home Indicator。
+- `dockBottomGap` 的 range 最小值保持 0；`clampNumber()` 通过 `Number.isFinite()` 保留 0，没有 `value || 默认值` 覆盖。诊断日志补充原始值、存储值、CSS 变量、computed bottom、物理边距、父级 padding/margin 和 surface 内部 safe-area。
+- 四个 `env(safe-area-inset-*)` 收敛为 `--safe-area-*` 唯一来源；iOS standalone 不再复制第二组 env 声明。Android 仍逐边取 browser/native inset 的较大值，不做相加。
+- 全屏画布改由 CSS `100vh` → `100dvh` 渐进增强统一负责。启动、resize、横竖屏和 pageshow 会清除旧会话遗留的像素 `--app-height`，不再把任一可能已扣安全区的 viewport 测量写回根高度。
+- viewport 使用 `width=device-width, initial-scale=1, viewport-fit=cover`；PWA 仍为 `display: standalone` 与 `black-translucent`，未隐藏状态栏或 Home Indicator。manifest 的 orientation 从锁定 portrait 改为 `any`，让横屏左右 safe-area 验收可以真实发生。
+- Service Worker/cache/build 升级为 r15，继续使用 `skipWaiting`、`clients.claim`、`controllerchange` 单次刷新和页面/同源资源 network-first。
 
 ## r14 iOS PWA 底栏尺寸与重复留白修复
 
@@ -79,8 +89,8 @@
 - 浏览器/iOS：`--app-safe-*` 唯一来源是四个 `env(safe-area-inset-*)` 变量。
 - Android WebView：原生读取 `systemBars | displayCutout`，按 density 从物理 px 转成 CSS px，写入 `--native-safe-*`；`.android-webview` 将它与 WebView 的 `env()` 逐边取较大值，既避免重复相加，也能在其中一个来源暂时为 0 时保留安全区。
 - 顶部 inset 只由 `.app` 的内容 padding 使用一次；所有运行环境的默认额外顶部间距均为 0，用户仍可通过设置主动增加。
-- 底部背景不缩进；`.floating-dock` 通过 `bottom = 用户距离 + --app-safe-bottom` 整体避让系统手势区，安全区不再计入胶囊自身高度。`.page-actions` 和共用 sheet 使用同一个来源完成必要避让。
-- IME inset 仅记录诊断，不会保存为 bottom safe-area。WebView 使用 `adjustResize`；Android 与普通浏览器高度由 CSS viewport 单位负责，iOS standalone 使用 r3 的“最大真实 viewport”同步逻辑。
+- 底部背景不缩进；`.floating-dock` 定位器使用 `bottom = 用户距离`，安全区只进入 `.floating-dock-surface` 内部，避免抬高整个胶囊。`.page-actions` 和共用 sheet 使用同一个来源完成各自的内容避让。
+- IME inset 仅记录诊断，不会保存为 bottom safe-area。WebView 使用 `adjustResize`；Android、普通浏览器与 iOS standalone 的高度都由 CSS `100dvh` 负责。
 
 ## Android Window 最终配置
 
@@ -99,6 +109,7 @@
 - 保留 `apple-mobile-web-app-capable=yes`、`apple-mobile-web-app-status-bar-style=black-translucent`，并补齐 `mobile-web-app-capable=yes`。
 - Service Worker 对导航继续使用 network-first；入口 HTML不会被长期 cache-first 固定。
 - r8 使用新的 shell/runtime cache 名称，activate 时删除旧 `meh-*` cache，`skipWaiting + clients.claim` 保持启用。
+- r15 新增真实 Chromium/localhost Service Worker 回归：验证新 worker 进入 `activated`、主动 claim 当前页面、旧 `meh-*` cache 被清理、r15 HTML/CSS/JS shell 完整，并在模拟离线后重新加载到 r15 CSS 与全屏背景。
 
 ## 诊断入口
 
@@ -108,5 +119,5 @@
 ## 本机可验证范围
 
 - 已做静态全量关键词审计、JavaScript 语法检查、PWA 更新模拟、源码/assets 哈希一致性检查、Kotlin debug 编译和 JVM 单元测试。
-- 已用桌面 Chromium 对 390×844 竖屏和 844×390 横屏做视觉检查，并自动遍历首页四个功能页、设置/自定义背景、预设编辑和随机数输入面板；另以 59/34 CSS px 和 24/24 CSS px 分别模拟 iOS、Android inset，验证最终来源只生效一次。这仍不能替代 iOS safe-area 或 Android WindowInsets 真机验证。
+- 已用桌面 Chromium 对 390×844 竖屏和 844×390 横屏做视觉检查，并自动遍历首页四个功能页、设置/自定义背景、预设编辑和随机数输入面板；另以 59/34 CSS px 和 24/30 CSS px 分别模拟 iOS、Android inset，验证底栏 0/5/10/20px 的 computed bottom 与物理边距一一对应。这仍不能替代 iOS safe-area 或 Android WindowInsets 真机验证。
 - 未声称完成 iPhone、Android 10–15、手势/三键导航、打孔屏或 IME 真机矩阵；这些项目必须用真机或对应模拟器验证。

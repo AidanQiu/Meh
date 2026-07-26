@@ -78,7 +78,7 @@ const app = read("app.js");
 const updater = read("pwa-update.js");
 const worker = read("service-worker.js");
 const syncScript = read("scripts/sync-web-assets.ps1");
-const currentBuild = "1.1.1-pwa-r14";
+const currentBuild = "1.1.1-pwa-r15";
 const iconPath = `./icons/meh_icon.png?v=${currentBuild}`;
 const expectedIcons = ["icon_monochrome.svg", "meh_background.svg", "meh_foreground.svg", "meh_icon.png"];
 
@@ -121,6 +121,8 @@ check(existsSync(join(root, "favicon.ico")), "favicon.ico is missing from the re
 for (const manifest of ["manifest.webmanifest", "manifest-meh.webmanifest", "manifest-zh.webmanifest"]) {
   const parsed = JSON.parse(read(manifest));
   check(parsed.start_url === `./index.html?v=${currentBuild}`, `${manifest} start_url build differs`);
+  check(parsed.display === "standalone", `${manifest} must retain standalone display mode`);
+  check(parsed.orientation === "any", `${manifest} must allow portrait and landscape safe-area layouts`);
   check(Array.isArray(parsed.icons) && parsed.icons.length === 1, `${manifest} must contain exactly one icon`);
   const icon = parsed.icons?.[0];
   check(icon?.src === iconPath, `${manifest} must use only icons/meh_icon.png`);
