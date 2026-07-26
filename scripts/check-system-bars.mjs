@@ -57,8 +57,8 @@ check(app.includes('els.dock.style.setProperty("bottom", `${dockBottomGap}px`, "
 check(!app.includes("`calc(${dockBottomGap}px + var(--content-inset-bottom))`"), "JavaScript still adds an inset to the user dock offset");
 check(!css.includes(".settings-sheet::after") && !css.includes(".editor-sheet::after"), "bottom sheet safe-area spacer pseudo-elements must be absent");
 check(!/--top-extra:\s*(20|24|44|47|59)px/.test(css), "fixed status-bar-sized top spacer found");
-check(html.includes('<div id="viewport-background" aria-hidden="true">') && css.includes("#viewport-background {\n  position: fixed;\n  inset: -1px;"), "body-level full-window background is missing");
-check(css.includes("body {") && css.includes("background: transparent !important"), "body must not paint a competing safe-area background");
+check(html.includes('<div id="viewport-background" aria-hidden="true">') && /#viewport-background\s*\{[\s\S]*?inset:\s*0\s*!important;/.test(css), "transparent viewport marker must match the full layout viewport");
+check(/body\s*\{[\s\S]*?background-image:\s*var\(--app-background\)\s*!important;/.test(css), "body must mirror the root visual background for iOS canvas propagation");
 check(css.includes(".phone-frame") && css.includes("background: transparent !important"), "content root must reveal the full-screen background layer");
 check(app.includes("topHeight: 0"), "the real top safe area must not receive a second default spacer");
 check(app.includes("systemBarLayoutVersion: 6"), "layout settings migration must target the body-level fixed dock model");
@@ -68,7 +68,7 @@ check(css.includes("#viewport-background") && css.includes("background: transpar
 check(app.includes('els.root.style.setProperty("--app-wallpaper-image", wallpaperLayer)'), "custom wallpapers must update the root canvas background");
 check(app.includes('els.root.style.removeProperty("--app-height")'), "restored sessions must clear stale pixel viewport overrides");
 check(css.includes("--app-height: 100vh") && css.includes("--app-height: 100dvh"), "the full-screen canvas needs vh and dvh fallbacks");
-check(css.includes("background-color: var(--surface) !important") && css.includes("background-image: var(--app-background) !important"), "root canvas needs a non-transparent system fallback color behind its visual background");
+check((css.match(/background-image:\s*var\(--app-background\)\s*!important;/g) || []).length >= 2, "html and body must both paint the complete visual background");
 check(app.includes("window.MehLayoutDiagnostics") && app.includes("surfacePhysicalGap") && app.includes("console.table(geometry)"), "real geometry diagnostics are missing");
 check(app.includes("logStandaloneStartupDiagnostics()") && app.includes("measureSafeAreaInsets()"), "standalone/meta/safe-area startup diagnostics are missing");
 check(app.includes("navigatorStandalone: window.navigator.standalone") && app.includes("displayModeFullscreen"), "standalone viewport geometry table is incomplete");

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { extname, isAbsolute, join, relative, resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
-const build = "1.1.1-pwa-r21";
+const build = "1.1.1-pwa-r24";
 const browserCandidates = process.platform === "win32"
   ? [
       "C:/Program Files/Google/Chrome/Application/chrome.exe",
@@ -207,7 +207,7 @@ try {
     build: document.querySelector('meta[name="meh-build"]')?.content || "",
     controlled: Boolean(navigator.serviceWorker.controller),
     stylesheetLoaded: Array.from(document.styleSheets).some((sheet) => sheet.href?.includes("style.css?v=${build}")),
-    background: getComputedStyle(document.querySelector('#viewport-background')).backgroundImage,
+    background: getComputedStyle(document.documentElement).backgroundImage,
   })`);
   if (offline.build !== build || !offline.controlled || !offline.stylesheetLoaded || offline.background === "none") {
     throw new Error(`Offline reopen failed: ${JSON.stringify(offline)}`);

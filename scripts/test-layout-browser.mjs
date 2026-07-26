@@ -144,6 +144,7 @@ try {
       frameBackground: frame.backgroundColor,
       htmlBackground: html.backgroundColor,
       bodyBackground: body.backgroundColor,
+      bodyBackgroundImage: body.backgroundImage,
       inlineAppHeight: document.documentElement.style.getPropertyValue('--app-height'),
       canvasHeight: [document.body.getBoundingClientRect().height, document.querySelector('.phone-frame').getBoundingClientRect().height],
       backgroundRect: [backgroundRect.top, backgroundRect.bottom],
@@ -160,15 +161,15 @@ try {
       ],
     };
   })()`);
-  check(base.build === "1.1.1-pwa-r21", "browser loaded the wrong build");
+  check(base.build === "1.1.1-pwa-r24", "browser loaded the wrong build");
   check(base.platform === "platform-browser" && base.finalTop === "0px" && base.finalBottom === "0px", "browser fallback platform or zero-inset policy is wrong");
   check(base.viewport[0] === 390, `portrait viewport width was ${base.viewport[0]}, expected 390`);
   check(base.bodyPadding.join(",") === "0px,0px", "visual body must not consume safe-area padding");
   check(base.framePadding.join(",") === "0px,0px", "visual root must not consume safe-area padding");
   check(base.frameBackground === "rgba(0, 0, 0, 0)", "content root must remain transparent over the visual background");
-  check(base.htmlBackground !== "rgba(0, 0, 0, 0)" && base.bodyBackground === "rgba(0, 0, 0, 0)", "html must own the canvas while body remains transparent");
-  check(base.backgroundImage === "none" && base.viewportBackgroundImage !== "none", "the fixed viewport layer must be the only production background painter");
-  check(base.backgroundRect[0] <= -1 && base.backgroundRect[1] >= 845, `viewport diagnostic marker did not cover the layout viewport: ${JSON.stringify(base.backgroundRect)}`);
+  check(base.htmlBackground !== "rgba(0, 0, 0, 0)" && base.bodyBackground !== "rgba(0, 0, 0, 0)", "html and body must share a non-transparent canvas fallback");
+  check(base.backgroundImage !== "none" && base.bodyBackgroundImage !== "none" && base.viewportBackgroundImage === "none", "html and body must share the production background while the fixed marker stays transparent");
+  check(base.backgroundRect[0] === 0 && base.backgroundRect[1] === 844, `transparent viewport marker did not match the layout viewport: ${JSON.stringify(base.backgroundRect)}`);
   check(base.backgroundParentIsBody && base.dockParentIsBody, "viewport background or fixed dock is not a direct body child");
   check(base.inlineAppHeight === "", "JavaScript wrote an inline full-screen app height");
   check(base.canvasHeight.every((height) => height >= 844), `portrait visual canvas did not cover the viewport: ${base.canvasHeight.join(",")}`);
@@ -180,15 +181,16 @@ try {
     applyBackgroundImage(testWallpaper, 0.5);
     const wallpaperVariable = document.documentElement.style.getPropertyValue('--app-wallpaper-image');
     const htmlBackground = getComputedStyle(document.documentElement).backgroundImage;
+    const bodyBackground = getComputedStyle(document.body).backgroundImage;
     const viewportBackground = getComputedStyle(document.querySelector('#viewport-background')).backgroundImage;
     applyBackgroundImage('', 0.5);
-    return { snapshot, wallpaperVariable, htmlBackground, viewportBackground };
+    return { snapshot, wallpaperVariable, htmlBackground, bodyBackground, viewportBackground };
   })()`);
   check(safeAreaDiagnostics.snapshot.metaInfo.viewport === "width=device-width, initial-scale=1, viewport-fit=cover", "runtime diagnostics read the wrong viewport meta");
   check(safeAreaDiagnostics.snapshot.metaInfo.appleMobileWebAppCapable === "yes", "runtime diagnostics read the wrong standalone capability meta");
   check(safeAreaDiagnostics.snapshot.metaInfo.appleMobileWebAppStatusBarStyle === "black-translucent", "runtime diagnostics read the wrong status bar meta");
   check(safeAreaDiagnostics.wallpaperVariable.includes("cross-fade") || safeAreaDiagnostics.wallpaperVariable.includes("url("), "custom wallpaper was not assigned to the shared background variable");
-  check(safeAreaDiagnostics.htmlBackground === "none" && safeAreaDiagnostics.viewportBackground.includes("url("), "custom wallpaper did not remain exclusively on the fixed viewport layer");
+  check(safeAreaDiagnostics.htmlBackground.includes("url(") && safeAreaDiagnostics.bodyBackground.includes("url(") && safeAreaDiagnostics.viewportBackground === "none", "custom wallpaper was not shared by the html/body canvas pair");
 
   const pages = await evaluate(`(async () => {
     const results = [];
