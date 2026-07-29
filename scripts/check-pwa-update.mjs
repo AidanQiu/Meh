@@ -78,11 +78,11 @@ const app = read("app.js");
 const updater = read("pwa-update.js");
 const worker = read("service-worker.js");
 const syncScript = read("scripts/sync-web-assets.ps1");
-const currentBuild = "1.1.1-pwa-r30";
+const currentBuild = "1.1.2-pwa-r1";
 const iconPath = `./icons/meh_icon.png?v=${currentBuild}`;
 const expectedIcons = ["icon_monochrome.svg", "meh_background.svg", "meh_foreground.svg", "meh_icon.png"];
 
-check(version.version === "1.1.1", "version.json Web version must be 1.1.1");
+check(version.version === "1.1.2", "version.json Web version must be 1.1.2");
 check(version.build === currentBuild, `version.json build must be ${currentBuild}`);
 check(html.includes(`<meta name="meh-build" content="${currentBuild}"`), "index build meta differs from version.json");
 check(worker.includes(`const SW_VERSION = "${currentBuild}"`), "Service Worker version differs from version.json");
