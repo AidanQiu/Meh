@@ -14,7 +14,7 @@
 ## r27 iOS 键盘与侧滑返回后的底部画布恢复
 
 - 底部弹层不再通过 `body { position: fixed; top: -scrollY }` 锁定页面。现在只给 `html` 添加 `page-scroll-locked`，使用 overflow/overscroll 锁定；避免 iOS 在键盘动画、`popstate` 和 fixed body 解锁同时发生时留下错误的内容偏移。
-- iOS standalone 会记录键盘弹出前的最大可用视口高度到 `--viewport-paint-height`。键盘造成的临时 visual/layout viewport 缩短不会缩短 `#viewport-background`，因此恢复动画期间不会暴露透明的系统画布。
+- `#viewport-background` 使用 `position: fixed; inset: 0` 覆盖当前布局视口，`html`、`body` 与 `.phone-frame` 同时提供不透明主题底色。键盘与后台恢复只触发轻量重绘，不再写入像素高度或执行根节点恢复技巧。
 - `focusout`、visual viewport resize/scroll、侧滑返回对应的 `popstate`、`pageshow`、恢复可见和窗口变化都会触发 0/120/360/720ms 多阶段恢复；横竖屏切换会重新建立稳定高度，避免沿用旧方向尺寸。
 - 保存的滚动位置只在 visual viewport 底部重新覆盖 layout viewport 后恢复，不在键盘仍收缩视口时立即 `scrollTo`。恢复同时清除旧版可能遗留的 body fixed 内联样式，并强制背景层重新合成。
 - 布局诊断新增稳定画布高度、键盘状态、滚动锁、待恢复位置和 visual/layout viewport 是否收敛，可用于真机确认底部空白是否仍属于 WebKit 宿主区域。

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { extname, isAbsolute, join, relative, resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
-const build = "1.1.2-pwa-r3";
+const build = "1.1.2-pwa-r4";
 const browserCandidates = process.platform === "win32"
   ? [
       "C:/Program Files/Google/Chrome/Application/chrome.exe",
@@ -218,6 +218,8 @@ try {
     build: document.querySelector('meta[name="meh-build"]')?.content || "",
     controlled: Boolean(navigator.serviceWorker.controller),
     stylesheetLoaded: Array.from(document.styleSheets).some((sheet) => sheet.href?.includes("style.css?v=${build}")),
+    htmlColor: getComputedStyle(document.documentElement).backgroundColor,
+    bodyColor: getComputedStyle(document.body).backgroundColor,
     htmlBackground: getComputedStyle(document.documentElement).backgroundImage,
     bodyBackground: getComputedStyle(document.body).backgroundImage,
     viewportBackground: getComputedStyle(document.querySelector("#viewport-background")).backgroundImage,
@@ -226,8 +228,10 @@ try {
     offline.build !== build
     || !offline.controlled
     || !offline.stylesheetLoaded
-    || offline.htmlBackground !== "none"
-    || offline.bodyBackground !== "none"
+    || offline.htmlColor === "rgba(0, 0, 0, 0)"
+    || offline.bodyColor === "rgba(0, 0, 0, 0)"
+    || offline.htmlBackground === "none"
+    || offline.bodyBackground === "none"
     || offline.viewportBackground === "none"
   ) {
     throw new Error(`Offline reopen failed: ${JSON.stringify(offline)}`);

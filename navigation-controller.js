@@ -7,6 +7,16 @@
   const HISTORY_TIMEOUT_MS = 900;
   const DEBUG_KEY = "meh-navigation-debug";
   const MAX_DEBUG_ENTRIES = 1200;
+  const NAVIGATION_MODE = Object.freeze({
+    UI_STACK_ONLY: "ui-stack-only",
+    HISTORY_ADAPTER: "history-adapter",
+  });
+  const platformRuntime = window.MehPlatform?.current || "platform-browser";
+  const navigationMode = platformRuntime === window.MehPlatform?.RUNTIME?.IOS_PWA
+    || platformRuntime === window.MehPlatform?.RUNTIME?.ANDROID_APP
+    ? NAVIGATION_MODE.UI_STACK_ONLY
+    : NAVIGATION_MODE.HISTORY_ADAPTER;
+  const usesHistoryAdapter = navigationMode === NAVIGATION_MODE.HISTORY_ADAPTER;
   const sessionId = typeof globalThis.crypto?.randomUUID === "function"
     ? globalThis.crypto.randomUUID()
     : `meh-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -25,17 +35,6 @@
   let uiOperationChain = Promise.resolve();
   let requestInFlight = false;
   let backGuard = null;
-
-  const edgeBack = {
-    isPossibleEdgeBack: false,
-    edgeGestureStartedAt: 0,
-    edgeGestureCommitted: false,
-    startX: 0,
-    startY: 0,
-    lastX: 0,
-    lastY: 0,
-    clearTimer: 0,
-  };
 
   function cloneSerializable(value, fallback = {}) {
     if (value == null) return fallback;
@@ -88,6 +87,7 @@
       now: performance.now(),
       event,
       sessionId,
+      navigationMode,
       historyIndex: cursor,
       uiStack: stackSnapshot(),
       activeElement: activeElement instanceof Element
@@ -137,7 +137,7 @@
       sessionId,
       index,
       itemId,
-      snapshot: serializeStack(),
+      snapshot: usesHistoryAdapter ? serializeStack() : [],
     };
   }
 
@@ -168,9 +168,13 @@
       type: config.type,
       screen: String(config.screen || definition.screen || config.type),
       context,
-      historyMode: ["push", "replace", "none"].includes(config.historyMode)
-        ? config.historyMode
-        : definition.historyMode || "push",
+      historyMode: usesHistoryAdapter
+        ? (
+            ["push", "replace", "none"].includes(config.historyMode)
+              ? config.historyMode
+              : definition.historyMode || "push"
+          )
+        : "none",
       onBack: typeof config.onBack === "function" ? config.onBack : definition.onBack,
       canAnimate: config.canAnimate !== false,
       isClosing: false,
@@ -205,6 +209,7 @@
     return {
       mehApp: true,
       sessionId,
+      navigationMode,
       index: cursor,
       screen: screenItem?.screen || ROOT_SCREEN,
       // Compatibility only. UI truth comes from getStack(), never this value.
@@ -427,13 +432,15 @@
     await closeItem(item, { source, canAnimate: true });
     if (item.historyMode === "push" && cursor >= item.historyIndex) {
       await queueTraversal(Math.max(0, item.historyIndex - 1));
-    } else {
+    } else if (item.historyMode === "replace") {
       await queueReplaceState(cursor);
     }
     removeClosedItem(item);
-    // The target entry predates the removal. Normalize its snapshot after the
-    // traversal acknowledgment without creating another history entry.
-    await queueReplaceState(cursor);
+    if (usesHistoryAdapter) {
+      // The target entry predates the removal. Normalize its snapshot after
+      // the traversal acknowledgment without creating another entry.
+      await queueReplaceState(cursor);
+    }
     notifyRenderer({
       action: "remove",
       direction: "back",
@@ -497,7 +504,7 @@
       await callItemOpen(item, { source: "ui-open", canAnimate: item.canAnimate });
       if (item.historyMode === "push") {
         await queuePushState(item.historyIndex);
-      } else {
+      } else if (item.historyMode === "replace") {
         await queueReplaceState(cursor);
       }
       notifyRenderer({
@@ -533,7 +540,7 @@
       uiStack.push(next);
       debug("ui-stack-push", { item: serializeItem(next), replacedItemId: previous.id });
       await callItemOpen(next, { source: "replace", canAnimate: true });
-      await queueReplaceState(cursor);
+      if (usesHistoryAdapter) await queueReplaceState(cursor);
       notifyRenderer({
         action: "replace",
         direction: "none",
@@ -569,7 +576,7 @@
   function replace(screen, params = {}) {
     if (screen === ROOT_SCREEN) {
       if (!getTopItem()) {
-        queueReplaceState(0);
+        if (usesHistoryAdapter) queueReplaceState(0);
         return true;
       }
       uiOperationChain = uiOperationChain.then(async () => {
@@ -578,8 +585,8 @@
           await closeItem(item, { source: "replace-root", canAnimate: false });
           removeClosedItem(item);
         }
-        if (cursor > 0) await queueTraversal(0);
-        await queueReplaceState(0);
+        if (usesHistoryAdapter && cursor > 0) await queueTraversal(0);
+        if (usesHistoryAdapter) await queueReplaceState(0);
         notifyRenderer({ action: "replace", direction: "back", source: "replace-root" });
         emitSettled({ source: "replace-root", handled: true });
       });
@@ -629,63 +636,105 @@
     return () => settledListeners.delete(listener);
   }
 
-  function clearEdgeState(eventName = "") {
-    window.clearTimeout(edgeBack.clearTimer);
-    if (eventName) debug(eventName);
-    edgeBack.isPossibleEdgeBack = false;
-    edgeBack.edgeGestureStartedAt = 0;
-    edgeBack.edgeGestureCommitted = false;
-    edgeBack.startX = 0;
-    edgeBack.startY = 0;
-    edgeBack.lastX = 0;
-    edgeBack.lastY = 0;
-  }
+  function createIosEdgeNavigationGuard() {
+    const enabled = platformRuntime === window.MehPlatform?.RUNTIME?.IOS_PWA;
+    const listenerOptions = { capture: true, passive: false };
+    const state = {
+      enabled,
+      active: false,
+      touchId: null,
+      startX: 0,
+      startY: 0,
+      prevented: false,
+      startedAt: 0,
+    };
 
-  function bindIosEdgeBackDetection() {
-    if (!window.MehPlatform?.ios) return;
-    document.addEventListener("touchstart", (event) => {
+    function snapshot() {
+      return { ...state };
+    }
+
+    function reset(eventName = "") {
+      if (eventName) debug(eventName, snapshot());
+      state.active = false;
+      state.touchId = null;
+      state.startX = 0;
+      state.startY = 0;
+      state.prevented = false;
+      state.startedAt = 0;
+    }
+
+    function isInteractiveTarget(target) {
+      return target instanceof Element && Boolean(target.closest(
+        "input, textarea, select, button, a, [role='button'], [contenteditable], "
+        + ".picker-field, .picker-hue-range, .range-input"
+      ));
+    }
+
+    function prevent(event, eventName) {
+      if (!event.cancelable) return false;
+      event.preventDefault();
+      state.prevented = true;
+      debug(eventName, snapshot());
+      return true;
+    }
+
+    function onTouchStart(event) {
+      reset();
+      if (!enabled || event.touches.length !== 1 || isInteractiveTarget(event.target)) return;
+      const touch = event.touches[0];
+      if (touch.clientX > 28) return;
+      state.active = true;
+      state.touchId = touch.identifier;
+      state.startX = touch.clientX;
+      state.startY = touch.clientY;
+      state.startedAt = performance.now();
+      debug("ios-edge-guard-start", snapshot());
+      prevent(event, "ios-edge-guard-prevent");
+    }
+
+    function onTouchMove(event) {
+      if (!state.active) return;
       if (event.touches.length !== 1) {
-        clearEdgeState("ios-edge-cancel");
+        reset("ios-edge-guard-cancel");
         return;
       }
-      const touch = event.touches[0];
-      if (touch.clientX > 30) {
-        clearEdgeState();
+      const touch = Array.from(event.touches)
+        .find((candidate) => candidate.identifier === state.touchId);
+      if (!touch) {
+        reset("ios-edge-guard-cancel");
         return;
       }
-      edgeBack.isPossibleEdgeBack = true;
-      edgeBack.edgeGestureStartedAt = performance.now();
-      edgeBack.startX = touch.clientX;
-      edgeBack.startY = touch.clientY;
-      edgeBack.lastX = touch.clientX;
-      edgeBack.lastY = touch.clientY;
-      debug("ios-edge-start", { x: touch.clientX, y: touch.clientY });
-    }, { passive: true });
-    document.addEventListener("touchmove", (event) => {
-      if (!edgeBack.isPossibleEdgeBack || event.touches.length !== 1) return;
-      const touch = event.touches[0];
-      edgeBack.lastX = touch.clientX;
-      edgeBack.lastY = touch.clientY;
-      const dx = touch.clientX - edgeBack.startX;
-      const dy = touch.clientY - edgeBack.startY;
-      if (Math.abs(dy) > Math.abs(dx) + 12) clearEdgeState("ios-edge-cancel");
-    }, { passive: true });
-    document.addEventListener("touchend", () => {
-      if (!edgeBack.isPossibleEdgeBack) return;
-      const dx = edgeBack.lastX - edgeBack.startX;
-      const dy = edgeBack.lastY - edgeBack.startY;
-      edgeBack.edgeGestureCommitted = dx >= 24 && Math.abs(dx) > Math.abs(dy);
-      debug("ios-edge-end", { committed: edgeBack.edgeGestureCommitted, dx, dy });
-      if (!edgeBack.edgeGestureCommitted) {
-        clearEdgeState("ios-edge-cancel");
-        return;
-      }
-      edgeBack.clearTimer = window.setTimeout(() => clearEdgeState(), 450);
-    }, { passive: true });
-    document.addEventListener("touchcancel", () => clearEdgeState("ios-edge-cancel"), {
-      passive: true,
+      prevent(event, "ios-edge-guard-prevent");
+    }
+
+    function onTouchEnd() {
+      if (!state.active) return;
+      reset("ios-edge-guard-end");
+    }
+
+    function onTouchCancel() {
+      reset("ios-edge-guard-cancel");
+    }
+
+    if (enabled) {
+      document.addEventListener("touchstart", onTouchStart, listenerOptions);
+      document.addEventListener("touchmove", onTouchMove, listenerOptions);
+      document.addEventListener("touchend", onTouchEnd, listenerOptions);
+      document.addEventListener("touchcancel", onTouchCancel, listenerOptions);
+    }
+
+    return Object.freeze({
+      get enabled() {
+        return enabled;
+      },
+      reset,
+      snapshot,
+      listenerOptions: Object.freeze({ ...listenerOptions }),
     });
   }
+
+  const iosEdgeNavigationGuard = createIosEdgeNavigationGuard();
+  window.IosEdgeNavigationGuard = iosEdgeNavigationGuard;
 
   async function restoreSnapshot(snapshot, source) {
     const desired = snapshot.filter((descriptor) => (
@@ -723,9 +772,7 @@
 
   function handleExternalPopstate(state) {
     const previousCursor = cursor;
-    const possibleEdge = edgeBack.isPossibleEdgeBack || edgeBack.edgeGestureCommitted;
-    const source = possibleEdge ? "ios-edge-back" : "browser-history";
-    const canAnimate = !possibleEdge;
+    const source = "browser-history";
     cursor = state.index;
     debug("history-popstate", {
       source,
@@ -736,7 +783,7 @@
       if (state.index < previousCursor) {
         while (getTopItem() && getTopItem().historyIndex > state.index) {
           const item = getTopItem();
-          await closeItem(item, { source, canAnimate });
+          await closeItem(item, { source, canAnimate: true });
           removeClosedItem(item);
         }
       } else {
@@ -750,11 +797,28 @@
         source,
       });
       emitSettled({ source, handled: true });
-      if (possibleEdge) clearEdgeState();
     });
   }
 
   window.addEventListener("popstate", (event) => {
+    if (!usesHistoryAdapter) {
+      cursor = 0;
+      iosEdgeNavigationGuard.reset("ios-edge-guard-unexpected-popstate");
+      history.replaceState(historyState(0, null), "", sameDocumentUrl());
+      debug("history-popstate", {
+        source: "stack-only-root-normalized",
+        keptStack: true,
+      });
+      window.dispatchEvent(new CustomEvent("meh:platform-history-normalized", {
+        detail: { navigationMode, keptStack: true },
+      }));
+      emitSettled({
+        source: "platform-history-normalized",
+        handled: true,
+        keptStack: true,
+      });
+      return;
+    }
     if (!isCurrentSessionState(event.state)) {
       // Never traverse again in response to an old document session. The
       // current entry is normalized in place so it cannot become a ghost root.
@@ -773,7 +837,15 @@
   }
 
   initializeHistory();
-  bindIosEdgeBackDetection();
+  window.addEventListener("pagehide", () => iosEdgeNavigationGuard.reset(
+    "ios-edge-guard-pagehide"
+  ));
+  window.addEventListener("pageshow", () => iosEdgeNavigationGuard.reset(
+    "ios-edge-guard-pageshow"
+  ));
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) iosEdgeNavigationGuard.reset("ios-edge-guard-hidden");
+  });
 
   window.mehNavigationDebug = Object.freeze({
     export() {
@@ -801,6 +873,8 @@
     setRenderer,
     setBackGuard,
     recordDebug: debug,
+    navigationMode,
+    usesHistoryAdapter,
     get sessionId() {
       return sessionId;
     },

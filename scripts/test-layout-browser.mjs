@@ -161,15 +161,15 @@ try {
       ],
     };
   })()`);
-  check(base.build === "1.1.2-pwa-r3", "browser loaded the wrong build");
+  check(base.build === "1.1.2-pwa-r4", "browser loaded the wrong build");
   check(base.platform === "platform-browser" && base.finalTop === "0px" && base.finalBottom === "0px", "browser fallback platform or zero-inset policy is wrong");
   check(base.viewport[0] === 390, `portrait viewport width was ${base.viewport[0]}, expected 390`);
   check(base.bodyPadding.join(",") === "0px,0px", "visual body must not consume safe-area padding");
   check(base.framePadding.join(",") === "0px,0px", "visual root must not consume safe-area padding");
-  check(base.frameBackground === "rgba(0, 0, 0, 0)", "content root must remain transparent over the visual background");
-  check(base.htmlBackground === "rgba(0, 0, 0, 0)" && base.bodyBackground === "rgba(0, 0, 0, 0)", "html and body must remain transparent over the dedicated viewport background");
-  check(base.backgroundImage === "none" && base.bodyBackgroundImage === "none" && base.viewportBackgroundImage !== "none", "the dedicated viewport layer does not own the production background");
-  check(base.backgroundRect[0] === -1 && base.backgroundRect[1] === 845, `viewport background did not overscan the layout viewport: ${JSON.stringify(base.backgroundRect)}`);
+  check(base.frameBackground !== "rgba(0, 0, 0, 0)", "content root must provide an opaque fallback background");
+  check(base.htmlBackground !== "rgba(0, 0, 0, 0)" && base.bodyBackground !== "rgba(0, 0, 0, 0)", "html and body must provide opaque fallback backgrounds");
+  check(base.backgroundImage !== "none" && base.bodyBackgroundImage !== "none" && base.viewportBackgroundImage !== "none", "root background layers did not receive the production theme");
+  check(base.backgroundRect[0] === 0 && base.backgroundRect[1] === 844, `viewport background did not use fixed inset zero: ${JSON.stringify(base.backgroundRect)}`);
   check(base.backgroundParentIsBody && base.dockParentIsBody, "viewport background or fixed dock is not a direct body child");
   check(base.inlineAppHeight === "", "JavaScript wrote an inline full-screen app height");
   check(base.canvasHeight.every((height) => height >= 844), `portrait visual canvas did not cover the viewport: ${base.canvasHeight.join(",")}`);
@@ -211,7 +211,9 @@ try {
     const bodyBackground = getComputedStyle(document.body).backgroundImage;
     const viewportBackground = getComputedStyle(document.querySelector('#viewport-background')).backgroundImage;
     const wallpaperLayer = getComputedStyle(document.querySelector('#viewport-background'), '::before');
+    const frameWallpaperLayer = getComputedStyle(document.querySelector('.phone-frame'), '::before');
     const wallpaperBackground = wallpaperLayer.backgroundImage;
+    const frameWallpaperBackground = frameWallpaperLayer.backgroundImage;
     const wallpaperOpacity = wallpaperLayer.opacity;
     applyBackgroundImage('', 0.5);
     return {
@@ -222,6 +224,7 @@ try {
       bodyBackground,
       viewportBackground,
       wallpaperBackground,
+      frameWallpaperBackground,
       wallpaperOpacity,
     };
   })()`);
@@ -232,11 +235,12 @@ try {
   check(safeAreaDiagnostics.wallpaperVariable.includes("url("), "custom wallpaper was not assigned to the shared background variable");
   check(safeAreaDiagnostics.wallpaperOpacityVariable === "0.5" && safeAreaDiagnostics.wallpaperOpacity === "0.5", "custom wallpaper opacity did not reach the dedicated wallpaper layer");
   check(
-    safeAreaDiagnostics.htmlBackground === "none"
-      && safeAreaDiagnostics.bodyBackground === "none"
+    safeAreaDiagnostics.htmlBackground !== "none"
+      && safeAreaDiagnostics.bodyBackground !== "none"
       && safeAreaDiagnostics.viewportBackground !== "none"
-      && safeAreaDiagnostics.wallpaperBackground.includes("url("),
-    "custom wallpaper was not painted exclusively by the dedicated viewport wallpaper layer"
+      && safeAreaDiagnostics.wallpaperBackground.includes("url(")
+      && safeAreaDiagnostics.frameWallpaperBackground.includes("url("),
+    "custom wallpaper did not reach both the viewport and opaque content-root wallpaper layers"
   );
 
   const themeColorPolicy = await evaluate(`(() => {
@@ -736,7 +740,7 @@ try {
     const beforeAndroidBack = {
       keyboardState: window.MehKeyboardViewport.getState().state,
       keyboardActive: window.MehKeyboardViewport.isKeyboardActive(),
-      paintHeight: document.documentElement.style.getPropertyValue('--viewport-paint-height'),
+      pixelPaintHeight: document.documentElement.style.getPropertyValue('--viewport-paint-height'),
       fontSize: getComputedStyle(input).fontSize,
       bodyInlinePosition: document.body.style.position,
     };
@@ -785,7 +789,7 @@ try {
   check(
     keyboardRecovery.beforeAndroidBack.keyboardActive
       && ["keyboard-opening", "keyboard-open"].includes(keyboardRecovery.beforeAndroidBack.keyboardState)
-      && keyboardRecovery.beforeAndroidBack.paintHeight
+      && keyboardRecovery.beforeAndroidBack.pixelPaintHeight === ""
       && keyboardRecovery.beforeAndroidBack.fontSize === "16px"
       && keyboardRecovery.beforeAndroidBack.bodyInlinePosition === "",
     `iOS editable focus did not enter the keyboard state machine safely: ${JSON.stringify(keyboardRecovery)}`

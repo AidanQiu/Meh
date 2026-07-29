@@ -60,10 +60,11 @@ check(!/els\.(?:dock|pageActions)\.style\.setProperty\("(?:left|right|bottom|wid
 check(!app.includes("`calc(${dockBottomGap}px + var(--content-inset-bottom))`"), "JavaScript still adds an inset to the user dock offset");
 check(!css.includes(".settings-sheet::after") && !css.includes(".editor-sheet::after"), "bottom sheet safe-area spacer pseudo-elements must be absent");
 check(!/--top-extra:\s*(20|24|44|47|59)px/.test(css), "fixed status-bar-sized top spacer found");
-check(html.includes('<div id="viewport-background" aria-hidden="true">') && /#viewport-background\s*\{[\s\S]*?inset:\s*-1px -1px auto;[\s\S]*?height:\s*calc\(var\(--viewport-paint-height\) \+ 2px\);/.test(css), "viewport background must overscan a stable non-keyboard paint height");
-check(/html\s*\{[\s\S]*?background-color:\s*transparent;[\s\S]*?background-image:\s*none;/.test(css), "html must remain transparent instead of supplying an iOS status-bar color");
-check(/body\s*\{[\s\S]*?background-color:\s*transparent;[\s\S]*?background-image:\s*none;/.test(css), "body must reveal the dedicated viewport background");
-check(css.includes(".phone-frame") && css.includes("background: transparent"), "content root must reveal the full-screen background layer");
+check(html.includes('<div id="viewport-background" aria-hidden="true">') && /#viewport-background\s*\{[\s\S]*?position:\s*fixed;[\s\S]*?inset:\s*0;[\s\S]*?width:\s*auto;[\s\S]*?height:\s*auto;/.test(css), "viewport background must cover the current viewport with fixed inset zero");
+check(/html\s*\{[\s\S]*?background-color:\s*var\(--surface\);[\s\S]*?background-image:\s*var\(--app-background\);/.test(css), "html must provide an opaque themed root background");
+check(/body\s*\{[\s\S]*?background-color:\s*var\(--surface\);[\s\S]*?background-image:\s*var\(--app-background\);/.test(css), "body must provide an opaque themed root background");
+check(/\.phone-frame\s*\{[\s\S]*?background-color:\s*var\(--surface\);[\s\S]*?background-image:\s*var\(--app-background\);/.test(css), "content root must provide an opaque themed background");
+check(/#app\s*\{[\s\S]*?background-color:\s*var\(--surface\);/.test(css), "app root must not be transparent");
 check(app.includes("topHeight: 0"), "the real top safe area must not receive a second default spacer");
 check(app.includes("systemBarLayoutVersion: 6"), "layout settings migration must target the body-level fixed dock model");
 check(!html.includes("customBgLayer") && !css.includes("#customBgLayer"), "an internal wallpaper painter still competes with the root canvas");
@@ -77,7 +78,8 @@ check(/#viewport-background\s*\{[\s\S]*?background-color:\s*var\(--surface\);[\s
 check(app.includes('els.root.style.setProperty("--app-wallpaper-image", wallpaperLayer)'), "custom wallpapers must update the root canvas background");
 check(app.includes('els.root.style.removeProperty("--app-height")'), "restored sessions must clear stale pixel viewport overrides");
 check(css.includes("--app-height: 100vh") && css.includes("--app-height: 100dvh"), "the full-screen canvas needs vh and dvh fallbacks");
-check(css.includes("--viewport-paint-height: var(--app-height)") && app.includes('"--viewport-paint-height"'), "iOS keyboard controller needs a stable viewport paint height");
+check(!css.includes("--viewport-paint-height") && !app.includes('"--viewport-paint-height"'), "pixel viewport paint height ownership must be removed");
+check(!/style\.setProperty\(\s*"--app-height"/.test(app), "JavaScript must not write a pixel app height");
 check(css.includes("html.page-scroll-locked") && app.includes('classList.add("page-scroll-locked")'), "sheet scroll locking must use an overflow class");
 check(!app.includes('document.body.style.position = "fixed"') && !app.includes("document.body.style.top = `-"), "sheet opening must not put body into iOS fixed positioning");
 for (const state of ["stable", "keyboard-opening", "keyboard-open", "keyboard-closing", "navigation-transition", "orientation-changing", "settling"]) {
@@ -94,8 +96,11 @@ for (const method of ["pushItem", "replaceItem", "removeItem", "requestBack", "c
   check(new RegExp(`\\b${method}\\(`).test(navigation), `SPA navigation controller is missing ${method}()`);
 }
 check((navigation.match(/addEventListener\("popstate"/g) || []).length === 1, "SPA navigation must have exactly one popstate entry point");
-check(navigation.includes("history.replaceState(historyState(0") && navigation.includes("history.pushState(historyState(index)"), "SPA root and child history writes are missing");
+check(navigation.includes("history.replaceState(historyState(0") && navigation.includes("history.pushState(historyState(index)"), "normal-browser History adapter writes are missing");
 check(navigation.includes("sessionId") && navigation.includes("pendingTraversalToken") && navigation.includes("historyOperationQueue"), "session-scoped serialized History adapter is missing");
+check(navigation.includes('"ui-stack-only"') && navigation.includes('"history-adapter"') && navigation.includes("usesHistoryAdapter"), "platform navigation modes are missing");
+check(navigation.includes("window.MehPlatform?.RUNTIME?.IOS_PWA") && navigation.includes("window.MehPlatform?.RUNTIME?.ANDROID_APP"), "iOS PWA and Android App must select UI Stack-only navigation");
+check(/historyMode:\s*usesHistoryAdapter[\s\S]*?:\s*"none"/.test(navigation), "internal platforms must force every UI item to historyMode none");
 for (const type of ["settings", "preset-editor", "number-settings", "language-menu", "dark-mode-menu", "advanced-color-picker", "wheel-history", "number-history"]) {
   check(app.includes(`"${type}"`), `UI Stack registration is missing ${type}`);
 }
@@ -107,8 +112,18 @@ check(
     && /\.settings-sheet\.is-open,[\s\S]*?transform:\s*translateY\(0\)/.test(css),
   "Bottom Sheets must use vertical-only open and close transforms"
 );
-check(navigation.includes('"browser-history"') && navigation.includes('"ios-edge-back"'), "browser and iOS edge history sources are missing");
-check(navigation.includes("canAnimate = !possibleEdge") && navigation.includes('{ passive: true }'), "iOS edge back must disable duplicate UI animation without preventing the gesture");
+check(navigation.includes('"browser-history"'), "normal browser History source is missing");
+check(navigation.includes("createIosEdgeNavigationGuard") && navigation.includes("passive: false") && navigation.includes("capture: true"), "iOS edge navigation guard must use capture non-passive listeners");
+check(navigation.includes('document.addEventListener("touchcancel"') && navigation.includes("event.preventDefault()"), "iOS edge navigation guard must cancel and suppress claimed gestures");
+check(!navigation.includes('"ios-edge-back"') && !navigation.includes("possibleEdge") && !navigation.includes("history.forward("), "legacy edge-back inference or compensating forward traversal remains");
+check(!html.includes("sheet-handle") && !css.includes(".sheet-handle") && !app.includes("bindSheetHandleGestures"), "Bottom Sheet handle or drag-close implementation remains");
+check((html.match(/sheet-close-button/g) || []).length === 3, "all three Bottom Sheets must use the dedicated close button class");
+check(css.includes(".sheet-close-button") && css.includes("var(--primary-container)") && css.includes("var(--primary)") && css.includes(".sheet-close-button:focus-visible") && css.includes(".sheet-close-button:active") && css.includes(".theme-dark .sheet-close-button"), "Bottom Sheet close button states must use the accent tokens");
+check(html.indexOf('id="githubProjectLink"') < html.indexOf('id="checkUpdateButton"') && /id="checkUpdateButton"[\s\S]*?system_update_alt[\s\S]*?data-i18n="checkUpdate"/.test(html), "version actions must place GitHub above the icon-labelled update button");
+for (const label of ["界面布局", "Interface & Layout", "画面レイアウト", "Интерфейс және орналасу"]) {
+  check(app.includes(`personalization: "${label}"`), `missing personalization label: ${label}`);
+}
+check(!app.includes('personalization: "个性化"') && !app.includes('personalization: "Personalization"'), "old personalization translations remain");
 check(css.includes("@media (prefers-reduced-motion: reduce)"), "navigation transitions must respect reduced motion");
 check(app.includes("isIosPwaRuntime()") && app.includes("meta.remove()"), "iOS standalone theme-color removal is missing");
 check(html.includes('if (platformClass === "platform-ios-pwa")') && html.includes("themeMeta.remove()"), "bootstrap must remove theme-color before the first iOS PWA paint");

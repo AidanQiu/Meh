@@ -109,7 +109,7 @@ const context = vm.createContext({
   document: documentMock,
   fetch: async (url, options) => {
     versionFetch = { url, options };
-    return { ok: true, json: async () => ({ version: "1.1.2", build: "1.1.2-pwa-r3" }) };
+    return { ok: true, json: async () => ({ version: "1.1.2", build: "1.1.2-pwa-r4" }) };
   },
   indexedDB: fakeIndexedDb,
   localStorage: {
@@ -149,7 +149,7 @@ assert(reloadCalls === 0, "update reloaded while navigation or keyboard work was
 interactionSettled = true;
 windowHub.dispatchEvent({ type: "meh:navigation-settled", detail: {} });
 assert(reloadCalls === 1, "settled navigation did not release the deferred update reload");
-assert(sessionData.get("meh-sw-reloaded-for-build") === "1.1.1-pwa-r4->1.1.2-pwa-r3", "reload guard was not stored for the target build");
+assert(sessionData.get("meh-sw-reloaded-for-build") === "1.1.1-pwa-r4->1.1.2-pwa-r4", "reload guard was not stored for the target build");
 
 serviceWorkerHub.dispatchEvent({ type: "controllerchange" });
 assert(reloadCalls === 1, "a repeated controllerchange caused an extra reload");
@@ -179,7 +179,7 @@ for (const localLocation of [
     CustomEvent: class CustomEvent { constructor(type, init) { this.type = type; this.detail = init?.detail; } },
     Date,
     document: {
-      querySelector: () => ({ content: "1.1.2-pwa-r3" }),
+      querySelector: () => ({ content: "1.1.2-pwa-r4" }),
     },
     location: { ...localLocation, reload() {} },
     navigator: localNavigator,
@@ -190,4 +190,4 @@ for (const localLocation of [
   assert(localRegisterCalls === 0, `Service Worker registered for local Android context ${localLocation.protocol}//${localLocation.hostname}`);
 }
 
-console.log("PWA 1.1.1-r4 -> 1.1.2-r3 simulation passed: stalled controllerchange recovered, one reload, preserved local data, safe offline fallback, no Android-local registration.");
+console.log("PWA 1.1.1-r4 -> 1.1.2-r4 simulation passed: stalled controllerchange recovered, one reload, preserved local data, safe offline fallback, no Android-local registration.");
