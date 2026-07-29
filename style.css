@@ -4,7 +4,7 @@
 
 @font-face {
   font-family: "Material Symbols Rounded";
-  src: url("./fonts/material-symbols-rounded.woff2?v=1.1.2-pwa-r2") format("woff2");
+  src: url("./fonts/material-symbols-rounded.woff2?v=1.1.2-pwa-r3") format("woff2");
   font-display: block;
   font-style: normal;
   font-weight: 100 700;
@@ -269,17 +269,8 @@ html.page-scroll-locked body {
   overscroll-behavior: none;
 }
 
-html.viewport-recovery-active,
-html.viewport-recovery-active body {
-  overflow-y: auto;
-  overscroll-behavior: auto;
-}
-
-html.platform-ios-pwa.viewport-recovery-active,
-html.platform-ios-pwa.viewport-recovery-active body,
-html.platform-ios-pwa.viewport-recovery-active .phone-frame,
-html.platform-ios-pwa.viewport-recovery-active .app {
-  min-height: var(--viewport-recovery-height);
+#viewport-background.is-repainting {
+  will-change: transform;
 }
 
 .top-bar {
@@ -2038,6 +2029,14 @@ body.sheet-open {
 .settings-sheet textarea,
 .editor-sheet textarea {
   touch-action: manipulation;
+}
+
+:root.platform-ios-pwa .settings-sheet input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="hidden"]),
+:root.platform-ios-pwa .editor-sheet input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="hidden"]),
+:root.platform-ios-pwa .settings-sheet textarea,
+:root.platform-ios-pwa .editor-sheet textarea,
+:root.platform-ios-pwa [contenteditable="true"] {
+  font-size: 16px;
 }
 
 .picker-field,

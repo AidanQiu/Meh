@@ -40,6 +40,7 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
+import java.util.UUID
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
@@ -56,6 +57,8 @@ class MainActivity : AppCompatActivity() {
     private var updateDialog: AlertDialog? = null
     private var pageInitialized = false
     private val systemBackInFlight = AtomicBoolean(false)
+    private var pendingSystemBackToken: String? = null
+    private var systemBackTimeout: Runnable? = null
     @Volatile
     private var latestInsets = InsetsSnapshot.EMPTY
 
@@ -276,8 +279,8 @@ class MainActivity : AppCompatActivity() {
     private fun colorString(color: Int): String = String.format(Locale.US, "#%08X", color)
 
     private fun handleSystemBack() {
-        if (!::webView.isInitialized) {
-            Log.i(TAG, "System back: WebView unavailable; exiting Activity")
+        if (!::webView.isInitialized || !pageInitialized) {
+            Log.i(TAG, "System back: page unavailable or not initialized; exiting Activity")
             finish()
             return
         }
@@ -286,12 +289,27 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        Log.i(TAG, "System back received")
+        val token = UUID.randomUUID().toString()
+        pendingSystemBackToken = token
+        val timeout = Runnable {
+            if (pendingSystemBackToken != token) return@Runnable
+            pendingSystemBackToken = null
+            systemBackTimeout = null
+            systemBackInFlight.set(false)
+            Log.w(TAG, "System back navigation timed out; lock released for token=$token")
+        }
+        systemBackTimeout = timeout
+        webView.postDelayed(timeout, SYSTEM_BACK_SETTLE_TIMEOUT_MS)
+
+        Log.i(TAG, "System back received; token=$token")
         webView.evaluateJavascript(
             """
                 (() => {
                   try {
-                    return window.mehNavigation?.canGoBack() === true;
+                    return window.mehNavigation?.requestBack(
+                      "android-back",
+                      ${JSONObject.quote(token)}
+                    ) === true;
                   } catch (_) {
                     return false;
                   }
@@ -299,30 +317,16 @@ class MainActivity : AppCompatActivity() {
             """.trimIndent()
         ) { result ->
             if (!isJavascriptTrue(result)) {
+                if (pendingSystemBackToken == token) {
+                    pendingSystemBackToken = null
+                    systemBackTimeout?.let(webView::removeCallbacks)
+                    systemBackTimeout = null
+                }
                 systemBackInFlight.set(false)
                 Log.i(TAG, "System back reached SPA home; exiting Activity (result=$result)")
                 finish()
-                return@evaluateJavascript
-            }
-
-            webView.evaluateJavascript(
-                """
-                    (() => {
-                      try {
-                        return window.mehNavigation?.back("android-back") === true;
-                      } catch (_) {
-                        return false;
-                      }
-                    })()
-                """.trimIndent()
-            ) { backResult ->
-                systemBackInFlight.set(false)
-                if (isJavascriptTrue(backResult)) {
-                    Log.i(TAG, "System back delegated to the SPA navigation stack")
-                } else {
-                    Log.w(TAG, "SPA declined back after reporting a child screen; exiting Activity")
-                    finish()
-                }
+            } else {
+                Log.i(TAG, "System back accepted by the SPA; awaiting settled callback")
             }
         }
     }
@@ -355,6 +359,22 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun setSystemBarColor(color: String, darkBackground: Boolean) {
             runOnUiThread { applySystemBarColor(color, darkBackground) }
+        }
+
+        @JavascriptInterface
+        fun onNavigationSettled(token: String, handled: Boolean) {
+            runOnUiThread {
+                if (pendingSystemBackToken != token) {
+                    Log.w(TAG, "Ignored stale navigation-settled callback for token=$token")
+                    return@runOnUiThread
+                }
+                pendingSystemBackToken = null
+                systemBackTimeout?.let(webView::removeCallbacks)
+                systemBackTimeout = null
+                systemBackInFlight.set(false)
+                Log.i(TAG, "System back navigation settled; token=$token handled=$handled")
+                if (!handled) finish()
+            }
         }
     }
 
@@ -630,6 +650,7 @@ class MainActivity : AppCompatActivity() {
         private const val NETWORK_READ_TIMEOUT_MS = 10_000
         private const val MAX_RELEASE_NOTES_LENGTH = 4_000
         private const val MAX_WALLPAPERS = 16
+        private const val SYSTEM_BACK_SETTLE_TIMEOUT_MS = 2_500L
         private val promptedVersions = mutableSetOf<String>()
     }
 }

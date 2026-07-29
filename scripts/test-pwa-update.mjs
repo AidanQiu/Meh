@@ -30,6 +30,7 @@ let reloadCalls = 0;
 let registerArgs = null;
 let versionFetch = null;
 let skipWaitingMessages = 0;
+let interactionSettled = false;
 
 windowHub.addEventListener("meh:pwa-update-status", (event) => statuses.push(event.detail.status));
 windowHub.setInterval = () => 1;
@@ -38,6 +39,18 @@ windowHub.setTimeout = (callback) => {
   return fallbackReloads.length;
 };
 windowHub.clearTimeout = () => {};
+windowHub.mehNavigation = {
+  get isAlteringHistory() { return false; },
+  get pendingTraversalToken() { return null; },
+  getTopItem() {
+    return interactionSettled ? null : { isClosing: true };
+  },
+};
+windowHub.MehKeyboardViewport = {
+  isSettled() {
+    return interactionSettled;
+  },
+};
 
 const localData = new Map([
   ["meh-wheel-presets-v1", "presets"],
@@ -96,7 +109,7 @@ const context = vm.createContext({
   document: documentMock,
   fetch: async (url, options) => {
     versionFetch = { url, options };
-    return { ok: true, json: async () => ({ version: "1.1.2", build: "1.1.2-pwa-r2" }) };
+    return { ok: true, json: async () => ({ version: "1.1.2", build: "1.1.2-pwa-r3" }) };
   },
   indexedDB: fakeIndexedDb,
   localStorage: {
@@ -132,8 +145,11 @@ assert(skipWaitingMessages >= 1, "waiting worker did not receive SKIP_WAITING");
 assert(reloadCalls === 0, "page reloaded before the controllerchange fallback");
 assert(fallbackReloads.length === 1, "missing fallback reload for a stalled controllerchange");
 fallbackReloads[0]();
-assert(reloadCalls === 1, "controllerchange did not reload exactly once");
-assert(sessionData.get("meh-sw-reloaded-for-build") === "1.1.1-pwa-r4->1.1.2-pwa-r2", "reload guard was not stored for the target build");
+assert(reloadCalls === 0, "update reloaded while navigation or keyboard work was unsettled");
+interactionSettled = true;
+windowHub.dispatchEvent({ type: "meh:navigation-settled", detail: {} });
+assert(reloadCalls === 1, "settled navigation did not release the deferred update reload");
+assert(sessionData.get("meh-sw-reloaded-for-build") === "1.1.1-pwa-r4->1.1.2-pwa-r3", "reload guard was not stored for the target build");
 
 serviceWorkerHub.dispatchEvent({ type: "controllerchange" });
 assert(reloadCalls === 1, "a repeated controllerchange caused an extra reload");
@@ -163,7 +179,7 @@ for (const localLocation of [
     CustomEvent: class CustomEvent { constructor(type, init) { this.type = type; this.detail = init?.detail; } },
     Date,
     document: {
-      querySelector: () => ({ content: "1.1.2-pwa-r2" }),
+      querySelector: () => ({ content: "1.1.2-pwa-r3" }),
     },
     location: { ...localLocation, reload() {} },
     navigator: localNavigator,
@@ -174,4 +190,4 @@ for (const localLocation of [
   assert(localRegisterCalls === 0, `Service Worker registered for local Android context ${localLocation.protocol}//${localLocation.hostname}`);
 }
 
-console.log("PWA 1.1.1-r4 -> 1.1.2-r2 simulation passed: stalled controllerchange recovered, one reload, preserved local data, safe offline fallback, no Android-local registration.");
+console.log("PWA 1.1.1-r4 -> 1.1.2-r3 simulation passed: stalled controllerchange recovered, one reload, preserved local data, safe offline fallback, no Android-local registration.");

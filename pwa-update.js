@@ -20,6 +20,8 @@
   let pendingRemoteBuild = "";
   let fallbackReloadTimer = 0;
   let lastStatus = "";
+  let deferredReloadBuild = "";
+  let deferredReloadBound = false;
 
   function publishStatus(status, detail = {}) {
     lastStatus = status;
@@ -35,11 +37,40 @@
     return true;
   }
 
+  function interactionsAreSettled() {
+    const navigation = window.mehNavigation;
+    const keyboard = window.MehKeyboardViewport;
+    const topItem = navigation?.getTopItem?.();
+    return navigation?.isAlteringHistory !== true
+      && !navigation?.pendingTraversalToken
+      && !topItem?.isClosing
+      && keyboard?.isSettled?.() !== false;
+  }
+
+  function bindDeferredReload() {
+    if (deferredReloadBound) return;
+    deferredReloadBound = true;
+    const retry = () => {
+      if (!deferredReloadBuild || !interactionsAreSettled()) return;
+      const build = deferredReloadBuild;
+      deferredReloadBuild = "";
+      reloadForBuild(build);
+    };
+    window.addEventListener("meh:navigation-settled", retry);
+    window.addEventListener("meh:keyboard-settled", retry);
+  }
+
   function reloadForBuild(targetBuild) {
     if (controllerChangeHandled) return false;
     const build = String(targetBuild || pendingRemoteBuild || "");
     if (build && build === CURRENT_BUILD) {
       publishStatus("latest");
+      return false;
+    }
+    if (!interactionsAreSettled()) {
+      deferredReloadBuild = build;
+      bindDeferredReload();
+      publishStatus("updating", { deferred: true, remoteBuild: build });
       return false;
     }
 

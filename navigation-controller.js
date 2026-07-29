@@ -4,204 +4,812 @@
   if (window.mehNavigation) return;
 
   const ROOT_SCREEN = "home";
-  const VALID_SCREENS = new Set([
-    ROOT_SCREEN,
-    "settings",
-    "preset-editor",
-    "number-settings",
-  ]);
-  const backHandlers = [];
+  const HISTORY_TIMEOUT_MS = 900;
+  const DEBUG_KEY = "meh-navigation-debug";
+  const MAX_DEBUG_ENTRIES = 1200;
+  const sessionId = typeof globalThis.crypto?.randomUUID === "function"
+    ? globalThis.crypto.randomUUID()
+    : `meh-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const itemTypes = new Map();
+  const uiStack = [];
+  const settledListeners = new Set();
+  const historyOperationQueue = [];
+  const debugEntries = [];
+
   let renderer = null;
-  let currentState = normalizeState(history.state);
-  let backPending = false;
-  let pendingNavigationSource = "";
+  let cursor = 0;
+  let nextItemSequence = 0;
+  let nextHistoryToken = 0;
+  let isAlteringHistory = false;
+  let pendingTraversalToken = null;
+  let uiOperationChain = Promise.resolve();
+  let requestInFlight = false;
+  let backGuard = null;
 
-  function cloneParams(params) {
-    if (!params || typeof params !== "object" || Array.isArray(params)) return {};
+  const edgeBack = {
+    isPossibleEdgeBack: false,
+    edgeGestureStartedAt: 0,
+    edgeGestureCommitted: false,
+    startX: 0,
+    startY: 0,
+    lastX: 0,
+    lastY: 0,
+    clearTimer: 0,
+  };
+
+  function cloneSerializable(value, fallback = {}) {
+    if (value == null) return fallback;
     try {
-      return JSON.parse(JSON.stringify(params));
+      return JSON.parse(JSON.stringify(value));
     } catch {
-      return {};
+      return fallback;
     }
   }
 
-  function rootState() {
-    return {
-      mehApp: true,
-      screen: ROOT_SCREEN,
-      depth: 0,
-      params: {},
-    };
+  function sameDocumentUrl() {
+    return `${location.pathname}${location.search}${location.hash}`;
   }
 
-  function normalizeState(value) {
-    if (!value || value.mehApp !== true || !VALID_SCREENS.has(value.screen)) {
-      return rootState();
-    }
-
-    const depth = Number.isInteger(value.depth) && value.depth >= 0
-      ? value.depth
-      : 0;
-    if (value.screen === ROOT_SCREEN || depth === 0) return rootState();
-
-    return {
-      mehApp: true,
-      screen: value.screen,
-      depth,
-      params: cloneParams(value.params),
-    };
-  }
-
-  function notifyRenderer(nextState, context) {
-    if (typeof renderer !== "function") return;
-    renderer(getState(), context);
-  }
-
-  function initializeHistory() {
-    const normalized = normalizeState(history.state);
-    currentState = normalized;
-    if (JSON.stringify(history.state) !== JSON.stringify(normalized)) {
-      history.replaceState(normalized, "", location.href);
-    }
-  }
-
-  function open(screen, params = {}) {
-    if (!VALID_SCREENS.has(screen) || screen === ROOT_SCREEN) return false;
-    const nextState = {
-      mehApp: true,
-      screen,
-      depth: currentState.depth + 1,
-      params: cloneParams(params),
-    };
-    if (currentState.screen === screen
-      && JSON.stringify(currentState.params) === JSON.stringify(nextState.params)) {
+  function isDebugEnabled() {
+    try {
+      return localStorage.getItem(DEBUG_KEY) === "1";
+    } catch {
       return false;
     }
-
-    const previousState = currentState;
-    currentState = nextState;
-    history.pushState(nextState, "", location.href);
-    notifyRenderer(nextState, {
-      action: "open",
-      direction: "forward",
-      source: "ui-open",
-      previousState: { ...previousState, params: cloneParams(previousState.params) },
-    });
-    return true;
   }
 
-  function runBackHandlers() {
-    for (const { handler } of backHandlers) {
-      try {
-        if (handler()) return true;
-      } catch (error) {
-        console.error("[Meh] Navigation back handler failed:", error);
-      }
+  function stackSnapshot() {
+    return uiStack.map((item) => ({
+      id: item.id,
+      type: item.type,
+      screen: item.screen,
+      context: cloneSerializable(item.context),
+      historyMode: item.historyMode,
+      historyIndex: item.historyIndex,
+      isClosing: item.isClosing,
+      isClosed: item.isClosed,
+    }));
+  }
+
+  function debug(event, detail = {}) {
+    if (!isDebugEnabled()) return;
+    const activeElement = document.activeElement;
+    const sheets = Array.from(document.querySelectorAll(
+      ".settings-sheet, .editor-sheet"
+    )).map((sheet) => ({
+      id: sheet.id,
+      ariaHidden: sheet.getAttribute("aria-hidden"),
+      transform: getComputedStyle(sheet).transform,
+    }));
+    const entry = {
+      sequence: debugEntries.length
+        ? debugEntries[debugEntries.length - 1].sequence + 1
+        : 1,
+      now: performance.now(),
+      event,
+      sessionId,
+      historyIndex: cursor,
+      uiStack: stackSnapshot(),
+      activeElement: activeElement instanceof Element
+        ? `${activeElement.tagName.toLowerCase()}${activeElement.id ? `#${activeElement.id}` : ""}`
+        : "",
+      keyboardState: window.MehKeyboardViewport?.getState?.().state || "unavailable",
+      innerHeight: window.innerHeight,
+      clientHeight: document.documentElement.clientHeight,
+      visualViewport: window.visualViewport
+        ? {
+            height: window.visualViewport.height,
+            offsetTop: window.visualViewport.offsetTop,
+          }
+        : null,
+      scrollY: window.scrollY,
+      htmlClass: document.documentElement.className,
+      bodyClass: document.body?.className || "",
+      sheets,
+      detail: cloneSerializable(detail),
+    };
+    debugEntries.push(entry);
+    if (debugEntries.length > MAX_DEBUG_ENTRIES) {
+      debugEntries.splice(0, debugEntries.length - MAX_DEBUG_ENTRIES);
     }
-    return false;
   }
 
-  function back(source = "ui-button") {
-    if (runBackHandlers()) return true;
-    if (!canGoBack()) return false;
-    if (backPending) return true;
-    backPending = true;
-    pendingNavigationSource = typeof source === "string" && source
-      ? source
-      : "ui-button";
-    history.back();
-    return true;
+  function serializeItem(item) {
+    return {
+      id: item.id,
+      type: item.type,
+      screen: item.screen,
+      context: cloneSerializable(item.context),
+      historyMode: item.historyMode,
+      historyIndex: item.historyIndex,
+    };
   }
 
-  function canGoBack() {
-    if (currentState.mehApp === true && currentState.depth > 0) return true;
-    return backHandlers.some(({ canHandle }) => {
-      try {
-        return typeof canHandle === "function" && canHandle();
-      } catch {
-        return false;
-      }
-    });
+  function serializeStack() {
+    return uiStack
+      .filter((item) => !item.isClosed)
+      .map(serializeItem);
+  }
+
+  function historyState(index = cursor, itemId = uiStack.at(-1)?.id || null) {
+    return {
+      mehApp: true,
+      sessionId,
+      index,
+      itemId,
+      snapshot: serializeStack(),
+    };
+  }
+
+  function isCurrentSessionState(value) {
+    return Boolean(
+      value
+      && value.mehApp === true
+      && value.sessionId === sessionId
+      && Number.isInteger(value.index)
+      && value.index >= 0
+      && Array.isArray(value.snapshot)
+    );
+  }
+
+  function createItem(input, restored = false) {
+    const config = typeof input === "string" ? { type: input } : { ...input };
+    const definition = itemTypes.get(config.type);
+    if (!definition) throw new Error(`Unknown navigation item type: ${config.type}`);
+    const context = cloneSerializable(config.context);
+    if (!restored && context.parentItemId == null) {
+      context.parentItemId = getTopItem()?.id || null;
+    }
+    if (typeof definition.validate === "function" && !definition.validate(context)) {
+      throw new Error(`Invalid navigation context for item type: ${config.type}`);
+    }
+    const item = {
+      id: String(config.id || `${sessionId}:${++nextItemSequence}`),
+      type: config.type,
+      screen: String(config.screen || definition.screen || config.type),
+      context,
+      historyMode: ["push", "replace", "none"].includes(config.historyMode)
+        ? config.historyMode
+        : definition.historyMode || "push",
+      onBack: typeof config.onBack === "function" ? config.onBack : definition.onBack,
+      canAnimate: config.canAnimate !== false,
+      isClosing: false,
+      isClosed: false,
+      historyIndex: Number.isInteger(config.historyIndex)
+        ? config.historyIndex
+        : cursor,
+      transitionToken: 0,
+      restored,
+    };
+    if (typeof item.onBack !== "function") {
+      throw new TypeError(`Navigation item type ${item.type} must define onBack()`);
+    }
+    return item;
+  }
+
+  function getTopItem() {
+    return uiStack.at(-1) || null;
+  }
+
+  function getStack() {
+    return uiStack.map((item) => ({
+      ...item,
+      context: cloneSerializable(item.context),
+    }));
   }
 
   function getState() {
+    const screenItem = [...uiStack]
+      .reverse()
+      .find((item) => item.screen !== ROOT_SCREEN && !item.isClosed);
     return {
       mehApp: true,
-      screen: currentState.screen,
-      depth: currentState.depth,
-      params: cloneParams(currentState.params),
+      sessionId,
+      index: cursor,
+      screen: screenItem?.screen || ROOT_SCREEN,
+      // Compatibility only. UI truth comes from getStack(), never this value.
+      depth: uiStack.filter((item) => !item.isClosed).length,
+      params: cloneSerializable(screenItem?.context),
+      itemId: getTopItem()?.id || null,
     };
   }
 
-  function replace(screen, params = {}) {
-    const candidate = normalizeState({
-      mehApp: true,
-      screen,
-      depth: screen === ROOT_SCREEN ? 0 : Math.max(1, currentState.depth),
-      params,
+  function notifyRenderer(context) {
+    if (typeof renderer === "function") {
+      renderer(getState(), context);
+    }
+  }
+
+  function emitSettled(detail = {}) {
+    const payload = {
+      ...detail,
+      sessionId,
+      historyIndex: cursor,
+      stack: stackSnapshot(),
+    };
+    window.dispatchEvent(new CustomEvent("meh:navigation-settled", { detail: payload }));
+    settledListeners.forEach((listener) => {
+      try {
+        listener(payload);
+      } catch (error) {
+        console.error("[Meh] navigation settled listener failed:", error);
+      }
     });
-    const previousState = currentState;
-    currentState = candidate;
-    history.replaceState(candidate, "", location.href);
-    notifyRenderer(candidate, {
-      action: "replace",
-      direction: candidate.depth < previousState.depth ? "back" : "none",
-      source: "replace",
-      previousState: { ...previousState, params: cloneParams(previousState.params) },
+  }
+
+  function afterAnimationFrame() {
+    return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+  }
+
+  function queueHistoryOperation(kind, run) {
+    return new Promise((resolve, reject) => {
+      historyOperationQueue.push({ kind, run, resolve, reject });
+      debug("history-operation-queued", { kind, queueLength: historyOperationQueue.length });
+      drainHistoryOperations();
+    });
+  }
+
+  async function drainHistoryOperations() {
+    if (isAlteringHistory) return;
+    const operation = historyOperationQueue.shift();
+    if (!operation) return;
+    isAlteringHistory = true;
+    debug("history-operation-start", { kind: operation.kind });
+    try {
+      await afterAnimationFrame();
+      const result = await operation.run();
+      operation.resolve(result);
+    } catch (error) {
+      operation.reject(error);
+    } finally {
+      isAlteringHistory = false;
+      if (historyOperationQueue.length) {
+        requestAnimationFrame(() => drainHistoryOperations());
+      }
+    }
+  }
+
+  function queueReplaceState(index = cursor) {
+    return queueHistoryOperation("replaceState", () => {
+      history.replaceState(historyState(index), "", sameDocumentUrl());
+      cursor = index;
+      debug("history-operation-ack", { kind: "replaceState", index });
+    });
+  }
+
+  function queuePushState(index) {
+    return queueHistoryOperation("pushState", () => {
+      history.pushState(historyState(index), "", sameDocumentUrl());
+      cursor = index;
+      debug("history-operation-ack", { kind: "pushState", index });
+    });
+  }
+
+  function acknowledgeTraversal(state, eventSource = "popstate") {
+    const pending = pendingTraversalToken;
+    if (!pending) return false;
+    if (!isCurrentSessionState(state)) return false;
+    pendingTraversalToken = null;
+    window.clearTimeout(pending.timeout);
+    cursor = state.index;
+    debug("history-operation-ack", {
+      kind: "traversal",
+      token: pending.token,
+      targetIndex: pending.targetIndex,
+      actualIndex: state.index,
+      eventSource,
+    });
+    pending.resolve(state);
+    return true;
+  }
+
+  function queueTraversal(targetIndex) {
+    return queueHistoryOperation("traversal", () => new Promise((resolve) => {
+      const delta = targetIndex - cursor;
+      if (delta === 0) {
+        resolve(history.state);
+        return;
+      }
+      const token = `${sessionId}:history:${++nextHistoryToken}`;
+      const timeout = window.setTimeout(() => {
+        if (pendingTraversalToken?.token !== token) return;
+        pendingTraversalToken = null;
+        const liveState = history.state;
+        if (isCurrentSessionState(liveState)) cursor = liveState.index;
+        debug("history-operation-ack", {
+          kind: "traversal-timeout",
+          token,
+          targetIndex,
+          actualIndex: cursor,
+        });
+        resolve(liveState);
+      }, HISTORY_TIMEOUT_MS);
+      pendingTraversalToken = { token, targetIndex, resolve, timeout };
+      history.go(delta);
+    }));
+  }
+
+  async function callItemOpen(item, options = {}) {
+    const definition = itemTypes.get(item.type);
+    if (typeof definition?.onOpen === "function") {
+      try {
+        await definition.onOpen({
+          item,
+          source: options.source || "ui-open",
+          canAnimate: options.canAnimate !== false,
+          restored: Boolean(options.restored),
+        });
+      } catch (error) {
+        console.error(`[Meh] ${item.type} onOpen failed:`, error);
+      }
+    }
+  }
+
+  async function closeItem(item, options = {}) {
+    if (!item || item.isClosed) return;
+    if (item.isClosing) {
+      await item.closePromise;
+      return;
+    }
+    item.isClosing = true;
+    item.canAnimate = options.canAnimate !== false;
+    const transitionToken = ++item.transitionToken;
+    debug("ui-stack-close-request", {
+      itemId: item.id,
+      type: item.type,
+      source: options.source,
+      canAnimate: item.canAnimate,
+    });
+    item.closePromise = Promise.resolve()
+      .then(() => item.onBack({
+        item,
+        source: options.source || "request-back",
+        canAnimate: item.canAnimate,
+        transitionToken,
+      }))
+      .catch((error) => {
+        console.error(`[Meh] ${item.type} onBack failed:`, error);
+      })
+      .then(() => {
+        if (item.transitionToken !== transitionToken) return;
+        item.isClosing = false;
+        item.isClosed = true;
+        debug("ui-stack-animation-complete", {
+          itemId: item.id,
+          type: item.type,
+          transitionToken,
+        });
+      });
+    await item.closePromise;
+  }
+
+  function removeClosedItem(item) {
+    const index = uiStack.indexOf(item);
+    if (index < 0) return false;
+    uiStack.splice(index, 1);
+    debug("ui-stack-remove", { itemId: item.id, type: item.type });
+    return true;
+  }
+
+  async function runBackGuard(source) {
+    if (!backGuard?.canHandle?.(source)) return { handled: false, proceed: true };
+    const result = await backGuard.run(source);
+    if (!result || typeof result !== "object") {
+      return { handled: Boolean(result), proceed: false };
+    }
+    return {
+      handled: result.handled !== false,
+      proceed: result.proceed === true,
+    };
+  }
+
+  function settleAndroid(token, handled) {
+    if (!token || !window.MehAndroid?.onNavigationSettled) return;
+    try {
+      window.MehAndroid.onNavigationSettled(String(token), Boolean(handled));
+      debug("android-back-settled", { token, handled });
+    } catch (error) {
+      console.warn("[Meh] Android navigation-settled callback failed:", error);
+    }
+  }
+
+  async function performActiveBack(source, nativeToken) {
+    const guardResult = await runBackGuard(source);
+    if (guardResult.handled && !guardResult.proceed) {
+      return { handled: true, keyboardOnly: true };
+    }
+
+    const item = getTopItem();
+    if (!item) {
+      return { handled: guardResult.handled };
+    }
+
+    await closeItem(item, { source, canAnimate: true });
+    if (item.historyMode === "push" && cursor >= item.historyIndex) {
+      await queueTraversal(Math.max(0, item.historyIndex - 1));
+    } else {
+      await queueReplaceState(cursor);
+    }
+    removeClosedItem(item);
+    // The target entry predates the removal. Normalize its snapshot after the
+    // traversal acknowledgment without creating another history entry.
+    await queueReplaceState(cursor);
+    notifyRenderer({
+      action: "remove",
+      direction: "back",
+      source,
+      item: serializeItem(item),
+    });
+    return { handled: true, itemId: item.id };
+  }
+
+  function requestBack(source = "ui-button", nativeToken = "") {
+    const normalizedSource = typeof source === "string" && source ? source : "ui-button";
+    const guardCanHandle = Boolean(backGuard?.canHandle?.(normalizedSource));
+    if (!getTopItem() && !guardCanHandle) return false;
+    if (requestInFlight) return true;
+    requestInFlight = true;
+    if (normalizedSource === "android-back") {
+      debug("android-back-request", { token: nativeToken });
+    }
+    uiOperationChain = uiOperationChain
+      .then(() => performActiveBack(normalizedSource, nativeToken))
+      .then((result) => {
+        requestInFlight = false;
+        emitSettled({ source: normalizedSource, ...result });
+        settleAndroid(nativeToken, result.handled);
+        return result.handled;
+      }, (error) => {
+        requestInFlight = false;
+        console.error("[Meh] Navigation back request failed:", error);
+        emitSettled({ source: normalizedSource, handled: false, error: true });
+        settleAndroid(nativeToken, false);
+        return false;
+      });
+    return true;
+  }
+
+  function back(source = "ui-button", nativeToken = "") {
+    return requestBack(source, nativeToken);
+  }
+
+  function canGoBack(source = "query") {
+    return Boolean(getTopItem() || backGuard?.canHandle?.(source));
+  }
+
+  function nextHistoryIndex() {
+    return Math.max(cursor, ...uiStack.map((item) => item.historyIndex)) + 1;
+  }
+
+  function pushItem(input) {
+    let item;
+    try {
+      item = createItem(input);
+    } catch (error) {
+      console.error("[Meh] Unable to push navigation item:", error);
+      return false;
+    }
+    if (item.historyMode === "push") item.historyIndex = nextHistoryIndex();
+    if (item.historyMode === "replace") item.historyIndex = cursor;
+    uiStack.push(item);
+    debug("ui-stack-push", { item: serializeItem(item) });
+    uiOperationChain = uiOperationChain.then(async () => {
+      await callItemOpen(item, { source: "ui-open", canAnimate: item.canAnimate });
+      if (item.historyMode === "push") {
+        await queuePushState(item.historyIndex);
+      } else {
+        await queueReplaceState(cursor);
+      }
+      notifyRenderer({
+        action: "open",
+        direction: "forward",
+        source: "ui-open",
+        item: serializeItem(item),
+      });
+      emitSettled({ source: "ui-open", handled: true, itemId: item.id });
     });
     return true;
   }
 
+  function replaceItem(input) {
+    const previous = getTopItem();
+    if (!previous) return pushItem({ ...input, historyMode: "replace" });
+    let next;
+    try {
+      next = createItem({
+        ...(typeof input === "string" ? { type: input } : input),
+        // The browser entry is replaced, but the new UI item still owns that
+        // entry and must consume it when it later closes.
+        historyMode: previous.historyMode,
+        historyIndex: previous.historyIndex,
+      });
+    } catch (error) {
+      console.error("[Meh] Unable to replace navigation item:", error);
+      return false;
+    }
+    uiOperationChain = uiOperationChain.then(async () => {
+      await closeItem(previous, { source: "replace", canAnimate: false });
+      removeClosedItem(previous);
+      uiStack.push(next);
+      debug("ui-stack-push", { item: serializeItem(next), replacedItemId: previous.id });
+      await callItemOpen(next, { source: "replace", canAnimate: true });
+      await queueReplaceState(cursor);
+      notifyRenderer({
+        action: "replace",
+        direction: "none",
+        source: "replace",
+        item: serializeItem(next),
+        previousItem: serializeItem(previous),
+      });
+      emitSettled({ source: "replace", handled: true, itemId: next.id });
+    });
+    return true;
+  }
+
+  function removeItem(itemOrId, options = {}) {
+    const item = typeof itemOrId === "string"
+      ? uiStack.find((candidate) => candidate.id === itemOrId)
+      : itemOrId;
+    if (!item || item !== getTopItem()) return false;
+    return requestBack(options.source || "remove-item");
+  }
+
+  function open(screen, params = {}) {
+    if (!screen || screen === ROOT_SCREEN) return false;
+    const top = getTopItem();
+    if (
+      top?.type === screen
+      && JSON.stringify(top.context) === JSON.stringify(cloneSerializable(params))
+    ) {
+      return false;
+    }
+    return pushItem({ type: screen, screen, context: params, historyMode: "push" });
+  }
+
+  function replace(screen, params = {}) {
+    if (screen === ROOT_SCREEN) {
+      if (!getTopItem()) {
+        queueReplaceState(0);
+        return true;
+      }
+      uiOperationChain = uiOperationChain.then(async () => {
+        while (getTopItem()) {
+          const item = getTopItem();
+          await closeItem(item, { source: "replace-root", canAnimate: false });
+          removeClosedItem(item);
+        }
+        if (cursor > 0) await queueTraversal(0);
+        await queueReplaceState(0);
+        notifyRenderer({ action: "replace", direction: "back", source: "replace-root" });
+        emitSettled({ source: "replace-root", handled: true });
+      });
+      return true;
+    }
+    return replaceItem({ type: screen, screen, context: params });
+  }
+
+  function registerItemType(type, definition) {
+    if (!type || !definition || typeof definition.onBack !== "function") {
+      throw new TypeError("registerItemType() requires a type and onBack()");
+    }
+    itemTypes.set(type, { ...definition });
+    return () => itemTypes.delete(type);
+  }
+
   function setRenderer(nextRenderer) {
-    if (typeof nextRenderer !== "function") throw new TypeError("Navigation renderer must be a function");
+    if (typeof nextRenderer !== "function") {
+      throw new TypeError("Navigation renderer must be a function");
+    }
     renderer = nextRenderer;
-    notifyRenderer(currentState, {
+    notifyRenderer({
       action: "restore",
       direction: "none",
       source: "restore",
-      previousState: null,
     });
   }
 
-  function registerBackHandler(name, handler, priority = 0, canHandle = null) {
-    if (typeof handler !== "function") throw new TypeError("Back handler must be a function");
-    const entry = { name, handler, priority, canHandle };
-    backHandlers.push(entry);
-    backHandlers.sort((left, right) => right.priority - left.priority);
-    return () => {
-      const index = backHandlers.indexOf(entry);
-      if (index >= 0) backHandlers.splice(index, 1);
-    };
+  function setBackGuard(guard) {
+    if (guard == null) {
+      backGuard = null;
+      return;
+    }
+    if (
+      typeof guard !== "object"
+      || typeof guard.canHandle !== "function"
+      || typeof guard.run !== "function"
+    ) {
+      throw new TypeError("Back guard requires canHandle() and run()");
+    }
+    backGuard = guard;
+  }
+
+  function onSettled(listener) {
+    if (typeof listener !== "function") throw new TypeError("onSettled() requires a function");
+    settledListeners.add(listener);
+    return () => settledListeners.delete(listener);
+  }
+
+  function clearEdgeState(eventName = "") {
+    window.clearTimeout(edgeBack.clearTimer);
+    if (eventName) debug(eventName);
+    edgeBack.isPossibleEdgeBack = false;
+    edgeBack.edgeGestureStartedAt = 0;
+    edgeBack.edgeGestureCommitted = false;
+    edgeBack.startX = 0;
+    edgeBack.startY = 0;
+    edgeBack.lastX = 0;
+    edgeBack.lastY = 0;
+  }
+
+  function bindIosEdgeBackDetection() {
+    if (!window.MehPlatform?.ios) return;
+    document.addEventListener("touchstart", (event) => {
+      if (event.touches.length !== 1) {
+        clearEdgeState("ios-edge-cancel");
+        return;
+      }
+      const touch = event.touches[0];
+      if (touch.clientX > 30) {
+        clearEdgeState();
+        return;
+      }
+      edgeBack.isPossibleEdgeBack = true;
+      edgeBack.edgeGestureStartedAt = performance.now();
+      edgeBack.startX = touch.clientX;
+      edgeBack.startY = touch.clientY;
+      edgeBack.lastX = touch.clientX;
+      edgeBack.lastY = touch.clientY;
+      debug("ios-edge-start", { x: touch.clientX, y: touch.clientY });
+    }, { passive: true });
+    document.addEventListener("touchmove", (event) => {
+      if (!edgeBack.isPossibleEdgeBack || event.touches.length !== 1) return;
+      const touch = event.touches[0];
+      edgeBack.lastX = touch.clientX;
+      edgeBack.lastY = touch.clientY;
+      const dx = touch.clientX - edgeBack.startX;
+      const dy = touch.clientY - edgeBack.startY;
+      if (Math.abs(dy) > Math.abs(dx) + 12) clearEdgeState("ios-edge-cancel");
+    }, { passive: true });
+    document.addEventListener("touchend", () => {
+      if (!edgeBack.isPossibleEdgeBack) return;
+      const dx = edgeBack.lastX - edgeBack.startX;
+      const dy = edgeBack.lastY - edgeBack.startY;
+      edgeBack.edgeGestureCommitted = dx >= 24 && Math.abs(dx) > Math.abs(dy);
+      debug("ios-edge-end", { committed: edgeBack.edgeGestureCommitted, dx, dy });
+      if (!edgeBack.edgeGestureCommitted) {
+        clearEdgeState("ios-edge-cancel");
+        return;
+      }
+      edgeBack.clearTimer = window.setTimeout(() => clearEdgeState(), 450);
+    }, { passive: true });
+    document.addEventListener("touchcancel", () => clearEdgeState("ios-edge-cancel"), {
+      passive: true,
+    });
+  }
+
+  async function restoreSnapshot(snapshot, source) {
+    const desired = snapshot.filter((descriptor) => (
+      descriptor
+      && typeof descriptor.id === "string"
+      && itemTypes.has(descriptor.type)
+      && Number.isInteger(descriptor.historyIndex)
+    ));
+    let shared = 0;
+    while (
+      shared < uiStack.length
+      && shared < desired.length
+      && uiStack[shared].id === desired[shared].id
+    ) {
+      shared += 1;
+    }
+    while (uiStack.length > shared) {
+      const item = getTopItem();
+      await closeItem(item, { source, canAnimate: false });
+      removeClosedItem(item);
+    }
+    for (let index = shared; index < desired.length; index += 1) {
+      let item;
+      try {
+        item = createItem(desired[index], true);
+      } catch (error) {
+        console.warn("[Meh] Ignoring invalid forward navigation snapshot:", error);
+        break;
+      }
+      uiStack.push(item);
+      debug("ui-stack-push", { item: serializeItem(item), restored: true });
+      await callItemOpen(item, { source, canAnimate: false, restored: true });
+    }
+  }
+
+  function handleExternalPopstate(state) {
+    const previousCursor = cursor;
+    const possibleEdge = edgeBack.isPossibleEdgeBack || edgeBack.edgeGestureCommitted;
+    const source = possibleEdge ? "ios-edge-back" : "browser-history";
+    const canAnimate = !possibleEdge;
+    cursor = state.index;
+    debug("history-popstate", {
+      source,
+      previousIndex: previousCursor,
+      targetIndex: state.index,
+    });
+    uiOperationChain = uiOperationChain.then(async () => {
+      if (state.index < previousCursor) {
+        while (getTopItem() && getTopItem().historyIndex > state.index) {
+          const item = getTopItem();
+          await closeItem(item, { source, canAnimate });
+          removeClosedItem(item);
+        }
+      } else {
+        await restoreSnapshot(state.snapshot, source);
+      }
+      // Snapshot validation also removes non-index-correlated stale items.
+      await restoreSnapshot(state.snapshot, source);
+      notifyRenderer({
+        action: "pop",
+        direction: state.index < previousCursor ? "back" : "forward",
+        source,
+      });
+      emitSettled({ source, handled: true });
+      if (possibleEdge) clearEdgeState();
+    });
   }
 
   window.addEventListener("popstate", (event) => {
-    const source = pendingNavigationSource || "browser-history";
-    pendingNavigationSource = "";
-    backPending = false;
-    const previousState = currentState;
-    const nextState = normalizeState(event.state);
-    if (!event.state || event.state.mehApp !== true || !VALID_SCREENS.has(event.state.screen)) {
-      history.replaceState(nextState, "", location.href);
+    if (!isCurrentSessionState(event.state)) {
+      // Never traverse again in response to an old document session. The
+      // current entry is normalized in place so it cannot become a ghost root.
+      cursor = 0;
+      history.replaceState(historyState(0, null), "", sameDocumentUrl());
+      debug("history-popstate", { source: "foreign-session-normalized" });
+      return;
     }
-    currentState = nextState;
-    notifyRenderer(nextState, {
-      action: "pop",
-      direction: nextState.depth < previousState.depth ? "back" : "forward",
-      source,
-      previousState: { ...previousState, params: cloneParams(previousState.params) },
-    });
+    if (acknowledgeTraversal(event.state)) return;
+    handleExternalPopstate(event.state);
   });
 
+  function initializeHistory() {
+    cursor = 0;
+    history.replaceState(historyState(0, null), "", sameDocumentUrl());
+  }
+
   initializeHistory();
+  bindIosEdgeBackDetection();
+
+  window.mehNavigationDebug = Object.freeze({
+    export() {
+      return cloneSerializable(debugEntries, []);
+    },
+    clear() {
+      debugEntries.length = 0;
+    },
+  });
 
   const api = Object.freeze({
+    pushItem,
+    replaceItem,
+    removeItem,
+    requestBack,
+    canGoBack,
+    getTopItem,
+    getStack,
+    registerItemType,
+    onSettled,
     open,
     back,
-    canGoBack,
-    getState,
     replace,
+    getState,
     setRenderer,
-    registerBackHandler,
+    setBackGuard,
+    recordDebug: debug,
+    get sessionId() {
+      return sessionId;
+    },
+    get isAlteringHistory() {
+      return isAlteringHistory;
+    },
+    get pendingTraversalToken() {
+      return pendingTraversalToken?.token || null;
+    },
   });
 
   window.mehNavigation = api;

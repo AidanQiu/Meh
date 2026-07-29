@@ -161,7 +161,7 @@ try {
       ],
     };
   })()`);
-  check(base.build === "1.1.2-pwa-r2", "browser loaded the wrong build");
+  check(base.build === "1.1.2-pwa-r3", "browser loaded the wrong build");
   check(base.platform === "platform-browser" && base.finalTop === "0px" && base.finalBottom === "0px", "browser fallback platform or zero-inset policy is wrong");
   check(base.viewport[0] === 390, `portrait viewport width was ${base.viewport[0]}, expected 390`);
   check(base.bodyPadding.join(",") === "0px,0px", "visual body must not consume safe-area padding");
@@ -174,6 +174,32 @@ try {
   check(base.inlineAppHeight === "", "JavaScript wrote an inline full-screen app height");
   check(base.canvasHeight.every((height) => height >= 844), `portrait visual canvas did not cover the viewport: ${base.canvasHeight.join(",")}`);
   check(base.dockIndicatorDelta.every((delta) => Math.abs(delta) <= 0.5), `dock indicator was not aligned to its active item: ${base.dockIndicatorDelta.join(",")}`);
+
+  const navigationDebug = await evaluate(`(() => {
+    localStorage.setItem('meh-navigation-debug', '1');
+    window.mehNavigationDebug.clear();
+    window.mehNavigation.recordDebug('viewport-resize', { test: true });
+    const exported = window.mehNavigationDebug.export();
+    window.mehNavigationDebug.clear();
+    localStorage.removeItem('meh-navigation-debug');
+    return {
+      count: exported.length,
+      event: exported[0]?.event,
+      sessionId: exported[0]?.sessionId,
+      hasStack: Array.isArray(exported[0]?.uiStack),
+      hasViewport: typeof exported[0]?.innerHeight === 'number',
+      cleared: window.mehNavigationDebug.export().length,
+    };
+  })()`);
+  check(
+    navigationDebug.count === 1
+      && navigationDebug.event === "viewport-resize"
+      && navigationDebug.sessionId
+      && navigationDebug.hasStack
+      && navigationDebug.hasViewport
+      && navigationDebug.cleared === 0,
+    `opt-in navigation diagnostics export/clear failed: ${JSON.stringify(navigationDebug)}`
+  );
 
   const safeAreaDiagnostics = await evaluate(`(() => {
     const snapshot = window.MehSafeAreaDiagnostics.snapshot();
@@ -332,7 +358,7 @@ try {
     open: document.querySelector('#settingsSheet').classList.contains('is-open'),
     state: window.mehNavigation?.getState(),
   }))()`);
-  check(restoredSettings.open && restoredSettings.state?.screen === "settings" && restoredSettings.state?.depth === 1, `refresh did not restore the settings route: ${JSON.stringify(restoredSettings)}`);
+  check(!restoredSettings.open && restoredSettings.state?.screen === "home" && restoredSettings.state?.depth === 0, `new document session did not normalize stale History state to root: ${JSON.stringify(restoredSettings)}`);
   const wallpaperLifecycle = await evaluate(`(async () => {
     const input = document.querySelector('#backgroundImageInput');
     const transfer = new DataTransfer();
@@ -378,27 +404,38 @@ try {
       && wallpaperLifecycle.stored === 0,
     `custom wallpaper select/delete lifecycle failed: ${JSON.stringify(wallpaperLifecycle)}`
   );
-  const historyTransition = await evaluate(`new Promise((resolve) => {
-    window.addEventListener('popstate', () => {
+  const historyTransition = await evaluate(`(async () => {
+    const settled = () => new Promise((resolve) => {
+      const unsubscribe = window.mehNavigation.onSettled((detail) => {
+        unsubscribe();
+        resolve(detail);
+      });
+    });
+    let done = settled();
+    document.querySelector('#settingsButton').click();
+    await done;
+    done = settled();
+    history.back();
+    const detail = await done;
       const sheet = document.querySelector('#settingsSheet');
       const matrix = new DOMMatrixReadOnly(getComputedStyle(sheet).transform);
-      resolve({
+      return {
         navigationClasses: Array.from(sheet.classList).filter((name) => name.startsWith('is-navigation-')),
         horizontalOffset: Math.round(matrix.m41),
         open: sheet.classList.contains('is-open'),
         ariaHidden: sheet.getAttribute('aria-hidden'),
         state: window.mehNavigation?.getState(),
-      });
-    }, { once: true });
-    history.back();
-  })`);
+        source: detail.source,
+      };
+  })()`);
   check(
     historyTransition.navigationClasses.length === 0
       && historyTransition.horizontalOffset === 0
       && !historyTransition.open
       && historyTransition.ariaHidden === "true"
       && historyTransition.state?.screen === "home"
-      && historyTransition.state?.depth === 0,
+      && historyTransition.state?.depth === 0
+      && historyTransition.source === "browser-history",
     `browser history return added a second transition or failed to restore root: ${JSON.stringify(historyTransition)}`
   );
   await evaluate(`new Promise((resolve) => setTimeout(resolve, 850))`);
@@ -419,15 +456,24 @@ try {
 
   const repeatedSheetCycles = await evaluate(`(async () => {
     const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+    const settled = () => new Promise((resolve) => {
+      const unsubscribe = window.mehNavigation.onSettled(() => {
+        unsubscribe();
+        resolve();
+      });
+    });
     const baselineScrollHeight = document.documentElement.scrollHeight;
     const cycles = [];
-    for (let index = 0; index < 10; index += 1) {
+    for (let index = 0; index < 20; index += 1) {
+      let done = settled();
       document.querySelector('#settingsButton').click();
       await wait(45);
       const sheet = document.querySelector('#settingsSheet');
       const openingMatrix = new DOMMatrixReadOnly(getComputedStyle(sheet).transform);
+      await done;
+      done = settled();
       document.querySelector('#closeSettingsButton').click();
-      await wait(360);
+      await done;
       const closingMatrix = new DOMMatrixReadOnly(getComputedStyle(sheet).transform);
       cycles.push({
         openingHorizontal: Math.round(openingMatrix.m41),
@@ -444,8 +490,8 @@ try {
           paddingBottom: document.body.style.paddingBottom,
           transform: document.body.style.transform,
         },
-        recoveryClass: document.documentElement.classList.contains('viewport-recovery-active'),
-        recoveryHeight: document.documentElement.style.getPropertyValue('--viewport-recovery-height'),
+        legacyRecoveryClass: document.documentElement.classList.contains('viewport-recovery-active'),
+        legacyRecoveryHeight: document.documentElement.style.getPropertyValue('--viewport-recovery-height'),
         scrollHeight: document.documentElement.scrollHeight,
         backgroundBottom: Math.round(document.querySelector('#viewport-background').getBoundingClientRect().bottom),
         viewportBottom: innerHeight,
@@ -462,108 +508,207 @@ try {
       && !cycle.rootLocked
       && !cycle.bodySheetOpen
       && Object.values(cycle.bodyStyles).every((value) => value === "")
-      && !cycle.recoveryClass
-      && cycle.recoveryHeight === ""
+      && !cycle.legacyRecoveryClass
+      && cycle.legacyRecoveryHeight === ""
       && Math.abs(cycle.scrollHeight - repeatedSheetCycles.baselineScrollHeight) <= 2
       && cycle.backgroundBottom >= cycle.viewportBottom
     ),
     `repeated Bottom Sheet cycles left horizontal motion, scroll locks, or viewport gaps: ${JSON.stringify(repeatedSheetCycles)}`
   );
 
-  const localBackPriority = await evaluate(`(() => {
-    wheelState.historyExpanded = true;
-    const canGoBack = window.mehNavigation.canGoBack();
-    const handled = window.mehNavigation.back('android-back');
-    return {
-      canGoBack,
-      handled,
-      historyExpanded: wheelState.historyExpanded,
-      state: window.mehNavigation.getState(),
-    };
-  })()`);
-  check(
-    localBackPriority.canGoBack
-      && localBackPriority.handled
-      && !localBackPriority.historyExpanded
-      && localBackPriority.state.screen === "home"
-      && localBackPriority.state.depth === 0,
-    `Android-style back did not prioritize local UI state at home: ${JSON.stringify(localBackPriority)}`
-  );
-
-  const nestedNavigation = await evaluate(`(async () => {
+  const stackNavigation = await evaluate(`(async () => {
     const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
-    window.mehNavigation.open('settings');
-    await wait(240);
-    const settingsSheet = document.querySelector('#settingsSheet');
-    settingsSheet.scrollTop = 120;
-    window.mehNavigation.open('preset-editor', { presetId: wheelState.selectedPresetId });
-    await wait(240);
-    const child = {
-      state: window.mehNavigation.getState(),
-      presetOpen: document.querySelector('#wheelEditorSheet').classList.contains('is-open'),
+    const settled = () => new Promise((resolve) => {
+      const unsubscribe = window.mehNavigation.onSettled((detail) => {
+        unsubscribe();
+        resolve(detail);
+      });
+    });
+    document.querySelector('[data-page="wheel"]').click();
+    await wait(40);
+    let done = settled();
+    document.querySelector('#wheelHistoryButton').click();
+    await done;
+    const wheelHistoryOpen = {
+      stack: window.mehNavigation.getStack().map((item) => item.type),
+      expanded: wheelState.historyExpanded,
+      canGoBack: window.mehNavigation.canGoBack(),
     };
-    document.querySelector('#closeWheelEditorButton').click();
-    await wait(360);
-    const parent = {
-      state: window.mehNavigation.getState(),
-      settingsOpen: settingsSheet.classList.contains('is-open'),
-      scrollTop: Math.round(settingsSheet.scrollTop),
+    done = settled();
+    window.mehNavigation.requestBack('android-back');
+    await done;
+    const wheelHistoryClosed = {
+      stack: window.mehNavigation.getStack().map((item) => item.type),
+      expanded: wheelState.historyExpanded,
+      canGoBack: window.mehNavigation.canGoBack(),
     };
-    document.querySelector('#closeSettingsButton').click();
-    await wait(360);
-    const root = {
-      state: window.mehNavigation.getState(),
+
+    done = settled();
+    document.querySelector('#settingsButton').click();
+    await done;
+    done = settled();
+    document.querySelector('#languageMenuButton').click();
+    await done;
+    const languageOpen = {
+      stack: window.mehNavigation.getStack().map((item) => item.type),
+      menuHidden: document.querySelector('#languageMenu').hidden,
+    };
+    done = settled();
+    document.querySelector('#darkModeMenuButton').click();
+    await done;
+    const switchedToDark = {
+      stack: window.mehNavigation.getStack().map((item) => item.type),
+      languageHidden: document.querySelector('#languageMenu').hidden,
+      darkHidden: document.querySelector('#darkModeMenu').hidden,
+    };
+    done = settled();
+    document.querySelector('#languageMenuButton').click();
+    await done;
+    const switchedBackToLanguage = {
+      stack: window.mehNavigation.getStack().map((item) => item.type),
+      languageHidden: document.querySelector('#languageMenu').hidden,
+      darkHidden: document.querySelector('#darkModeMenu').hidden,
+    };
+    done = settled();
+    window.mehNavigation.requestBack('ui-button');
+    await done;
+    const languageClosed = {
+      stack: window.mehNavigation.getStack().map((item) => item.type),
+      settingsOpen: document.querySelector('#settingsSheet').classList.contains('is-open'),
+      menuHidden: document.querySelector('#languageMenu').hidden,
+    };
+    done = settled();
+    window.mehNavigation.requestBack('ui-button');
+    await done;
+
+    done = settled();
+    document.querySelector('#settingsButton').click();
+    await done;
+    done = settled();
+    document.querySelector('#primarySwatches .swatch-add-button').click();
+    await done;
+    const colorOpen = {
+      stack: window.mehNavigation.getStack().map((item) => item.type),
+      hidden: document.querySelector('#primaryColorPicker').hidden,
+    };
+    done = settled();
+    window.mehNavigation.requestBack('ui-button');
+    await done;
+    const colorClosed = {
+      stack: window.mehNavigation.getStack().map((item) => item.type),
+      settingsOpen: document.querySelector('#settingsSheet').classList.contains('is-open'),
+      hidden: document.querySelector('#primaryColorPicker').hidden,
+    };
+    done = settled();
+    window.mehNavigation.requestBack('ui-button');
+    await done;
+
+    done = settled();
+    history.forward();
+    await done;
+    const forwardSettings = {
+      stack: window.mehNavigation.getStack().map((item) => item.type),
+      settingsOpen: document.querySelector('#settingsSheet').classList.contains('is-open'),
+    };
+    done = settled();
+    history.back();
+    await done;
+
+    document.querySelector('[data-page="wheel"]').click();
+    await wait(40);
+    done = settled();
+    document.querySelector('#featureButton').click();
+    await done;
+    const presetOpen = {
+      stack: window.mehNavigation.getStack().map((item) => item.type),
+      sheetOpen: document.querySelector('#wheelEditorSheet').classList.contains('is-open'),
+    };
+    done = settled();
+    window.mehNavigation.requestBack('ui-button');
+    await done;
+    const finalRoot = {
+      stack: window.mehNavigation.getStack().map((item) => item.type),
+      canGoBack: window.mehNavigation.canGoBack(),
       anySheetOpen: Boolean(document.querySelector('.settings-sheet.is-open, .editor-sheet.is-open')),
     };
-    history.forward();
-    await wait(360);
-    const forwardParent = window.mehNavigation.getState();
-    history.forward();
-    await wait(360);
-    const forwardChild = window.mehNavigation.getState();
-    window.mehNavigation.back();
-    await wait(360);
-    window.mehNavigation.back();
-    await wait(360);
-    return { child, parent, root, forwardParent, forwardChild };
+    return {
+      wheelHistoryOpen,
+      wheelHistoryClosed,
+      languageOpen,
+      switchedToDark,
+      switchedBackToLanguage,
+      languageClosed,
+      colorOpen,
+      colorClosed,
+      forwardSettings,
+      presetOpen,
+      finalRoot,
+    };
   })()`);
   check(
-    nestedNavigation.child.presetOpen
-      && nestedNavigation.child.state.screen === "preset-editor"
-      && nestedNavigation.child.state.depth === 2
-      && nestedNavigation.child.state.params.presetId,
-    `nested preset editor route was not recorded: ${JSON.stringify(nestedNavigation.child)}`
+    stackNavigation.wheelHistoryOpen.stack.join(",") === "wheel-history"
+      && stackNavigation.wheelHistoryOpen.expanded
+      && stackNavigation.wheelHistoryOpen.canGoBack
+      && stackNavigation.wheelHistoryClosed.stack.length === 0
+      && !stackNavigation.wheelHistoryClosed.expanded
+      && !stackNavigation.wheelHistoryClosed.canGoBack,
+    `home history UI left a ghost stack item: ${JSON.stringify(stackNavigation)}`
   );
   check(
-    nestedNavigation.parent.settingsOpen
-      && nestedNavigation.parent.state.screen === "settings"
-      && nestedNavigation.parent.state.depth === 1
-      && nestedNavigation.parent.scrollTop > 0,
-    `child back did not restore the settings context: ${JSON.stringify(nestedNavigation.parent)}`
+    stackNavigation.languageOpen.stack.join(",") === "settings,language-menu"
+      && !stackNavigation.languageOpen.menuHidden
+      && stackNavigation.switchedToDark.stack.join(",") === "settings,dark-mode-menu"
+      && stackNavigation.switchedToDark.languageHidden
+      && !stackNavigation.switchedToDark.darkHidden
+      && stackNavigation.switchedBackToLanguage.stack.join(",") === "settings,language-menu"
+      && !stackNavigation.switchedBackToLanguage.languageHidden
+      && stackNavigation.switchedBackToLanguage.darkHidden
+      && stackNavigation.languageClosed.stack.join(",") === "settings"
+      && stackNavigation.languageClosed.settingsOpen
+      && stackNavigation.languageClosed.menuHidden,
+    `language menu did not close before its owning settings Sheet: ${JSON.stringify(stackNavigation)}`
   );
   check(
-    nestedNavigation.root.state.screen === "home"
-      && nestedNavigation.root.state.depth === 0
-      && !nestedNavigation.root.anySheetOpen,
-    `parent back did not restore home: ${JSON.stringify(nestedNavigation.root)}`
+    stackNavigation.colorOpen.stack.join(",") === "settings,advanced-color-picker"
+      && !stackNavigation.colorOpen.hidden
+      && stackNavigation.colorClosed.stack.join(",") === "settings"
+      && stackNavigation.colorClosed.settingsOpen
+      && stackNavigation.colorClosed.hidden,
+    `advanced color picker left a hidden=false ghost item: ${JSON.stringify(stackNavigation)}`
   );
   check(
-    nestedNavigation.forwardParent.screen === "settings"
-      && nestedNavigation.forwardChild.screen === "preset-editor"
-      && nestedNavigation.forwardChild.params.presetId,
-    `browser forward did not replay the SPA stack: ${JSON.stringify(nestedNavigation)}`
+    stackNavigation.forwardSettings.stack.join(",") === "settings"
+      && stackNavigation.forwardSettings.settingsOpen,
+    `browser forward did not restore the serialized settings snapshot: ${JSON.stringify(stackNavigation)}`
+  );
+  check(
+    stackNavigation.presetOpen.stack.join(",") === "preset-editor"
+      && stackNavigation.presetOpen.sheetOpen
+      && stackNavigation.finalRoot.stack.length === 0
+      && !stackNavigation.finalRoot.canGoBack
+      && !stackNavigation.finalRoot.anySheetOpen,
+    `preset editor did not return to a ghost-free root: ${JSON.stringify(stackNavigation)}`
   );
 
   const editors = await evaluate(`(async () => {
     const result = {};
+    const settled = () => new Promise((resolve) => {
+      const unsubscribe = window.mehNavigation.onSettled(() => {
+        unsubscribe();
+        resolve();
+      });
+    });
     for (const page of ['wheel', 'number']) {
       document.querySelector('[data-page="' + page + '"]').click();
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      let done = settled();
       document.querySelector('#featureButton').click();
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await done;
       const selector = page === 'wheel' ? '#wheelEditorSheet' : '#numberSettingsSheet';
       result[page] = document.querySelector(selector).classList.contains('is-open');
-      history.back();
-      await new Promise((resolve) => setTimeout(resolve, 80));
+      done = settled();
+      window.mehNavigation.requestBack('test');
+      await done;
     }
     return result;
   })()`);
@@ -572,68 +717,105 @@ try {
   const keyboardRecovery = await evaluate(`(async () => {
     document.documentElement.classList.remove('platform-android-app', 'platform-browser');
     document.documentElement.classList.add('platform-ios-pwa');
-    syncPwaAppHeight({ resetStable: true, measuredHeight: innerHeight });
-    const fullPaintHeight = document.documentElement.style.getPropertyValue('--viewport-paint-height');
-    syncPwaAppHeight({ measuredHeight: innerHeight - 300 });
-    const keyboardSizedPaintHeight = document.documentElement.style.getPropertyValue('--viewport-paint-height');
+    window.MehKeyboardViewport.handleViewportChange('ios-test-bootstrap');
+    await window.MehKeyboardViewport.requestSettle('ios-test-bootstrap');
+    const settled = () => new Promise((resolve) => {
+      const unsubscribe = window.mehNavigation.onSettled((detail) => {
+        unsubscribe();
+        resolve(detail);
+      });
+    });
     document.querySelector('[data-page="number"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    let done = settled();
     document.querySelector('#featureButton').click();
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await done;
     const input = document.querySelector('#numberCountInput');
     input.focus();
-    await new Promise((resolve) => setTimeout(resolve, 30));
-    const openGeometry = reconcileKeyboardViewport('test-open', {
-      visualExtent: innerHeight - 300,
-      bypassGrace: true,
-    });
-    const dismissedGeometry = reconcileKeyboardViewport('test-dismiss', {
-      visualExtent: innerHeight - 68,
-      bypassGrace: true,
-    });
-    const during = {
-      keyboardActive: keyboardViewportActive,
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const beforeAndroidBack = {
+      keyboardState: window.MehKeyboardViewport.getState().state,
+      keyboardActive: window.MehKeyboardViewport.isKeyboardActive(),
       paintHeight: document.documentElement.style.getPropertyValue('--viewport-paint-height'),
-      fullPaintHeight,
-      keyboardSizedPaintHeight,
+      fontSize: getComputedStyle(input).fontSize,
       bodyInlinePosition: document.body.style.position,
-      openGeometry,
-      dismissedGeometry,
     };
-    await new Promise((resolve) => setTimeout(resolve, 850));
-    const afterKeyboardDismiss = {
-      keyboardActive: keyboardViewportActive,
-      focusedWithoutBlur: document.activeElement === input,
+    done = settled();
+    window.mehNavigation.requestBack('android-back');
+    const firstAndroidDetail = await done;
+    const afterFirstAndroidBack = {
+      detail: firstAndroidDetail,
+      keyboardState: window.MehKeyboardViewport.getState().state,
+      keyboardActive: window.MehKeyboardViewport.isKeyboardActive(),
+      sheetOpen: document.querySelector('#numberSettingsSheet').classList.contains('is-open'),
+      stack: window.mehNavigation.getStack().map((item) => item.type),
+    };
+    done = settled();
+    window.mehNavigation.requestBack('android-back');
+    await done;
+    const afterSecondAndroidBack = {
+      sheetOpen: document.querySelector('#numberSettingsSheet').classList.contains('is-open'),
+      stack: window.mehNavigation.getStack().map((item) => item.type),
       rootLocked: document.documentElement.classList.contains('page-scroll-locked'),
-      nudgePending: viewportNudgePending,
-      recoveryActive: document.documentElement.classList.contains('viewport-recovery-active'),
+    };
+
+    done = settled();
+    document.querySelector('#featureButton').click();
+    await done;
+    input.focus();
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    done = settled();
+    document.querySelector('#closeNumberSettingsButton').click();
+    const closeDetail = await done;
+    const backgroundRect = document.querySelector('#viewport-background').getBoundingClientRect();
+    const afterUiClose = {
+      closeDetail,
+      keyboardState: window.MehKeyboardViewport.getState().state,
+      keyboardActive: window.MehKeyboardViewport.isKeyboardActive(),
+      sheetOpen: document.querySelector('#numberSettingsSheet').classList.contains('is-open'),
+      rootLocked: document.documentElement.classList.contains('page-scroll-locked'),
+      legacyRecoveryClass: document.documentElement.classList.contains('viewport-recovery-active'),
+      legacyRecoveryHeight: document.documentElement.style.getPropertyValue('--viewport-recovery-height'),
       bodyInlinePosition: document.body.style.position,
-      backgroundBottom: Math.round(document.querySelector('#viewport-background').getBoundingClientRect().bottom),
+      backgroundBottom: Math.round(backgroundRect.bottom),
       viewportBottom: innerHeight,
     };
-    history.back();
-    await new Promise((resolve) => setTimeout(resolve, 850));
-    const backgroundRect = document.querySelector('#viewport-background').getBoundingClientRect();
-    return {
-      during,
-      afterKeyboardDismiss,
-      after: {
-        keyboardActive: keyboardViewportActive,
-        rootLocked: document.documentElement.classList.contains('page-scroll-locked'),
-        bodyInlinePosition: document.body.style.position,
-        backgroundBottom: Math.round(backgroundRect.bottom),
-        viewportBottom: innerHeight,
-      },
-    };
+    return { beforeAndroidBack, afterFirstAndroidBack, afterSecondAndroidBack, afterUiClose };
   })()`);
-  check(keyboardRecovery.during.openGeometry.visible && keyboardRecovery.during.dismissedGeometry.changed && !keyboardRecovery.during.keyboardActive, `viewport geometry did not recognize number-keyboard dismissal without blur: ${JSON.stringify(keyboardRecovery)}`);
-  check(keyboardRecovery.during.paintHeight, `editable focus did not preserve the iOS viewport paint state: ${JSON.stringify(keyboardRecovery)}`);
-  check(keyboardRecovery.during.fullPaintHeight === keyboardRecovery.during.keyboardSizedPaintHeight, `keyboard-sized viewport replaced the stable canvas height: ${JSON.stringify(keyboardRecovery)}`);
-  check(keyboardRecovery.during.bodyInlinePosition === "", `keyboard sheet used body fixed positioning: ${JSON.stringify(keyboardRecovery)}`);
-  check(!keyboardRecovery.afterKeyboardDismiss.keyboardActive && keyboardRecovery.afterKeyboardDismiss.focusedWithoutBlur, `number-keyboard recovery still depends on focusout: ${JSON.stringify(keyboardRecovery)}`);
-  check(keyboardRecovery.afterKeyboardDismiss.rootLocked && !keyboardRecovery.afterKeyboardDismiss.nudgePending && !keyboardRecovery.afterKeyboardDismiss.recoveryActive, `keyboard recovery did not finish while the number sheet remained open: ${JSON.stringify(keyboardRecovery)}`);
-  check(keyboardRecovery.afterKeyboardDismiss.backgroundBottom >= keyboardRecovery.afterKeyboardDismiss.viewportBottom, `number-keyboard recovery exposed a bottom canvas gap: ${JSON.stringify(keyboardRecovery)}`);
-  check(!keyboardRecovery.after.keyboardActive && !keyboardRecovery.after.rootLocked, `keyboard dismissal did not settle its viewport state: ${JSON.stringify(keyboardRecovery)}`);
-  check(keyboardRecovery.after.bodyInlinePosition === "" && keyboardRecovery.after.backgroundBottom >= keyboardRecovery.after.viewportBottom, `keyboard dismissal exposed a bottom canvas gap: ${JSON.stringify(keyboardRecovery)}`);
+  check(
+    keyboardRecovery.beforeAndroidBack.keyboardActive
+      && ["keyboard-opening", "keyboard-open"].includes(keyboardRecovery.beforeAndroidBack.keyboardState)
+      && keyboardRecovery.beforeAndroidBack.paintHeight
+      && keyboardRecovery.beforeAndroidBack.fontSize === "16px"
+      && keyboardRecovery.beforeAndroidBack.bodyInlinePosition === "",
+    `iOS editable focus did not enter the keyboard state machine safely: ${JSON.stringify(keyboardRecovery)}`
+  );
+  check(
+    keyboardRecovery.afterFirstAndroidBack.detail.keyboardOnly
+      && !keyboardRecovery.afterFirstAndroidBack.keyboardActive
+      && keyboardRecovery.afterFirstAndroidBack.keyboardState === "stable"
+      && keyboardRecovery.afterFirstAndroidBack.sheetOpen
+      && keyboardRecovery.afterFirstAndroidBack.stack.join(",") === "number-settings",
+    `first Android back did not settle only the keyboard: ${JSON.stringify(keyboardRecovery)}`
+  );
+  check(
+    !keyboardRecovery.afterSecondAndroidBack.sheetOpen
+      && keyboardRecovery.afterSecondAndroidBack.stack.length === 0
+      && !keyboardRecovery.afterSecondAndroidBack.rootLocked,
+    `second Android back did not close only the number settings Sheet: ${JSON.stringify(keyboardRecovery)}`
+  );
+  check(
+    keyboardRecovery.afterUiClose.closeDetail.source === "ui-button"
+      && keyboardRecovery.afterUiClose.keyboardState === "stable"
+      && !keyboardRecovery.afterUiClose.keyboardActive
+      && !keyboardRecovery.afterUiClose.sheetOpen
+      && !keyboardRecovery.afterUiClose.rootLocked
+      && !keyboardRecovery.afterUiClose.legacyRecoveryClass
+      && keyboardRecovery.afterUiClose.legacyRecoveryHeight === ""
+      && keyboardRecovery.afterUiClose.bodyInlinePosition === ""
+      && keyboardRecovery.afterUiClose.backgroundBottom >= keyboardRecovery.afterUiClose.viewportBottom,
+    `keyboard-first UI close left a viewport nudge, lock, or bottom gap: ${JSON.stringify(keyboardRecovery)}`
+  );
 
   await evaluate(`localStorage.setItem('meh-app-settings-v2', JSON.stringify({ topHeight: 16 })); location.reload(); true`);
   await waitForApp();

@@ -566,7 +566,6 @@ let diceRollTimer = null;
 let diceFaceTimer = null;
 let diceFaceTimers = [];
 let wheelSpinTimer = null;
-let sheetCloseTimer = null;
 let renderedNavigationState = {
   mehApp: true,
   screen: "home",
@@ -654,14 +653,10 @@ const els = {
 let layoutDiagnosticTimer = 0;
 let lastLayoutDiagnosticSignature = "";
 let stableViewportHeight = 0;
-let viewportRecoveryTimers = [];
-let keyboardViewportActive = false;
-let keyboardFocusStartedAt = 0;
-let viewportRestoreScrollY = 0;
-let viewportRestorePending = false;
-let viewportNudgePending = false;
-let viewportNudgeGeneration = 0;
-let orientationRecoveryTimer = 0;
+let keyboardViewportController = null;
+
+keyboardViewportController = createKeyboardViewportController();
+window.MehKeyboardViewport = keyboardViewportController;
 
 init();
 
@@ -773,51 +768,39 @@ function bindEvents() {
   });
   if (window.MehPwaUpdate?.status) setPwaUpdateStatus(window.MehPwaUpdate.status);
   window.addEventListener("resize", () => {
-    syncPwaAppHeight();
     updateDockIndicator();
     scheduleLayoutDiagnostics("window-resize");
-    window.requestAnimationFrame(() => reconcileKeyboardViewport("window-resize"));
-    if (!keyboardViewportActive) scheduleViewportRecovery("window-resize");
+    keyboardViewportController.handleViewportChange("window-resize");
   });
   if (window.visualViewport) {
     window.visualViewport.addEventListener("resize", () => {
-      syncPwaAppHeight();
       scheduleLayoutDiagnostics("visual-viewport-resize");
-      window.requestAnimationFrame(() => reconcileKeyboardViewport("visual-viewport-resize"));
-      scheduleViewportRecovery("visual-viewport-resize");
+      keyboardViewportController.handleViewportChange("visual-viewport-resize");
     });
     window.visualViewport.addEventListener("scroll", () => {
       scheduleLayoutDiagnostics("visual-viewport-scroll");
-      window.requestAnimationFrame(() => reconcileKeyboardViewport("visual-viewport-scroll"));
-      if (!keyboardViewportActive) scheduleViewportRecovery("visual-viewport-scroll");
+      keyboardViewportController.handleViewportChange("visual-viewport-scroll");
     });
   }
   window.addEventListener("orientationchange", () => {
-    window.clearTimeout(orientationRecoveryTimer);
-    orientationRecoveryTimer = window.setTimeout(() => {
-      scheduleViewportRecovery("orientation-change", { resetStable: true });
-    }, 180);
+    keyboardViewportController.handleOrientationChange();
     scheduleLayoutDiagnostics("orientation-change");
   });
   window.addEventListener("pageshow", () => {
-    scheduleViewportRecovery("page-show");
+    keyboardViewportController.requestSettle("page-show");
     scheduleLayoutDiagnostics("page-show");
   });
   document.addEventListener("focusin", (event) => {
     if (!isKeyboardEditable(event.target)) return;
-    keyboardViewportActive = true;
-    keyboardFocusStartedAt = performance.now();
-    syncPwaAppHeight();
+    keyboardViewportController.handleFocusIn(event.target);
     scheduleLayoutDiagnostics("keyboard-open");
   });
   document.addEventListener("focusout", (event) => {
     if (!isKeyboardEditable(event.target)) return;
-    keyboardViewportActive = false;
-    viewportNudgePending = true;
-    scheduleViewportRecovery("keyboard-dismiss");
+    keyboardViewportController.handleFocusOut(event.target);
   });
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) scheduleViewportRecovery("visibility-restored");
+    if (!document.hidden) keyboardViewportController.requestSettle("visibility-restored");
   });
   window.addEventListener("meh:native-insets", () => scheduleLayoutDiagnostics("native-insets"));
   bindDocumentScrollLock();
@@ -843,185 +826,373 @@ function isKeyboardEditable(element) {
     && Boolean(element.closest('input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), textarea, [contenteditable="true"]'));
 }
 
+function createKeyboardViewportController() {
+  const STATE = Object.freeze({
+    STABLE: "stable",
+    OPENING: "keyboard-opening",
+    OPEN: "keyboard-open",
+    CLOSING: "keyboard-closing",
+    NAVIGATION: "navigation-transition",
+    ORIENTATION: "orientation-changing",
+    SETTLING: "settling",
+  });
+  let stateName = STATE.STABLE;
+  let baseline = null;
+  let keyboardScrollY = 0;
+  let lastGeometry = null;
+  let lastChangeAt = performance.now();
+  let stableFrameCount = 0;
+  let settleRaf = 0;
+  let settleFallback = 0;
+  let settleRequested = false;
+  let settleReason = "";
+  let settlePromise = Promise.resolve();
+  let resolveSettle = null;
+
+  function visualExtent() {
+    return window.visualViewport
+      ? window.visualViewport.height + Math.max(0, window.visualViewport.offsetTop)
+      : window.innerHeight || document.documentElement.clientHeight || 0;
+  }
+
+  function layoutHeight() {
+    return Math.max(
+      1,
+      window.innerHeight || 0,
+      document.documentElement.clientHeight || 0
+    );
+  }
+
+  function measure() {
+    const referenceHeight = Math.max(
+      1,
+      baseline?.layoutHeight || stableViewportHeight || layoutHeight()
+    );
+    const extent = visualExtent();
+    const occlusion = Math.max(0, referenceHeight - extent);
+    const visibleThreshold = Math.max(96, Math.min(140, referenceHeight * 0.16));
+    return {
+      layoutHeight: layoutHeight(),
+      visualExtent: extent,
+      occlusion,
+      visibleThreshold,
+      visible: occlusion >= visibleThreshold,
+    };
+  }
+
+  function log(event, detail = {}) {
+    window.mehNavigation?.recordDebug?.(event, {
+      state: stateName,
+      ...detail,
+    });
+  }
+
+  function setState(next, event, detail = {}) {
+    if (stateName !== next) stateName = next;
+    log(event, detail);
+  }
+
+  function updatePaintHeight(height) {
+    els.root.style.removeProperty("--app-height");
+    if (!isIosPwaRuntime()) {
+      stableViewportHeight = 0;
+      els.root.style.removeProperty("--viewport-paint-height");
+      return 0;
+    }
+    stableViewportHeight = Math.max(1, Number(height) || layoutHeight());
+    els.root.style.setProperty(
+      "--viewport-paint-height",
+      `${Math.ceil(stableViewportHeight)}px`
+    );
+    return stableViewportHeight;
+  }
+
+  function refreshBackground() {
+    const background = document.querySelector("#viewport-background");
+    if (!background) return;
+    background.classList.add("is-repainting");
+    background.getBoundingClientRect();
+    requestAnimationFrame(() => background.classList.remove("is-repainting"));
+  }
+
+  function startPromise() {
+    if (resolveSettle) return;
+    settlePromise = new Promise((resolve) => {
+      resolveSettle = resolve;
+    });
+  }
+
+  function finishPromise() {
+    const resolve = resolveSettle;
+    resolveSettle = null;
+    resolve?.();
+  }
+
+  function clearScheduler() {
+    cancelAnimationFrame(settleRaf);
+    window.clearTimeout(settleFallback);
+    settleRaf = 0;
+    settleFallback = 0;
+  }
+
+  function finalSettle(reason, forced = false) {
+    if (!settleRequested && stateName === STATE.STABLE) return;
+    clearScheduler();
+    setState(STATE.SETTLING, "viewport-settle", { reason, forced });
+    settleRequested = false;
+    const currentHeight = layoutHeight();
+    baseline = {
+      layoutHeight: currentHeight,
+      visualExtent: visualExtent(),
+      scrollY: window.scrollY,
+    };
+    updatePaintHeight(currentHeight);
+    els.root.classList.remove("keyboard-viewport-active");
+    if (!pageScrollLock.active && Math.abs(window.scrollY - keyboardScrollY) > 1) {
+      window.scrollTo(0, keyboardScrollY);
+    }
+    updateDockIndicator();
+    refreshBackground();
+    stateName = STATE.STABLE;
+    log("keyboard-settled", { reason, forced, baseline });
+    window.dispatchEvent(new CustomEvent("meh:keyboard-settled", {
+      detail: { reason, forced },
+    }));
+    finishPromise();
+  }
+
+  function evaluateStability(timestamp) {
+    const geometry = measure();
+    const previous = lastGeometry;
+    const heightStable = previous
+      && Math.abs(previous.visualExtent - geometry.visualExtent) <= 1
+      && Math.abs(previous.layoutHeight - geometry.layoutHeight) <= 1;
+    if (heightStable) {
+      stableFrameCount += 1;
+    } else {
+      stableFrameCount = 0;
+      lastChangeAt = timestamp;
+    }
+    lastGeometry = geometry;
+
+    const focused = isKeyboardEditable(document.activeElement);
+    if ((stateName === STATE.OPENING || stateName === STATE.OPEN) && focused) {
+      if (geometry.visible && (stableFrameCount >= 2 || timestamp - lastChangeAt >= 80)) {
+        setState(STATE.OPEN, "keyboard-open", { geometry });
+        clearScheduler();
+        return;
+      }
+    }
+
+    if (settleRequested) {
+      const keyboardGone = !focused && geometry.occlusion < Math.min(64, geometry.visibleThreshold);
+      const stableLongEnough = stableFrameCount >= 2 || timestamp - lastChangeAt >= 100;
+      if (keyboardGone && stableLongEnough) {
+        finalSettle(settleReason || "geometry-stable");
+        return;
+      }
+    }
+    settleRaf = requestAnimationFrame(evaluateStability);
+  }
+
+  function ensureScheduler() {
+    if (!settleRaf) {
+      lastGeometry = measure();
+      lastChangeAt = performance.now();
+      stableFrameCount = 0;
+      settleRaf = requestAnimationFrame(evaluateStability);
+    }
+    if (settleRequested && !settleFallback) {
+      settleFallback = window.setTimeout(() => {
+        const focused = isKeyboardEditable(document.activeElement);
+        if (focused) return;
+        finalSettle(`${settleReason || "settle"}:fallback`, true);
+      }, 600);
+    }
+  }
+
+  function requestSettle(reason) {
+    settleRequested = true;
+    settleReason = reason;
+    startPromise();
+    ensureScheduler();
+    return settlePromise;
+  }
+
+  function handleFocusIn() {
+    if (stateName === STATE.STABLE) {
+      const height = layoutHeight();
+      baseline = {
+        layoutHeight: height,
+        visualExtent: visualExtent(),
+        scrollY: window.scrollY,
+      };
+      keyboardScrollY = window.scrollY;
+      updatePaintHeight(height);
+    }
+    settleRequested = false;
+    window.clearTimeout(settleFallback);
+    settleFallback = 0;
+    els.root.classList.add("keyboard-viewport-active");
+    log("keyboard-focus", { baseline });
+    setState(STATE.OPENING, "keyboard-opening", { baseline });
+    ensureScheduler();
+  }
+
+  function handleFocusOut() {
+    setState(STATE.CLOSING, "keyboard-closing");
+    requestSettle("focusout");
+  }
+
+  function handleViewportChange(reason) {
+    const geometry = measure();
+    log("viewport-resize", { reason, geometry });
+    if (stateName === STATE.STABLE && !isKeyboardEditable(document.activeElement)) {
+      baseline = {
+        layoutHeight: geometry.layoutHeight,
+        visualExtent: geometry.visualExtent,
+        scrollY: window.scrollY,
+      };
+      updatePaintHeight(geometry.layoutHeight);
+      refreshBackground();
+      return;
+    }
+    if (
+      isKeyboardEditable(document.activeElement)
+      && stateName === STATE.OPENING
+      && geometry.visible
+    ) {
+      ensureScheduler();
+      return;
+    }
+    if (!isKeyboardEditable(document.activeElement) && stateName !== STATE.STABLE) {
+      if (stateName !== STATE.ORIENTATION && stateName !== STATE.NAVIGATION) {
+        stateName = STATE.CLOSING;
+      }
+      requestSettle(reason);
+    }
+  }
+
+  function handleOrientationChange() {
+    clearScheduler();
+    baseline = null;
+    stableViewportHeight = 0;
+    setState(STATE.ORIENTATION, "viewport-resize", { reason: "orientation-change" });
+    requestSettle("orientation-change");
+  }
+
+  function isKeyboardActive() {
+    return isKeyboardEditable(document.activeElement)
+      || [STATE.OPENING, STATE.OPEN, STATE.CLOSING].includes(stateName);
+  }
+
+  async function interceptBack(source) {
+    if (!isKeyboardActive()) return { handled: false, proceed: true };
+    const focused = isKeyboardEditable(document.activeElement)
+      ? document.activeElement
+      : null;
+    focused?.blur();
+    if (stateName !== STATE.CLOSING) {
+      setState(STATE.CLOSING, "keyboard-closing", { source });
+    }
+    await requestSettle(`navigation:${source}`);
+    return {
+      handled: true,
+      proceed: source !== "android-back",
+    };
+  }
+
+  function navigationStarted() {
+    if (stateName === STATE.STABLE) {
+      setState(STATE.NAVIGATION, "viewport-resize", { reason: "navigation-transition" });
+    }
+  }
+
+  function navigationEnded(source) {
+    if (stateName === STATE.NAVIGATION) requestSettle(`navigation-settled:${source}`);
+    if (source === "ios-edge-back" && stateName !== STATE.STABLE) {
+      requestSettle("ios-edge-back");
+    }
+  }
+
+  function initialize() {
+    const height = layoutHeight();
+    baseline = {
+      layoutHeight: height,
+      visualExtent: visualExtent(),
+      scrollY: window.scrollY,
+    };
+    keyboardScrollY = window.scrollY;
+    updatePaintHeight(height);
+  }
+
+  initialize();
+
+  return Object.freeze({
+    STATE,
+    handleFocusIn,
+    handleFocusOut,
+    handleViewportChange,
+    handleOrientationChange,
+    requestSettle,
+    interceptBack,
+    navigationStarted,
+    navigationEnded,
+    waitUntilSettled() {
+      return stateName === STATE.STABLE ? Promise.resolve() : settlePromise;
+    },
+    isSettled() {
+      return stateName === STATE.STABLE && !settleRequested;
+    },
+    isKeyboardActive,
+    getGeometry: measure,
+    getState() {
+      return {
+        state: stateName,
+        baseline: clonePlainObject(baseline),
+        geometry: measure(),
+        settleRequested,
+      };
+    },
+  });
+}
+
+function clonePlainObject(value) {
+  return value ? JSON.parse(JSON.stringify(value)) : value;
+}
+
 function measureAllocatedViewportHeight() {
-  const visualBottom = measureVisualViewportExtent();
   return Math.max(
     window.innerHeight || 0,
-    document.documentElement.clientHeight || 0,
-    visualBottom || 0
+    document.documentElement.clientHeight || 0
   );
 }
 
 function measureVisualViewportExtent() {
   return window.visualViewport
     ? window.visualViewport.height + Math.max(0, window.visualViewport.offsetTop)
-    : window.innerHeight || document.documentElement.clientHeight || 0;
-}
-
-function getKeyboardViewportGeometry(options = {}) {
-  const referenceHeight = Math.max(
-    1,
-    stableViewportHeight || measureAllocatedViewportHeight()
-  );
-  const visualExtent = options.visualExtent != null && Number.isFinite(Number(options.visualExtent))
-    ? Number(options.visualExtent)
-    : measureVisualViewportExtent();
-  const occlusion = Math.max(0, referenceHeight - visualExtent);
-  const visibleThreshold = Math.max(96, Math.min(140, referenceHeight * 0.16));
-  return {
-    referenceHeight,
-    visualExtent,
-    occlusion,
-    visibleThreshold,
-    visible: occlusion >= visibleThreshold,
-  };
-}
-
-function reconcileKeyboardViewport(reason, options = {}) {
-  const geometry = getKeyboardViewportGeometry(options);
-  const focusedEditable = isKeyboardEditable(document.activeElement);
-
-  if (focusedEditable && geometry.visible) {
-    keyboardViewportActive = true;
-    return { ...geometry, changed: false };
-  }
-
-  const focusGraceElapsed = performance.now() - keyboardFocusStartedAt >= 320;
-  if (keyboardViewportActive && !geometry.visible && (options.bypassGrace || focusGraceElapsed)) {
-    keyboardViewportActive = false;
-    viewportNudgePending = true;
-    scheduleViewportRecovery(`keyboard-geometry-dismiss:${reason}`);
-    scheduleLayoutDiagnostics(`keyboard-geometry-dismiss:${reason}`);
-    return { ...geometry, changed: true };
-  }
-
-  return { ...geometry, changed: false };
-}
-
-function syncPwaAppHeight(options = {}) {
-  // CSS 100dvh owns the visual canvas in every runtime. Removing an inline
-  // value also repairs sessions that were restored from an older standalone
-  // page which measured a safe-area-reduced visualViewport in pixels.
-  els.root.style.removeProperty("--app-height");
-
-  if (!isIosPwaRuntime()) {
-    stableViewportHeight = 0;
-    els.root.style.removeProperty("--viewport-paint-height");
-    return 0;
-  }
-
-  const measuredHeight = options.measuredHeight != null && Number.isFinite(Number(options.measuredHeight))
-    ? Number(options.measuredHeight)
     : measureAllocatedViewportHeight();
-  if (options.resetStable || stableViewportHeight <= 0) {
-    stableViewportHeight = measuredHeight;
-  } else if (measuredHeight > stableViewportHeight - 2) {
-    stableViewportHeight = measuredHeight;
-  }
+}
 
-  const paintHeight = Math.max(1, Math.ceil(stableViewportHeight || measuredHeight));
-  els.root.style.setProperty("--viewport-paint-height", `${paintHeight}px`);
-  return paintHeight;
+function getKeyboardViewportGeometry() {
+  return keyboardViewportController.getGeometry();
+}
+
+function syncPwaAppHeight() {
+  return stableViewportHeight;
 }
 
 function refreshViewportBackgroundLayer() {
   const background = document.querySelector("#viewport-background");
   if (!background) return;
-  background.style.setProperty("will-change", "transform", "important");
+  background.classList.add("is-repainting");
   background.getBoundingClientRect();
-  window.requestAnimationFrame(() => {
-    background.style.removeProperty("will-change");
-  });
+  requestAnimationFrame(() => background.classList.remove("is-repainting"));
 }
 
 function isVisualViewportSettled() {
-  if (!window.visualViewport) return true;
-  const visualBottom = window.visualViewport.height + Math.max(0, window.visualViewport.offsetTop);
-  const layoutHeight = document.documentElement.clientHeight || window.innerHeight || 0;
-  return visualBottom >= layoutHeight - 2;
-}
-
-function nudgeWebKitViewport(restoreY) {
-  const generation = ++viewportNudgeGeneration;
-  const recoveryHeight = Math.max(
-    1,
-    Math.ceil(stableViewportHeight || measureAllocatedViewportHeight())
-  );
-  els.root.style.setProperty("--viewport-recovery-height", `${recoveryHeight}px`);
-  els.root.classList.add("viewport-recovery-active");
-  document.documentElement.getBoundingClientRect();
-
-  window.requestAnimationFrame(() => {
-    if (generation !== viewportNudgeGeneration) return;
-    // Write the same position deliberately. WebKit uses this assignment to
-    // discard a stale keyboard content offset even when scrollY already reads 0.
-    document.documentElement.scrollTop = restoreY;
-    document.body.scrollTop = restoreY;
-    window.scrollTo(0, restoreY);
-    refreshViewportBackgroundLayer();
-
-    window.requestAnimationFrame(() => {
-      if (generation !== viewportNudgeGeneration) return;
-      els.root.classList.remove("viewport-recovery-active");
-      els.root.style.removeProperty("--viewport-recovery-height");
-      document.documentElement.getBoundingClientRect();
-      window.scrollTo(0, restoreY);
-      refreshViewportBackgroundLayer();
-    });
-  });
-}
-
-function restoreViewportAfterInteraction(reason, options = {}) {
-  if (options.resetStable) stableViewportHeight = 0;
-  const paintHeight = syncPwaAppHeight({ resetStable: options.resetStable });
-  const hasOpenSheet = Boolean(document.querySelector(".settings-sheet.is-open, .editor-sheet.is-open"));
-  const viewportSettled = isVisualViewportSettled() || options.forceViewportNudge;
-  let shouldNudgeViewport = false;
-  let restoreY = pageScrollLock.active ? pageScrollLock.y : viewportRestoreScrollY;
-
-  if (!keyboardViewportActive && viewportNudgePending && viewportSettled) {
-    viewportNudgePending = false;
-    shouldNudgeViewport = true;
-  }
-
-  if (!pageScrollLock.active && !hasOpenSheet && !keyboardViewportActive) {
-    // Clear legacy body-fixed scroll locks before asking WebKit to restore its
-    // layout/visual viewport after keyboard or interactive-back animations.
-    document.body.style.position = "";
-    document.body.style.top = "";
-    document.body.style.left = "";
-    document.body.style.right = "";
-    document.body.style.width = "";
-    if (viewportRestorePending && viewportSettled) {
-      restoreY = viewportRestoreScrollY;
-      viewportRestorePending = false;
-      shouldNudgeViewport = true;
-    }
-  }
-
-  if (shouldNudgeViewport) nudgeWebKitViewport(restoreY);
-  refreshViewportBackgroundLayer();
-  updateDockIndicator();
-  scheduleLayoutDiagnostics(`viewport-recovery:${reason}`);
-  return paintHeight;
-}
-
-function scheduleViewportRecovery(reason, options = {}) {
-  viewportRecoveryTimers.forEach((timer) => window.clearTimeout(timer));
-  const delays = options.resetStable ? [120, 360, 720] : [0, 120, 360, 720];
-  const keyboardRecovery = reason.includes("keyboard");
-  viewportRecoveryTimers = delays.map((delay, index) =>
-    window.setTimeout(() => {
-      restoreViewportAfterInteraction(reason, {
-        resetStable: Boolean(options.resetStable),
-        // Some affected WebKit builds never report matching visual/layout
-        // heights after the number keyboard closes. The final pass still
-        // performs the relayout pulse once geometry says the keyboard is gone.
-        forceViewportNudge: index === delays.length - 1
-          && (keyboardRecovery || viewportNudgePending),
-      });
-    }, delay)
-  );
+  const geometry = getKeyboardViewportGeometry();
+  return geometry.occlusion < Math.min(64, geometry.visibleThreshold);
 }
 
 function readStaticMetaContent(name) {
@@ -1648,13 +1819,10 @@ function logLayoutDiagnostics(reason = "manual", force = false) {
     viewportRecovery: {
       stableViewportHeight,
       paintHeight: variable("--viewport-paint-height"),
-      keyboardActive: keyboardViewportActive,
+      keyboardActive: keyboardViewportController.isKeyboardActive(),
+      keyboardState: keyboardViewportController.getState().state,
       keyboardGeometry: getKeyboardViewportGeometry(),
       scrollLocked: pageScrollLock.active,
-      restoreScrollY: viewportRestoreScrollY,
-      restorePending: viewportRestorePending,
-      nudgePending: viewportNudgePending,
-      recoveryActive: els.root.classList.contains("viewport-recovery-active"),
       visualViewportSettled: isVisualViewportSettled(),
     },
     appHeight: variable("--app-height"),
@@ -1890,8 +2058,18 @@ function movePage(direction) {
   setPage(pageKeys[nextIndex]);
 }
 
-function setPage(pageKey) {
+async function setPage(pageKey) {
   if (!pages[pageKey]) return;
+  const topType = window.mehNavigation?.getTopItem?.()?.type;
+  if (["wheel-history", "number-history"].includes(topType)) {
+    await new Promise((resolve) => {
+      const unsubscribe = window.mehNavigation.onSettled(() => {
+        unsubscribe();
+        resolve();
+      });
+      window.mehNavigation.requestBack("page-change");
+    });
+  }
 
   state.page = pageKey;
   wheelState.historyExpanded = false;
@@ -2347,6 +2525,9 @@ function buildWheelSectors() {
 
 function spinWheel() {
   if (wheelState.isSpinning || state.page !== "wheel") return;
+  if (window.mehNavigation.getTopItem()?.type === "wheel-history") {
+    window.mehNavigation.requestBack("wheel-spin");
+  }
 
   const sectors = buildWheelSectors();
   const selected = pickWeightedSector(sectors);
@@ -2421,12 +2602,14 @@ function updateWheelStats() {
   hydrateOfflineIcons(els.topStats);
 
   document.querySelector("#wheelHistoryButton").addEventListener("click", () => {
-    wheelState.historyExpanded = !wheelState.historyExpanded;
-    updateWheelStats();
+    openTransientItem("wheel-history", { page: "wheel" });
   });
 }
 
 function resetWheelHistory() {
+  if (window.mehNavigation.getTopItem()?.type === "wheel-history") {
+    window.mehNavigation.requestBack("reset");
+  }
   window.clearTimeout(wheelSpinTimer);
   wheelState.result = null;
   wheelState.isSpinning = false;
@@ -2449,7 +2632,7 @@ function getWheelResultText() {
 }
 
 function openWheelEditor() {
-  window.mehNavigation.open("preset-editor", {
+  openTopLevelItem("preset-editor", {
     presetId: wheelState.selectedPresetId,
   });
 }
@@ -2742,6 +2925,9 @@ function renderNumberResultDisplay() {
 
 function generateRandomNumbers() {
   if (state.page !== "number") return;
+  if (window.mehNavigation.getTopItem()?.type === "number-history") {
+    window.mehNavigation.requestBack("number-generate");
+  }
 
   const result = createRandomNumberResult();
 
@@ -2826,13 +3012,15 @@ function updateNumberHistoryStats() {
   const button = document.querySelector("#numberHistoryButton");
   if (button) {
     button.addEventListener("click", () => {
-      numberState.historyExpanded = !numberState.historyExpanded;
-      updateNumberHistoryStats();
+      openTransientItem("number-history", { page: "number" });
     });
   }
 }
 
 function resetNumberHistory() {
+  if (window.mehNavigation.getTopItem()?.type === "number-history") {
+    window.mehNavigation.requestBack("reset");
+  }
   numberState.result = null;
   numberState.history = [];
   numberState.historyExpanded = false;
@@ -2842,7 +3030,7 @@ function resetNumberHistory() {
 }
 
 function openNumberSettings() {
-  window.mehNavigation.open("number-settings");
+  openTopLevelItem("number-settings");
 }
 
 function renderNumberSettingsPanel() {
@@ -2965,18 +3153,17 @@ async function initSettings() {
   });
 
   els.languageMenuButton.addEventListener("click", () => {
-    const willOpen = els.languageMenu.hidden;
-
-    closeDarkModeMenu();
-
-    els.languageMenu.hidden = !willOpen;
-    els.languageMenuButton.setAttribute("aria-expanded", String(willOpen));
+    openTransientItem("language-menu", { owner: "settings" });
   });
 
   els.languageMenu.querySelectorAll("[data-lang-option]").forEach((button) => {
     button.addEventListener("click", () => {
       setLanguage(button.dataset.langOption);
-      closeLanguageMenu();
+      if (window.mehNavigation.getTopItem()?.type === "language-menu") {
+        window.mehNavigation.requestBack("selection");
+      } else {
+        closeLanguageMenu();
+      }
     });
   });
   bindDarkModeMenu();
@@ -3081,9 +3268,21 @@ function initCustomColorPickers() {
   });
 }
 
-function toggleCustomColorPicker(kind) {
+function setColorPickerVisibility(kind) {
   document.querySelectorAll(".advanced-color-picker").forEach((picker) => {
-    picker.hidden = picker.dataset.colorPicker === kind ? !picker.hidden : true;
+    picker.hidden = picker.dataset.colorPicker !== kind;
+  });
+}
+
+function toggleCustomColorPicker(kind) {
+  const top = window.mehNavigation.getTopItem();
+  if (top?.type === "advanced-color-picker" && top.context.kind === kind) {
+    window.mehNavigation.requestBack("toggle");
+    return;
+  }
+  openTransientItem("advanced-color-picker", {
+    owner: "settings",
+    kind,
   });
 }
 function updateCustomColorFromField(kind, field, event, isFinal = false) {
@@ -3738,7 +3937,7 @@ function closeLanguageMenu() {
   els.languageMenuButton.setAttribute("aria-expanded", "false");
 }
 function openSettings() {
-  window.mehNavigation.open("settings");
+  openTopLevelItem("settings");
 }
 
 function lockPageScroll() {
@@ -3760,15 +3959,13 @@ function lockPageScroll() {
       transform: document.body.style.transform,
     },
   };
-  viewportRestoreScrollY = pageScrollLock.y;
-  viewportRestorePending = true;
   document.documentElement.classList.add("page-scroll-locked");
 }
 
 function unlockPageScroll() {
   const scrollY = pageScrollLock.active
     ? pageScrollLock.y
-    : viewportRestoreScrollY;
+    : window.scrollY;
   const htmlOverflow = pageScrollLock.htmlOverflow || "";
   const bodyStyles = pageScrollLock.bodyStyles;
   pageScrollLock = {
@@ -3793,15 +3990,139 @@ function unlockPageScroll() {
   Object.entries(safeBodyStyles).forEach(([property, value]) => {
     document.body.style[property] = value;
   });
-  viewportNudgeGeneration += 1;
-  els.root.classList.remove("viewport-recovery-active");
-  els.root.style.removeProperty("--viewport-recovery-height");
-  viewportRestoreScrollY = scrollY;
-  scheduleViewportRecovery("sheet-unlock");
+  if (Math.abs(window.scrollY - scrollY) > 1) window.scrollTo(0, scrollY);
+  keyboardViewportController.requestSettle("sheet-unlock");
 }
 
 function configureNavigation() {
-  window.mehNavigation.setRenderer(renderNavigationState);
+  const registerSheet = (type, screen, sheet, options = {}) => {
+    window.mehNavigation.registerItemType(type, {
+      screen,
+      historyMode: "push",
+      validate: options.validate,
+      async onOpen({ item, canAnimate, restored }) {
+        const route = { screen, params: item.context };
+        prepareNavigationScreen(route);
+        [els.settingsSheet, els.wheelEditorSheet, els.numberSettingsSheet].forEach((candidate) => {
+          if (candidate !== sheet) setBottomSheetImmediate(candidate, false);
+        });
+        sheet.scrollTop = navigationScrollPositions.get(navigationStateKey(route)) || 0;
+        renderedNavigationState = {
+          ...window.mehNavigation.getState(),
+          screen,
+          params: clonePlainObject(item.context),
+        };
+        keyboardViewportController.navigationStarted();
+        await openBottomSheet(sheet, {
+          item,
+          immediate: !canAnimate || restored,
+        });
+      },
+      async onBack({ item, source, canAnimate, transitionToken }) {
+        navigationScrollPositions.set(
+          navigationStateKey({ screen, params: item.context }),
+          sheet.scrollTop
+        );
+        const focused = isKeyboardEditable(document.activeElement)
+          ? document.activeElement
+          : null;
+        focused?.blur();
+        keyboardViewportController.navigationStarted();
+        await closeBottomSheet(sheet, {
+          item,
+          immediate: !canAnimate,
+          transitionToken,
+        });
+        renderedNavigationState = {
+          ...window.mehNavigation.getState(),
+          screen: "home",
+          params: {},
+        };
+        if (source === "ios-edge-back") {
+          keyboardViewportController.requestSettle("ios-edge-back");
+        }
+      },
+    });
+  };
+
+  registerSheet("settings", "settings", els.settingsSheet);
+  registerSheet("preset-editor", "preset-editor", els.wheelEditorSheet, {
+    validate(context) {
+      const presetId = String(context?.presetId || "");
+      return Boolean(presetId && wheelState.presets.some((preset) => preset.id === presetId));
+    },
+  });
+  registerSheet("number-settings", "number-settings", els.numberSettingsSheet);
+
+  window.mehNavigation.registerItemType("language-menu", {
+    screen: "settings",
+    historyMode: "push",
+    onOpen() {
+      els.languageMenu.hidden = false;
+      els.languageMenuButton.setAttribute("aria-expanded", "true");
+    },
+    onBack() {
+      closeLanguageMenu();
+    },
+  });
+  window.mehNavigation.registerItemType("dark-mode-menu", {
+    screen: "settings",
+    historyMode: "push",
+    onOpen() {
+      els.darkModeMenu.hidden = false;
+      els.darkModeMenuButton.setAttribute("aria-expanded", "true");
+      els.darkModeMenuButton.classList.add("is-open");
+    },
+    onBack() {
+      closeDarkModeMenu();
+    },
+  });
+  window.mehNavigation.registerItemType("advanced-color-picker", {
+    screen: "settings",
+    historyMode: "push",
+    onOpen({ item }) {
+      setColorPickerVisibility(item.context.kind);
+    },
+    onBack() {
+      setColorPickerVisibility("");
+    },
+  });
+  window.mehNavigation.registerItemType("wheel-history", {
+    screen: "home",
+    historyMode: "push",
+    onOpen() {
+      wheelState.historyExpanded = true;
+      updateWheelStats();
+    },
+    onBack() {
+      wheelState.historyExpanded = false;
+      updateWheelStats();
+    },
+  });
+  window.mehNavigation.registerItemType("number-history", {
+    screen: "home",
+    historyMode: "push",
+    onOpen() {
+      numberState.historyExpanded = true;
+      updateNumberHistoryStats();
+    },
+    onBack() {
+      numberState.historyExpanded = false;
+      updateNumberHistoryStats();
+    },
+  });
+
+  window.mehNavigation.setBackGuard({
+    canHandle() {
+      return keyboardViewportController.isKeyboardActive();
+    },
+    run(source) {
+      return keyboardViewportController.interceptBack(source);
+    },
+  });
+  window.mehNavigation.onSettled((detail) => {
+    keyboardViewportController.navigationEnded(detail.source);
+  });
 }
 
 function navigationStateKey(route) {
@@ -3815,12 +4136,6 @@ function getNavigationSheet(screen) {
   return null;
 }
 
-function isValidNavigationState(route) {
-  if (route.screen !== "preset-editor") return true;
-  const presetId = String(route.params?.presetId || "");
-  return Boolean(presetId && wheelState.presets.some((preset) => preset.id === presetId));
-}
-
 function prepareNavigationScreen(route) {
   if (route.screen === "preset-editor") {
     const presetId = String(route.params?.presetId || "");
@@ -3830,31 +4145,51 @@ function prepareNavigationScreen(route) {
   if (route.screen === "number-settings") renderNumberSettingsPanel();
 }
 
-let pendingSheetTransitionCleanup = null;
+const sheetTransitions = new WeakMap();
 
-function finishPendingSheetTransition() {
-  if (!pendingSheetTransitionCleanup) return;
-  const cleanup = pendingSheetTransitionCleanup;
-  pendingSheetTransitionCleanup = null;
-  cleanup();
+function cancelBottomSheetTransition(sheet) {
+  const active = sheetTransitions.get(sheet);
+  active?.finish();
 }
 
-function waitForBottomSheetTransition(sheet, callback) {
-  let finished = false;
-  const finish = () => {
-    if (finished) return;
-    finished = true;
-    sheet.removeEventListener("transitionend", handleTransitionEnd);
-    window.clearTimeout(sheetCloseTimer);
-    if (pendingSheetTransitionCleanup === finish) pendingSheetTransitionCleanup = null;
-    callback();
-  };
-  const handleTransitionEnd = (event) => {
-    if (event.target === sheet && event.propertyName === "transform") finish();
-  };
-  pendingSheetTransitionCleanup = finish;
-  sheet.addEventListener("transitionend", handleTransitionEnd);
-  sheetCloseTimer = window.setTimeout(finish, 320);
+function waitForBottomSheetTransition(sheet, item, transitionToken) {
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+    return Promise.resolve();
+  }
+  cancelBottomSheetTransition(sheet);
+  return new Promise((resolve) => {
+    let finished = false;
+    const itemId = item?.id || sheet.dataset.navigationItemId || "";
+    const finish = () => {
+      if (finished) return;
+      const current = sheetTransitions.get(sheet);
+      if (
+        current
+        && (current.itemId !== itemId || current.transitionToken !== transitionToken)
+      ) {
+        return;
+      }
+      finished = true;
+      sheet.removeEventListener("transitionend", handleTransitionEnd);
+      window.clearTimeout(fallback);
+      if (sheetTransitions.get(sheet)?.finish === finish) sheetTransitions.delete(sheet);
+      resolve();
+    };
+    const handleTransitionEnd = (event) => {
+      const current = sheetTransitions.get(sheet);
+      if (
+        event.target === sheet
+        && event.propertyName === "transform"
+        && current?.itemId === itemId
+        && current.transitionToken === transitionToken
+      ) {
+        finish();
+      }
+    };
+    const fallback = window.setTimeout(finish, 360);
+    sheetTransitions.set(sheet, { itemId, transitionToken, finish });
+    sheet.addEventListener("transitionend", handleTransitionEnd);
+  });
 }
 
 function clearBottomSheetState(sheet) {
@@ -3905,9 +4240,11 @@ function hideScrim(immediate = false) {
   }
 }
 
-function openBottomSheet(sheet, options = {}) {
+async function openBottomSheet(sheet, options = {}) {
   if (!sheet) return;
+  cancelBottomSheetTransition(sheet);
   clearBottomSheetState(sheet);
+  sheet.dataset.navigationItemId = options.item?.id || "";
   lockPageScroll();
   document.body.classList.add("sheet-open");
 
@@ -3924,168 +4261,68 @@ function openBottomSheet(sheet, options = {}) {
   showScrim(false);
   sheet.getBoundingClientRect();
   sheet.classList.remove("is-transition-suppressed");
-  window.requestAnimationFrame(() => {
-    sheet.classList.add("is-open");
-  });
+  await new Promise((resolve) => window.requestAnimationFrame(resolve));
+  sheet.classList.add("is-open");
+  await waitForBottomSheetTransition(sheet, options.item, 0);
 }
 
-function closeBottomSheet(sheet, options = {}) {
+async function closeBottomSheet(sheet, options = {}) {
   if (!sheet) {
-    if (!options.keepOverlay) {
-      hideScrim(true);
-      document.body.classList.remove("sheet-open");
-      unlockPageScroll();
-    }
-    options.onComplete?.();
+    hideScrim(true);
+    document.body.classList.remove("sheet-open");
+    unlockPageScroll();
     return;
   }
 
+  cancelBottomSheetTransition(sheet);
   sheet.setAttribute("aria-hidden", "true");
   sheet.classList.add("is-closing");
   sheet.style.transform = "";
 
-  const finish = () => {
-    sheet.classList.remove("is-open");
-    clearBottomSheetState(sheet);
-    if (!options.keepOverlay) {
-      hideScrim(true);
-      document.body.classList.remove("sheet-open");
-      unlockPageScroll();
-    }
-    options.onComplete?.();
-  };
-
   if (options.immediate) {
     sheet.classList.add("is-transition-suppressed");
     sheet.classList.remove("is-open");
-    finish();
-    return;
+  } else {
+    sheet.classList.remove("is-open");
+    hideScrim(false);
+    await waitForBottomSheetTransition(
+      sheet,
+      options.item,
+      options.transitionToken || 0
+    );
   }
-
   sheet.classList.remove("is-open");
-  if (!options.keepOverlay) hideScrim(false);
-  waitForBottomSheetTransition(sheet, finish);
+  clearBottomSheetState(sheet);
+  delete sheet.dataset.navigationItemId;
+  hideScrim(true);
+  document.body.classList.remove("sheet-open");
+  unlockPageScroll();
 }
 
-function syncBottomSheetsImmediately(route) {
-  const targetSheet = getNavigationSheet(route.screen);
-  [els.settingsSheet, els.wheelEditorSheet, els.numberSettingsSheet].forEach((sheet) => {
-    setBottomSheetImmediate(sheet, sheet === targetSheet);
-  });
-  if (targetSheet) {
-    lockPageScroll();
-    document.body.classList.add("sheet-open");
-    showScrim(true);
-    targetSheet.scrollTop = navigationScrollPositions.get(navigationStateKey(route)) || 0;
-  } else {
-    hideScrim(true);
-    document.body.classList.remove("sheet-open");
-    unlockPageScroll();
+function openTransientItem(type, context = {}) {
+  const top = window.mehNavigation.getTopItem();
+  const transientTypes = new Set([
+    "language-menu",
+    "dark-mode-menu",
+    "advanced-color-picker",
+    "wheel-history",
+    "number-history",
+  ]);
+  if (top?.type === type) return window.mehNavigation.requestBack("toggle");
+  if (top && transientTypes.has(top.type)) {
+    return window.mehNavigation.replaceItem({ type, context });
   }
+  return window.mehNavigation.pushItem({ type, context, historyMode: "push" });
 }
 
-function renderNavigationState(route, context = {}) {
-  if (!isValidNavigationState(route)) {
-    console.warn("[Meh] Invalid navigation state; restoring home", route);
-    window.mehNavigation.replace("home");
-    return;
+function openTopLevelItem(type, context = {}) {
+  const top = window.mehNavigation.getTopItem();
+  if (top && ["wheel-history", "number-history"].includes(top.type)) {
+    return window.mehNavigation.replaceItem({ type, screen: type, context });
   }
-
-  const previousRoute = context.previousState || renderedNavigationState;
-  const previousSheet = getNavigationSheet(previousRoute?.screen);
-  if (previousSheet) {
-    navigationScrollPositions.set(navigationStateKey(previousRoute), previousSheet.scrollTop);
-  }
-
-  finishPendingSheetTransition();
-  closeLanguageMenu();
-
-  if (typeof closeDarkModeMenu === "function") {
-    closeDarkModeMenu();
-  }
-
-  const focusedEditable = isKeyboardEditable(document.activeElement)
-    ? document.activeElement
-    : null;
-  if (focusedEditable?.closest(".settings-sheet, .editor-sheet")) {
-    focusedEditable.blur();
-  }
-
-  const targetSheet = getNavigationSheet(route.screen);
-  prepareNavigationScreen(route);
-  const isExternalHistory = context.action === "pop"
-    && context.source === "browser-history";
-  const mustSynchronizeImmediately = context.action === "restore"
-    || context.action === "replace"
-    || isExternalHistory;
-
-  if (mustSynchronizeImmediately) {
-    syncBottomSheetsImmediately(route);
-    renderedNavigationState = route;
-    if (context.action === "pop") scheduleViewportRecovery("history-pop");
-    return;
-  }
-
-  if (targetSheet && previousSheet && previousSheet !== targetSheet && context.direction === "back") {
-    setBottomSheetImmediate(targetSheet, true);
-    lockPageScroll();
-    document.body.classList.add("sheet-open");
-    showScrim(true);
-    targetSheet.scrollTop = navigationScrollPositions.get(navigationStateKey(route)) || 0;
-    closeBottomSheet(previousSheet, { keepOverlay: true });
-  } else if (targetSheet) {
-    [els.settingsSheet, els.wheelEditorSheet, els.numberSettingsSheet].forEach((sheet) => {
-      if (sheet !== targetSheet) setBottomSheetImmediate(sheet, false);
-    });
-    openBottomSheet(targetSheet);
-    targetSheet.scrollTop = navigationScrollPositions.get(navigationStateKey(route)) || 0;
-  } else {
-    closeBottomSheet(previousSheet);
-  }
-  renderedNavigationState = route;
+  return window.mehNavigation.open(type, context);
 }
 
-function hasPageLocalBackState() {
-  return Boolean(
-    (els.languageMenu && !els.languageMenu.hidden)
-    || (els.darkModeMenu && !els.darkModeMenu.hidden)
-    || document.querySelector(".advanced-color-picker:not([hidden])")
-    || wheelState.historyExpanded
-    || numberState.historyExpanded
-  );
-}
-
-window.mehNavigation.registerBackHandler("page-local-state", () => {
-    if (els.languageMenu && !els.languageMenu.hidden) {
-      closeLanguageMenu();
-      console.info("[Meh] Back handled by language menu");
-      return true;
-    }
-    if (els.darkModeMenu && !els.darkModeMenu.hidden) {
-      closeDarkModeMenu();
-      console.info("[Meh] Back handled by dark mode menu");
-      return true;
-    }
-    const openColorPicker = document.querySelector(".advanced-color-picker:not([hidden])");
-    if (openColorPicker) {
-      openColorPicker.hidden = true;
-      console.info("[Meh] Back handled by color picker");
-      return true;
-    }
-    if (wheelState.historyExpanded) {
-      wheelState.historyExpanded = false;
-      updateWheelStats();
-      console.info("[Meh] Back handled by wheel history");
-      return true;
-    }
-    if (numberState.historyExpanded) {
-      numberState.historyExpanded = false;
-      updateNumberHistoryStats();
-      console.info("[Meh] Back handled by number history");
-      return true;
-    }
-    return false;
-}, 100, hasPageLocalBackState);
 function bindDarkModeMenu() {
   if (!els.darkModeMenuButton || !els.darkModeMenu) return;
 
@@ -4099,25 +4336,28 @@ function bindDarkModeMenu() {
 
   els.darkModeMenuButton.addEventListener("click", (event) => {
     event.stopPropagation();
-
-    const willOpen = els.darkModeMenu.hidden;
-
-    closeLanguageMenu();
-
-    els.darkModeMenu.hidden = !willOpen;
-    els.darkModeMenuButton.setAttribute("aria-expanded", String(willOpen));
+    openTransientItem("dark-mode-menu", { owner: "settings" });
   });
 
   els.darkModeMenu.querySelectorAll("[data-dark-option]").forEach((button) => {
     button.addEventListener("click", () => {
       setDarkMode(button.dataset.darkOption);
-      closeDarkModeMenu();
+      if (window.mehNavigation.getTopItem()?.type === "dark-mode-menu") {
+        window.mehNavigation.requestBack("selection");
+      } else {
+        closeDarkModeMenu();
+      }
     });
   });
 
   document.addEventListener("click", (event) => {
-    if (!event.target.closest(".dark-mode-picker")) {
-      closeDarkModeMenu();
+    if (
+      !event.target.closest(
+        ".dark-mode-picker, .language-picker, .swatch-button, .advanced-color-picker"
+      )
+      && window.mehNavigation.getTopItem()?.type === "dark-mode-menu"
+    ) {
+      window.mehNavigation.requestBack("outside-click");
     }
   });
 }
@@ -4162,6 +4402,7 @@ function closeDarkModeMenu() {
 
   els.darkModeMenu.hidden = true;
   els.darkModeMenuButton.setAttribute("aria-expanded", "false");
+  els.darkModeMenuButton.classList.remove("is-open");
 }
 
 function loadState() {
