@@ -161,7 +161,7 @@ try {
       ],
     };
   })()`);
-  check(base.build === "1.1.2-pwa-r1", "browser loaded the wrong build");
+  check(base.build === "1.1.2-pwa-r2", "browser loaded the wrong build");
   check(base.platform === "platform-browser" && base.finalTop === "0px" && base.finalBottom === "0px", "browser fallback platform or zero-inset policy is wrong");
   check(base.viewport[0] === 390, `portrait viewport width was ${base.viewport[0]}, expected 390`);
   check(base.bodyPadding.join(",") === "0px,0px", "visual body must not consume safe-area padding");
@@ -381,8 +381,11 @@ try {
   const historyTransition = await evaluate(`new Promise((resolve) => {
     window.addEventListener('popstate', () => {
       const sheet = document.querySelector('#settingsSheet');
+      const matrix = new DOMMatrixReadOnly(getComputedStyle(sheet).transform);
       resolve({
-        exiting: sheet.classList.contains('is-navigation-exiting'),
+        navigationClasses: Array.from(sheet.classList).filter((name) => name.startsWith('is-navigation-')),
+        horizontalOffset: Math.round(matrix.m41),
+        open: sheet.classList.contains('is-open'),
         ariaHidden: sheet.getAttribute('aria-hidden'),
         state: window.mehNavigation?.getState(),
       });
@@ -390,11 +393,13 @@ try {
     history.back();
   })`);
   check(
-    historyTransition.exiting
+    historyTransition.navigationClasses.length === 0
+      && historyTransition.horizontalOffset === 0
+      && !historyTransition.open
       && historyTransition.ariaHidden === "true"
       && historyTransition.state?.screen === "home"
       && historyTransition.state?.depth === 0,
-    `history return did not restore the root state with a back transition: ${JSON.stringify(historyTransition)}`
+    `browser history return added a second transition or failed to restore root: ${JSON.stringify(historyTransition)}`
   );
   await evaluate(`new Promise((resolve) => setTimeout(resolve, 850))`);
   const historyRecovery = await evaluate(`(() => {
@@ -412,6 +417,79 @@ try {
   check(historyRecovery.bodyInlinePosition === "" && historyRecovery.bodyInlineTop === "", `history return left a body-fixed offset: ${JSON.stringify(historyRecovery)}`);
   check(historyRecovery.backgroundBottom >= historyRecovery.viewportBottom, `history return exposed the viewport below the background: ${JSON.stringify(historyRecovery)}`);
 
+  const repeatedSheetCycles = await evaluate(`(async () => {
+    const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+    const baselineScrollHeight = document.documentElement.scrollHeight;
+    const cycles = [];
+    for (let index = 0; index < 10; index += 1) {
+      document.querySelector('#settingsButton').click();
+      await wait(45);
+      const sheet = document.querySelector('#settingsSheet');
+      const openingMatrix = new DOMMatrixReadOnly(getComputedStyle(sheet).transform);
+      document.querySelector('#closeSettingsButton').click();
+      await wait(360);
+      const closingMatrix = new DOMMatrixReadOnly(getComputedStyle(sheet).transform);
+      cycles.push({
+        openingHorizontal: Math.round(openingMatrix.m41),
+        openingVertical: Math.round(openingMatrix.m42),
+        closingHorizontal: Math.round(closingMatrix.m41),
+        open: sheet.classList.contains('is-open'),
+        rootLocked: document.documentElement.classList.contains('page-scroll-locked'),
+        bodySheetOpen: document.body.classList.contains('sheet-open'),
+        bodyStyles: {
+          position: document.body.style.position,
+          top: document.body.style.top,
+          height: document.body.style.height,
+          overflow: document.body.style.overflow,
+          paddingBottom: document.body.style.paddingBottom,
+          transform: document.body.style.transform,
+        },
+        recoveryClass: document.documentElement.classList.contains('viewport-recovery-active'),
+        recoveryHeight: document.documentElement.style.getPropertyValue('--viewport-recovery-height'),
+        scrollHeight: document.documentElement.scrollHeight,
+        backgroundBottom: Math.round(document.querySelector('#viewport-background').getBoundingClientRect().bottom),
+        viewportBottom: innerHeight,
+      });
+    }
+    return { baselineScrollHeight, cycles };
+  })()`);
+  check(
+    repeatedSheetCycles.cycles.every((cycle) =>
+      cycle.openingHorizontal === 0
+      && cycle.closingHorizontal === 0
+      && cycle.openingVertical > 0
+      && !cycle.open
+      && !cycle.rootLocked
+      && !cycle.bodySheetOpen
+      && Object.values(cycle.bodyStyles).every((value) => value === "")
+      && !cycle.recoveryClass
+      && cycle.recoveryHeight === ""
+      && Math.abs(cycle.scrollHeight - repeatedSheetCycles.baselineScrollHeight) <= 2
+      && cycle.backgroundBottom >= cycle.viewportBottom
+    ),
+    `repeated Bottom Sheet cycles left horizontal motion, scroll locks, or viewport gaps: ${JSON.stringify(repeatedSheetCycles)}`
+  );
+
+  const localBackPriority = await evaluate(`(() => {
+    wheelState.historyExpanded = true;
+    const canGoBack = window.mehNavigation.canGoBack();
+    const handled = window.mehNavigation.back('android-back');
+    return {
+      canGoBack,
+      handled,
+      historyExpanded: wheelState.historyExpanded,
+      state: window.mehNavigation.getState(),
+    };
+  })()`);
+  check(
+    localBackPriority.canGoBack
+      && localBackPriority.handled
+      && !localBackPriority.historyExpanded
+      && localBackPriority.state.screen === "home"
+      && localBackPriority.state.depth === 0,
+    `Android-style back did not prioritize local UI state at home: ${JSON.stringify(localBackPriority)}`
+  );
+
   const nestedNavigation = await evaluate(`(async () => {
     const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
     window.mehNavigation.open('settings');
@@ -425,28 +503,28 @@ try {
       presetOpen: document.querySelector('#wheelEditorSheet').classList.contains('is-open'),
     };
     document.querySelector('#closeWheelEditorButton').click();
-    await wait(260);
+    await wait(360);
     const parent = {
       state: window.mehNavigation.getState(),
       settingsOpen: settingsSheet.classList.contains('is-open'),
       scrollTop: Math.round(settingsSheet.scrollTop),
     };
     document.querySelector('#closeSettingsButton').click();
-    await wait(260);
+    await wait(360);
     const root = {
       state: window.mehNavigation.getState(),
       anySheetOpen: Boolean(document.querySelector('.settings-sheet.is-open, .editor-sheet.is-open')),
     };
     history.forward();
-    await wait(260);
+    await wait(360);
     const forwardParent = window.mehNavigation.getState();
     history.forward();
-    await wait(260);
+    await wait(360);
     const forwardChild = window.mehNavigation.getState();
     window.mehNavigation.back();
-    await wait(260);
+    await wait(360);
     window.mehNavigation.back();
-    await wait(260);
+    await wait(360);
     return { child, parent, root, forwardParent, forwardChild };
   })()`);
   check(

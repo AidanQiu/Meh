@@ -91,8 +91,15 @@ for (const method of ["open", "back", "canGoBack", "getState", "replace"]) {
 check((navigation.match(/addEventListener\("popstate"/g) || []).length === 1, "SPA navigation must have exactly one popstate entry point");
 check(navigation.includes("history.replaceState(normalized") && navigation.includes("history.pushState(nextState"), "SPA root and child history writes are missing");
 check(app.includes('window.mehNavigation.open("settings")') && app.includes('window.mehNavigation.open("preset-editor"'), "full-page entry points must use the SPA controller");
-check(app.includes("window.mehNavigation.back()"), "page back controls must use the SPA controller");
-check(css.includes(".is-navigation-entering") && css.includes(".is-navigation-exiting"), "native-style page transition states are missing");
+check(app.includes("window.mehNavigation.back("), "page back controls must use the SPA controller");
+check(!css.includes("is-navigation-entering") && !css.includes("is-navigation-exiting") && !css.includes("is-navigation-leaving"), "obsolete horizontal SPA transition states remain");
+check(
+  /\.settings-sheet,[\s\S]*?transform:\s*translateY\(105%\)/.test(css)
+    && /\.settings-sheet\.is-open,[\s\S]*?transform:\s*translateY\(0\)/.test(css),
+  "Bottom Sheets must use vertical-only open and close transforms"
+);
+check(navigation.includes('pendingNavigationSource || "browser-history"'), "navigation source tracking is missing");
+check(app.includes('context.source === "browser-history"'), "browser history must synchronize UI without a second custom transition");
 check(css.includes("@media (prefers-reduced-motion: reduce)"), "navigation transitions must respect reduced motion");
 check(app.includes("isIosPwaRuntime()") && app.includes("meta.remove()"), "iOS standalone theme-color removal is missing");
 check(html.includes('if (platformClass === "platform-ios-pwa")') && html.includes("themeMeta.remove()"), "bootstrap must remove theme-color before the first iOS PWA paint");
@@ -123,7 +130,7 @@ check(activity.includes("isAppearanceLightStatusBars") && activity.includes("isA
 check(activity.includes("getSafeAreaInsets") && activity.includes("MehPlatform?.applyAndroidInsets"), "native-to-CSS inset bridge is missing");
 check(activity.includes("EDGE_TO_EDGE_ENABLED") && activity.includes('.put("edgeToEdge", EDGE_TO_EDGE_ENABLED)'), "Android inset policy is not tied to native edge-to-edge state");
 check(activity.includes("cacheMode = WebSettings.LOAD_NO_CACHE"), "packaged Android web assets must bypass stale WebView caches");
-check(activity.includes("window.mehNavigation?.canGoBack()") && activity.includes("window.mehNavigation?.back()"), "Android back must query and invoke the SPA controller");
+check(activity.includes("window.mehNavigation?.canGoBack()") && activity.includes('window.mehNavigation?.back("android-back")'), "Android back must query and invoke the SPA controller");
 check(!activity.includes("webView.canGoBack()") && !activity.includes("webView.goBack()"), "Android back must not fall through to WebView browsing history");
 check(!activity.includes("webView.restoreState(savedInstanceState)"), "Android must not restore an old packaged page after an incremental reinstall");
 check(layout.includes('android:layout_width="match_parent"') && layout.includes('android:layout_height="match_parent"'), "root and WebView must fill the window");

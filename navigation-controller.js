@@ -13,9 +13,8 @@
   const backHandlers = [];
   let renderer = null;
   let currentState = normalizeState(history.state);
-  let transitionPending = false;
   let backPending = false;
-  let backPendingTimer = 0;
+  let pendingNavigationSource = "";
 
   function cloneParams(params) {
     if (!params || typeof params !== "object" || Array.isArray(params)) return {};
@@ -81,16 +80,13 @@
 
     const previousState = currentState;
     currentState = nextState;
-    transitionPending = true;
     history.pushState(nextState, "", location.href);
     notifyRenderer(nextState, {
       action: "open",
       direction: "forward",
+      source: "ui-open",
       previousState: { ...previousState, params: cloneParams(previousState.params) },
     });
-    window.setTimeout(() => {
-      transitionPending = false;
-    }, 320);
     return true;
   }
 
@@ -105,22 +101,27 @@
     return false;
   }
 
-  function back() {
+  function back(source = "ui-button") {
     if (runBackHandlers()) return true;
     if (!canGoBack()) return false;
     if (backPending) return true;
     backPending = true;
-    transitionPending = true;
+    pendingNavigationSource = typeof source === "string" && source
+      ? source
+      : "ui-button";
     history.back();
-    window.clearTimeout(backPendingTimer);
-    backPendingTimer = window.setTimeout(() => {
-      backPending = false;
-    }, 800);
     return true;
   }
 
   function canGoBack() {
-    return currentState.mehApp === true && currentState.depth > 0;
+    if (currentState.mehApp === true && currentState.depth > 0) return true;
+    return backHandlers.some(({ canHandle }) => {
+      try {
+        return typeof canHandle === "function" && canHandle();
+      } catch {
+        return false;
+      }
+    });
   }
 
   function getState() {
@@ -145,6 +146,7 @@
     notifyRenderer(candidate, {
       action: "replace",
       direction: candidate.depth < previousState.depth ? "back" : "none",
+      source: "replace",
       previousState: { ...previousState, params: cloneParams(previousState.params) },
     });
     return true;
@@ -156,13 +158,14 @@
     notifyRenderer(currentState, {
       action: "restore",
       direction: "none",
+      source: "restore",
       previousState: null,
     });
   }
 
-  function registerBackHandler(name, handler, priority = 0) {
+  function registerBackHandler(name, handler, priority = 0, canHandle = null) {
     if (typeof handler !== "function") throw new TypeError("Back handler must be a function");
-    const entry = { name, handler, priority };
+    const entry = { name, handler, priority, canHandle };
     backHandlers.push(entry);
     backHandlers.sort((left, right) => right.priority - left.priority);
     return () => {
@@ -172,23 +175,21 @@
   }
 
   window.addEventListener("popstate", (event) => {
+    const source = pendingNavigationSource || "browser-history";
+    pendingNavigationSource = "";
     backPending = false;
-    window.clearTimeout(backPendingTimer);
     const previousState = currentState;
     const nextState = normalizeState(event.state);
     if (!event.state || event.state.mehApp !== true || !VALID_SCREENS.has(event.state.screen)) {
       history.replaceState(nextState, "", location.href);
     }
     currentState = nextState;
-    transitionPending = true;
     notifyRenderer(nextState, {
       action: "pop",
       direction: nextState.depth < previousState.depth ? "back" : "forward",
+      source,
       previousState: { ...previousState, params: cloneParams(previousState.params) },
     });
-    window.setTimeout(() => {
-      transitionPending = false;
-    }, 320);
   });
 
   initializeHistory();
@@ -201,9 +202,6 @@
     replace,
     setRenderer,
     registerBackHandler,
-    get transitionPending() {
-      return transitionPending;
-    },
   });
 
   window.mehNavigation = api;

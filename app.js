@@ -577,6 +577,8 @@ const navigationScrollPositions = new Map();
 let pageScrollLock = {
   active: false,
   y: 0,
+  htmlOverflow: "",
+  bodyStyles: null,
 };
 
 const els = {
@@ -718,10 +720,10 @@ function bindEvents() {
 
   els.settingsButton.addEventListener("click", openSettings);
   els.featureButton.addEventListener("click", handleFeatureButton);
-  els.closeSettingsButton.addEventListener("click", () => window.mehNavigation.back());
-  els.closeWheelEditorButton.addEventListener("click", () => window.mehNavigation.back());
-  els.closeNumberSettingsButton.addEventListener("click", () => window.mehNavigation.back());
-  els.scrim.addEventListener("click", () => window.mehNavigation.back());
+  els.closeSettingsButton.addEventListener("click", () => window.mehNavigation.back("ui-button"));
+  els.closeWheelEditorButton.addEventListener("click", () => window.mehNavigation.back("ui-button"));
+  els.closeNumberSettingsButton.addEventListener("click", () => window.mehNavigation.back("ui-button"));
+  els.scrim.addEventListener("click", () => window.mehNavigation.back("ui-button"));
   bindSheetHandleGestures();
   bindDockDragGesture();
 
@@ -1748,7 +1750,7 @@ function bindSheetHandleGestures() {
       shouldTrack = false;
       sheet.classList.remove("is-dragging");
       sheet.style.transform = "";
-      window.mehNavigation.back();
+      window.mehNavigation.back("sheet-gesture");
     };
 
     const finishDrag = () => {
@@ -2861,7 +2863,7 @@ function saveNumberSettingsFromPanel() {
   saveNumberSettings();
   numberState.historyExpanded = false;
   if (state.page === "number") renderNumberPage();
-  window.mehNavigation.back();
+  window.mehNavigation.back("save-action");
 }
 
 function loadNumberSettings() {
@@ -3745,6 +3747,18 @@ function lockPageScroll() {
   pageScrollLock = {
     active: true,
     y: window.scrollY || document.documentElement.scrollTop || 0,
+    htmlOverflow: document.documentElement.style.overflow,
+    bodyStyles: {
+      position: document.body.style.position,
+      top: document.body.style.top,
+      left: document.body.style.left,
+      right: document.body.style.right,
+      width: document.body.style.width,
+      height: document.body.style.height,
+      overflow: document.body.style.overflow,
+      paddingBottom: document.body.style.paddingBottom,
+      transform: document.body.style.transform,
+    },
   };
   viewportRestoreScrollY = pageScrollLock.y;
   viewportRestorePending = true;
@@ -3752,14 +3766,36 @@ function lockPageScroll() {
 }
 
 function unlockPageScroll() {
-  if (!pageScrollLock.active) return;
-
-  const scrollY = pageScrollLock.y;
+  const scrollY = pageScrollLock.active
+    ? pageScrollLock.y
+    : viewportRestoreScrollY;
+  const htmlOverflow = pageScrollLock.htmlOverflow || "";
+  const bodyStyles = pageScrollLock.bodyStyles;
   pageScrollLock = {
     active: false,
     y: 0,
+    htmlOverflow: "",
+    bodyStyles: null,
   };
   document.documentElement.classList.remove("page-scroll-locked");
+  document.documentElement.style.overflow = htmlOverflow;
+  const safeBodyStyles = bodyStyles || {
+    position: "",
+    top: "",
+    left: "",
+    right: "",
+    width: "",
+    height: "",
+    overflow: "",
+    paddingBottom: "",
+    transform: "",
+  };
+  Object.entries(safeBodyStyles).forEach(([property, value]) => {
+    document.body.style[property] = value;
+  });
+  viewportNudgeGeneration += 1;
+  els.root.classList.remove("viewport-recovery-active");
+  els.root.style.removeProperty("--viewport-recovery-height");
   viewportRestoreScrollY = scrollY;
   scheduleViewportRecovery("sheet-unlock");
 }
@@ -3794,6 +3830,160 @@ function prepareNavigationScreen(route) {
   if (route.screen === "number-settings") renderNumberSettingsPanel();
 }
 
+let pendingSheetTransitionCleanup = null;
+
+function finishPendingSheetTransition() {
+  if (!pendingSheetTransitionCleanup) return;
+  const cleanup = pendingSheetTransitionCleanup;
+  pendingSheetTransitionCleanup = null;
+  cleanup();
+}
+
+function waitForBottomSheetTransition(sheet, callback) {
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    sheet.removeEventListener("transitionend", handleTransitionEnd);
+    window.clearTimeout(sheetCloseTimer);
+    if (pendingSheetTransitionCleanup === finish) pendingSheetTransitionCleanup = null;
+    callback();
+  };
+  const handleTransitionEnd = (event) => {
+    if (event.target === sheet && event.propertyName === "transform") finish();
+  };
+  pendingSheetTransitionCleanup = finish;
+  sheet.addEventListener("transitionend", handleTransitionEnd);
+  sheetCloseTimer = window.setTimeout(finish, 320);
+}
+
+function clearBottomSheetState(sheet) {
+  if (!sheet) return;
+  sheet.classList.remove("is-closing", "is-dragging", "is-transition-suppressed");
+  sheet.style.transform = "";
+}
+
+function setBottomSheetImmediate(sheet, visible) {
+  if (!sheet) return;
+  clearBottomSheetState(sheet);
+  sheet.classList.add("is-transition-suppressed");
+  sheet.classList.toggle("is-open", visible);
+  sheet.setAttribute("aria-hidden", String(!visible));
+  sheet.style.transform = "";
+  window.requestAnimationFrame(() => {
+    sheet.classList.remove("is-transition-suppressed");
+  });
+}
+
+function showScrim(immediate = false) {
+  if (!els.scrim) return;
+  const alreadyVisible = !els.scrim.hidden && els.scrim.classList.contains("is-open");
+  els.scrim.hidden = false;
+  if (immediate) {
+    els.scrim.classList.add("is-transition-suppressed", "is-open");
+    window.requestAnimationFrame(() => {
+      els.scrim.classList.remove("is-transition-suppressed");
+    });
+  } else if (!alreadyVisible) {
+    els.scrim.classList.remove("is-open");
+    els.scrim.getBoundingClientRect();
+    window.requestAnimationFrame(() => {
+      els.scrim.classList.add("is-open");
+    });
+  }
+}
+
+function hideScrim(immediate = false) {
+  if (!els.scrim) return;
+  if (immediate) els.scrim.classList.add("is-transition-suppressed");
+  els.scrim.classList.remove("is-open");
+  if (immediate) {
+    els.scrim.hidden = true;
+    window.requestAnimationFrame(() => {
+      els.scrim.classList.remove("is-transition-suppressed");
+    });
+  }
+}
+
+function openBottomSheet(sheet, options = {}) {
+  if (!sheet) return;
+  clearBottomSheetState(sheet);
+  lockPageScroll();
+  document.body.classList.add("sheet-open");
+
+  if (options.immediate) {
+    showScrim(true);
+    setBottomSheetImmediate(sheet, true);
+    return;
+  }
+
+  sheet.classList.add("is-transition-suppressed");
+  sheet.classList.remove("is-open");
+  sheet.setAttribute("aria-hidden", "false");
+  sheet.style.transform = "";
+  showScrim(false);
+  sheet.getBoundingClientRect();
+  sheet.classList.remove("is-transition-suppressed");
+  window.requestAnimationFrame(() => {
+    sheet.classList.add("is-open");
+  });
+}
+
+function closeBottomSheet(sheet, options = {}) {
+  if (!sheet) {
+    if (!options.keepOverlay) {
+      hideScrim(true);
+      document.body.classList.remove("sheet-open");
+      unlockPageScroll();
+    }
+    options.onComplete?.();
+    return;
+  }
+
+  sheet.setAttribute("aria-hidden", "true");
+  sheet.classList.add("is-closing");
+  sheet.style.transform = "";
+
+  const finish = () => {
+    sheet.classList.remove("is-open");
+    clearBottomSheetState(sheet);
+    if (!options.keepOverlay) {
+      hideScrim(true);
+      document.body.classList.remove("sheet-open");
+      unlockPageScroll();
+    }
+    options.onComplete?.();
+  };
+
+  if (options.immediate) {
+    sheet.classList.add("is-transition-suppressed");
+    sheet.classList.remove("is-open");
+    finish();
+    return;
+  }
+
+  sheet.classList.remove("is-open");
+  if (!options.keepOverlay) hideScrim(false);
+  waitForBottomSheetTransition(sheet, finish);
+}
+
+function syncBottomSheetsImmediately(route) {
+  const targetSheet = getNavigationSheet(route.screen);
+  [els.settingsSheet, els.wheelEditorSheet, els.numberSettingsSheet].forEach((sheet) => {
+    setBottomSheetImmediate(sheet, sheet === targetSheet);
+  });
+  if (targetSheet) {
+    lockPageScroll();
+    document.body.classList.add("sheet-open");
+    showScrim(true);
+    targetSheet.scrollTop = navigationScrollPositions.get(navigationStateKey(route)) || 0;
+  } else {
+    hideScrim(true);
+    document.body.classList.remove("sheet-open");
+    unlockPageScroll();
+  }
+}
+
 function renderNavigationState(route, context = {}) {
   if (!isValidNavigationState(route)) {
     console.warn("[Meh] Invalid navigation state; restoring home", route);
@@ -3807,7 +3997,7 @@ function renderNavigationState(route, context = {}) {
     navigationScrollPositions.set(navigationStateKey(previousRoute), previousSheet.scrollTop);
   }
 
-  window.clearTimeout(sheetCloseTimer);
+  finishPendingSheetTransition();
   closeLanguageMenu();
 
   if (typeof closeDarkModeMenu === "function") {
@@ -3822,85 +4012,47 @@ function renderNavigationState(route, context = {}) {
   }
 
   const targetSheet = getNavigationSheet(route.screen);
-  const direction = context.direction || "none";
-  const immediate = context.action === "restore" || direction === "none";
+  prepareNavigationScreen(route);
+  const isExternalHistory = context.action === "pop"
+    && context.source === "browser-history";
+  const mustSynchronizeImmediately = context.action === "restore"
+    || context.action === "replace"
+    || isExternalHistory;
 
-  [els.settingsSheet, els.wheelEditorSheet, els.numberSettingsSheet].forEach((sheet) => {
-    const isAnimatedClosingSheet = sheet === previousSheet
-      && sheet !== targetSheet
-      && ["back", "forward"].includes(direction)
-      && !immediate;
-    if (!sheet || sheet === targetSheet || isAnimatedClosingSheet) return;
-    sheet.classList.remove(
-      "is-open",
-      "is-expanded",
-      "is-dragging",
-      "is-navigation-entering",
-      "is-navigation-exiting",
-      "is-navigation-leaving"
-    );
-    sheet.setAttribute("aria-hidden", "true");
-    sheet.style.transform = "";
-  });
-
-  if (!targetSheet) {
-    const closingSheet = previousSheet;
-    if (closingSheet && direction === "back" && !immediate) {
-      closingSheet.classList.remove("is-navigation-leaving");
-      closingSheet.classList.add("is-navigation-exiting");
-      closingSheet.setAttribute("aria-hidden", "true");
-      sheetCloseTimer = window.setTimeout(() => {
-        closingSheet.classList.remove("is-open", "is-navigation-exiting", "is-navigation-leaving");
-        closingSheet.style.transform = "";
-        if (els.scrim) els.scrim.hidden = true;
-        document.body.classList.remove("sheet-open");
-        unlockPageScroll();
-        scheduleViewportRecovery("history-pop");
-      }, 210);
-    } else {
-      if (closingSheet) closingSheet.classList.remove("is-open", "is-navigation-exiting", "is-navigation-leaving");
-      if (els.scrim) els.scrim.hidden = true;
-      document.body.classList.remove("sheet-open");
-      unlockPageScroll();
-      if (context.action === "pop") scheduleViewportRecovery("history-pop");
-    }
+  if (mustSynchronizeImmediately) {
+    syncBottomSheetsImmediately(route);
     renderedNavigationState = route;
-    console.info("[Meh] Navigation restored: home (depth 0)");
+    if (context.action === "pop") scheduleViewportRecovery("history-pop");
     return;
   }
 
-  prepareNavigationScreen(route);
-  lockPageScroll();
-  if (els.scrim) els.scrim.hidden = false;
-  document.body.classList.add("sheet-open");
-  targetSheet.classList.remove("is-navigation-exiting", "is-navigation-leaving");
-  targetSheet.style.transform = "";
-  if (direction === "forward" && !immediate) {
-    targetSheet.classList.add("is-navigation-entering");
-    targetSheet.classList.add("is-open");
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => targetSheet.classList.remove("is-navigation-entering"));
+  if (targetSheet && previousSheet && previousSheet !== targetSheet && context.direction === "back") {
+    setBottomSheetImmediate(targetSheet, true);
+    lockPageScroll();
+    document.body.classList.add("sheet-open");
+    showScrim(true);
+    targetSheet.scrollTop = navigationScrollPositions.get(navigationStateKey(route)) || 0;
+    closeBottomSheet(previousSheet, { keepOverlay: true });
+  } else if (targetSheet) {
+    [els.settingsSheet, els.wheelEditorSheet, els.numberSettingsSheet].forEach((sheet) => {
+      if (sheet !== targetSheet) setBottomSheetImmediate(sheet, false);
     });
+    openBottomSheet(targetSheet);
+    targetSheet.scrollTop = navigationScrollPositions.get(navigationStateKey(route)) || 0;
   } else {
-    targetSheet.classList.remove("is-navigation-entering");
-    targetSheet.classList.add("is-open");
-  }
-  targetSheet.setAttribute("aria-hidden", "false");
-  targetSheet.scrollTop = navigationScrollPositions.get(navigationStateKey(route)) || 0;
-  if (previousSheet && previousSheet !== targetSheet && !immediate) {
-    const exitClass = direction === "back"
-      ? "is-navigation-exiting"
-      : "is-navigation-leaving";
-    previousSheet.classList.remove("is-navigation-exiting", "is-navigation-leaving");
-    previousSheet.classList.add(exitClass);
-    previousSheet.setAttribute("aria-hidden", "true");
-    sheetCloseTimer = window.setTimeout(() => {
-      previousSheet.classList.remove("is-open", exitClass);
-      previousSheet.style.transform = "";
-    }, 210);
+    closeBottomSheet(previousSheet);
   }
   renderedNavigationState = route;
-  console.info(`[Meh] Navigation rendered: ${route.screen} (depth ${route.depth})`);
+}
+
+function hasPageLocalBackState() {
+  return Boolean(
+    (els.languageMenu && !els.languageMenu.hidden)
+    || (els.darkModeMenu && !els.darkModeMenu.hidden)
+    || document.querySelector(".advanced-color-picker:not([hidden])")
+    || wheelState.historyExpanded
+    || numberState.historyExpanded
+  );
 }
 
 window.mehNavigation.registerBackHandler("page-local-state", () => {
@@ -3933,7 +4085,7 @@ window.mehNavigation.registerBackHandler("page-local-state", () => {
       return true;
     }
     return false;
-}, 100);
+}, 100, hasPageLocalBackState);
 function bindDarkModeMenu() {
   if (!els.darkModeMenuButton || !els.darkModeMenu) return;
 

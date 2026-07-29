@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { extname, isAbsolute, join, relative, resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
-const build = "1.1.2-pwa-r1";
+const build = "1.1.2-pwa-r2";
 const browserCandidates = process.platform === "win32"
   ? [
       "C:/Program Files/Google/Chrome/Application/chrome.exe",

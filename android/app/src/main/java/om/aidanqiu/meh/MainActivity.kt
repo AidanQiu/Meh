@@ -309,7 +309,7 @@ class MainActivity : AppCompatActivity() {
                 """
                     (() => {
                       try {
-                        return window.mehNavigation?.back() === true;
+                        return window.mehNavigation?.back("android-back") === true;
                       } catch (_) {
                         return false;
                       }
