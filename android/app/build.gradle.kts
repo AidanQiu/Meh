@@ -5,6 +5,8 @@ plugins {
     alias(libs.plugins.kotlin.android)
 }
 
+val generatedWebAssets = layout.buildDirectory.dir("generated/webAssets")
+
 android {
     namespace = "com.aidanqiu.meh"
     compileSdk {
@@ -41,6 +43,7 @@ android {
     buildFeatures {
         buildConfig = true
     }
+    sourceSets.getByName("main").assets.srcDir(generatedWebAssets)
 }
 
 val webProjectRoot = rootProject.projectDir.parentFile
@@ -50,6 +53,8 @@ val syncWebAssets by tasks.registering(Sync::class) {
     from(webProjectRoot) {
         include(
             "index.html",
+            "platform.js",
+            "navigation-controller.js",
             "app.js",
             "pwa-update.js",
             "style.css",
@@ -66,7 +71,7 @@ val syncWebAssets by tasks.registering(Sync::class) {
             "icons/meh_icon.png"
         )
     }
-    into(layout.projectDirectory.dir("src/main/assets/www"))
+    into(generatedWebAssets.map { it.dir("www") })
 }
 
 tasks.named("preBuild").configure {

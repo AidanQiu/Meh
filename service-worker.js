@@ -1,10 +1,12 @@
-const SW_VERSION = "1.1.1-pwa-r28";
+const SW_VERSION = "1.1.1-pwa-r30";
 const CACHE_NAME = `meh-shell-${SW_VERSION}`;
 const RUNTIME_CACHE_NAME = `meh-runtime-${SW_VERSION}`;
 
 const APP_SHELL = [
   "./",
   "./index.html",
+  `./platform.js?v=${SW_VERSION}`,
+  `./navigation-controller.js?v=${SW_VERSION}`,
   `./style.css?v=${SW_VERSION}`,
   `./app.js?v=${SW_VERSION}`,
   `./pwa-update.js?v=${SW_VERSION}`,

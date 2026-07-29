@@ -8,4 +8,5 @@
     <string name="update_latest">You already have the latest version.</string>
     <string name="update_check_failed">Update check failed. Check your network and try again.</string>
     <string name="update_open_failed">Unable to open the update page.</string>
+    <string name="project_open_failed">Unable to open the GitHub project page.</string>
 </resources>

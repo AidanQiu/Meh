@@ -4,6 +4,8 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 $targetRoot = Join-Path $projectRoot "android/app/src/main/assets/www"
 $files = @(
     "index.html",
+    "platform.js",
+    "navigation-controller.js",
     "app.js",
     "pwa-update.js",
     "style.css",

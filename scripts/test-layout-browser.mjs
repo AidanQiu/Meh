@@ -161,7 +161,7 @@ try {
       ],
     };
   })()`);
-  check(base.build === "1.1.1-pwa-r28", "browser loaded the wrong build");
+  check(base.build === "1.1.1-pwa-r30", "browser loaded the wrong build");
   check(base.platform === "platform-browser" && base.finalTop === "0px" && base.finalBottom === "0px", "browser fallback platform or zero-inset policy is wrong");
   check(base.viewport[0] === 390, `portrait viewport width was ${base.viewport[0]}, expected 390`);
   check(base.bodyPadding.join(",") === "0px,0px", "visual body must not consume safe-area padding");
@@ -180,18 +180,38 @@ try {
     const testWallpaper = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4=';
     applyBackgroundImage(testWallpaper, 0.5);
     const wallpaperVariable = document.documentElement.style.getPropertyValue('--app-wallpaper-image');
+    const wallpaperOpacityVariable = document.documentElement.style.getPropertyValue('--app-wallpaper-opacity');
     const htmlBackground = getComputedStyle(document.documentElement).backgroundImage;
     const bodyBackground = getComputedStyle(document.body).backgroundImage;
     const viewportBackground = getComputedStyle(document.querySelector('#viewport-background')).backgroundImage;
+    const wallpaperLayer = getComputedStyle(document.querySelector('#viewport-background'), '::before');
+    const wallpaperBackground = wallpaperLayer.backgroundImage;
+    const wallpaperOpacity = wallpaperLayer.opacity;
     applyBackgroundImage('', 0.5);
-    return { snapshot, wallpaperVariable, htmlBackground, bodyBackground, viewportBackground };
+    return {
+      snapshot,
+      wallpaperVariable,
+      wallpaperOpacityVariable,
+      htmlBackground,
+      bodyBackground,
+      viewportBackground,
+      wallpaperBackground,
+      wallpaperOpacity,
+    };
   })()`);
   check(safeAreaDiagnostics.snapshot.metaInfo.viewport === "width=device-width, initial-scale=1, viewport-fit=cover", "runtime diagnostics read the wrong viewport meta");
   check(safeAreaDiagnostics.snapshot.metaInfo.appleMobileWebAppCapable === "yes", "runtime diagnostics read the wrong standalone capability meta");
   check(safeAreaDiagnostics.snapshot.metaInfo.appleMobileWebAppStatusBarStyle === "black-translucent", "runtime diagnostics read the wrong status bar meta");
   check(safeAreaDiagnostics.snapshot.statusBarColors.statusBarStrategyValid, `browser status-bar fallback strategy is invalid: ${JSON.stringify(safeAreaDiagnostics.snapshot.statusBarColors)}`);
-  check(safeAreaDiagnostics.wallpaperVariable.includes("cross-fade") || safeAreaDiagnostics.wallpaperVariable.includes("url("), "custom wallpaper was not assigned to the shared background variable");
-  check(safeAreaDiagnostics.htmlBackground === "none" && safeAreaDiagnostics.bodyBackground === "none" && safeAreaDiagnostics.viewportBackground.includes("url("), "custom wallpaper was not painted exclusively by the viewport layer");
+  check(safeAreaDiagnostics.wallpaperVariable.includes("url("), "custom wallpaper was not assigned to the shared background variable");
+  check(safeAreaDiagnostics.wallpaperOpacityVariable === "0.5" && safeAreaDiagnostics.wallpaperOpacity === "0.5", "custom wallpaper opacity did not reach the dedicated wallpaper layer");
+  check(
+    safeAreaDiagnostics.htmlBackground === "none"
+      && safeAreaDiagnostics.bodyBackground === "none"
+      && safeAreaDiagnostics.viewportBackground !== "none"
+      && safeAreaDiagnostics.wallpaperBackground.includes("url("),
+    "custom wallpaper was not painted exclusively by the dedicated viewport wallpaper layer"
+  );
 
   const themeColorPolicy = await evaluate(`(() => {
     const root = document.documentElement;
@@ -277,6 +297,14 @@ try {
     return results;
   })()`);
   check(pages.every((page) => page.title && page.content > 0), "one or more main pages failed to render");
+  await send("Page.reload", { ignoreCache: true });
+  await waitForApp();
+  const refreshedPage = await evaluate(`(() => ({
+    page: document.querySelector('.dock-item.is-active')?.dataset.page,
+    title: document.querySelector('#pageTitle')?.textContent.trim(),
+    content: document.querySelector('#pageContent')?.childElementCount || 0,
+  }))()`);
+  check(refreshedPage.page === "number" && refreshedPage.title && refreshedPage.content > 0, `page refresh did not restore a valid saved page: ${JSON.stringify(refreshedPage)}`);
 
   const settings = await evaluate(`(async () => {
     document.querySelector('#settingsButton').click();
@@ -287,26 +315,87 @@ try {
       open: sheet.classList.contains('is-open'),
       paddingBottom: style.paddingBottom,
       wallpaperGrid: Boolean(document.querySelector('#presetWallpaperGrid')),
+      githubProjectUrl: document.querySelector('.project-link-button')?.href,
       rootLocked: document.documentElement.classList.contains('page-scroll-locked'),
       bodyInlinePosition: document.body.style.position,
       bodyInlineTop: document.body.style.top,
+      navigation: window.mehNavigation?.getState(),
     };
   })()`);
   check(settings.open && settings.wallpaperGrid, "settings/custom-background page failed to open");
+  check(settings.navigation?.screen === "settings" && settings.navigation?.depth === 1, `settings did not create a depth-1 SPA state: ${JSON.stringify(settings.navigation)}`);
+  check(settings.githubProjectUrl === "https://github.com/AidanQiu/Meh", `GitHub project link is missing or incorrect: ${settings.githubProjectUrl}`);
   check(settings.rootLocked && settings.bodyInlinePosition === "" && settings.bodyInlineTop === "", `sheet scroll lock mutated body positioning: ${JSON.stringify(settings)}`);
-  const historyImmediate = await evaluate(`new Promise((resolve) => {
+  await send("Page.reload", { ignoreCache: true });
+  await waitForApp();
+  const restoredSettings = await evaluate(`(() => ({
+    open: document.querySelector('#settingsSheet').classList.contains('is-open'),
+    state: window.mehNavigation?.getState(),
+  }))()`);
+  check(restoredSettings.open && restoredSettings.state?.screen === "settings" && restoredSettings.state?.depth === 1, `refresh did not restore the settings route: ${JSON.stringify(restoredSettings)}`);
+  const wallpaperLifecycle = await evaluate(`(async () => {
+    const input = document.querySelector('#backgroundImageInput');
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(
+      ['<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"><rect width="4" height="4" fill="red"/></svg>'],
+      'test-wallpaper.svg',
+      { type: 'image/svg+xml' }
+    ));
+    Object.defineProperty(input, 'files', { configurable: true, value: transfer.files });
+    await handleBackgroundImageSelect({ target: input });
+    const selected = {
+      count: wallpapers.length,
+      activeId: appSettings.activeWallpaperId,
+      painted: document.documentElement.style.getPropertyValue('--app-wallpaper-image'),
+    };
+    const opacityRange = document.querySelector('#bgOpacityRange');
+    opacityRange.value = '0.27';
+    opacityRange.dispatchEvent(new Event('input', { bubbles: true }));
+    const opacity = {
+      setting: appSettings.backgroundOpacity,
+      variable: document.documentElement.style.getPropertyValue('--app-wallpaper-opacity'),
+      computed: getComputedStyle(document.querySelector('#viewport-background'), '::before').opacity,
+    };
+    await clearCurrentBackground();
+    const stored = await getAllWallpapersFromDb();
+    return {
+      selected,
+      opacity,
+      remaining: wallpapers.length,
+      activeId: appSettings.activeWallpaperId,
+      stored: stored.length,
+    };
+  })()`);
+  check(
+    wallpaperLifecycle.selected.count === 1
+      && wallpaperLifecycle.selected.activeId
+      && wallpaperLifecycle.selected.painted.includes("url(")
+      && wallpaperLifecycle.opacity.setting === 0.27
+      && wallpaperLifecycle.opacity.variable === "0.27"
+      && wallpaperLifecycle.opacity.computed === "0.27"
+      && wallpaperLifecycle.remaining === 0
+      && wallpaperLifecycle.activeId === ""
+      && wallpaperLifecycle.stored === 0,
+    `custom wallpaper select/delete lifecycle failed: ${JSON.stringify(wallpaperLifecycle)}`
+  );
+  const historyTransition = await evaluate(`new Promise((resolve) => {
     window.addEventListener('popstate', () => {
       const sheet = document.querySelector('#settingsSheet');
-      const style = getComputedStyle(sheet);
       resolve({
-        closingClass: sheet.classList.contains('is-history-closing'),
-        display: style.display,
-        transitionDuration: style.transitionDuration,
+        exiting: sheet.classList.contains('is-navigation-exiting'),
+        ariaHidden: sheet.getAttribute('aria-hidden'),
+        state: window.mehNavigation?.getState(),
       });
     }, { once: true });
     history.back();
   })`);
-  check(historyImmediate.closingClass && historyImmediate.display === "none" && historyImmediate.transitionDuration === "0s", `history return replayed the sheet close animation: ${JSON.stringify(historyImmediate)}`);
+  check(
+    historyTransition.exiting
+      && historyTransition.ariaHidden === "true"
+      && historyTransition.state?.screen === "home"
+      && historyTransition.state?.depth === 0,
+    `history return did not restore the root state with a back transition: ${JSON.stringify(historyTransition)}`
+  );
   await evaluate(`new Promise((resolve) => setTimeout(resolve, 850))`);
   const historyRecovery = await evaluate(`(() => {
     const backgroundRect = document.querySelector('#viewport-background').getBoundingClientRect();
@@ -322,6 +411,70 @@ try {
   check(!historyRecovery.sheetOpen && !historyRecovery.rootLocked, `history return did not release the sheet scroll lock: ${JSON.stringify(historyRecovery)}`);
   check(historyRecovery.bodyInlinePosition === "" && historyRecovery.bodyInlineTop === "", `history return left a body-fixed offset: ${JSON.stringify(historyRecovery)}`);
   check(historyRecovery.backgroundBottom >= historyRecovery.viewportBottom, `history return exposed the viewport below the background: ${JSON.stringify(historyRecovery)}`);
+
+  const nestedNavigation = await evaluate(`(async () => {
+    const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+    window.mehNavigation.open('settings');
+    await wait(240);
+    const settingsSheet = document.querySelector('#settingsSheet');
+    settingsSheet.scrollTop = 120;
+    window.mehNavigation.open('preset-editor', { presetId: wheelState.selectedPresetId });
+    await wait(240);
+    const child = {
+      state: window.mehNavigation.getState(),
+      presetOpen: document.querySelector('#wheelEditorSheet').classList.contains('is-open'),
+    };
+    document.querySelector('#closeWheelEditorButton').click();
+    await wait(260);
+    const parent = {
+      state: window.mehNavigation.getState(),
+      settingsOpen: settingsSheet.classList.contains('is-open'),
+      scrollTop: Math.round(settingsSheet.scrollTop),
+    };
+    document.querySelector('#closeSettingsButton').click();
+    await wait(260);
+    const root = {
+      state: window.mehNavigation.getState(),
+      anySheetOpen: Boolean(document.querySelector('.settings-sheet.is-open, .editor-sheet.is-open')),
+    };
+    history.forward();
+    await wait(260);
+    const forwardParent = window.mehNavigation.getState();
+    history.forward();
+    await wait(260);
+    const forwardChild = window.mehNavigation.getState();
+    window.mehNavigation.back();
+    await wait(260);
+    window.mehNavigation.back();
+    await wait(260);
+    return { child, parent, root, forwardParent, forwardChild };
+  })()`);
+  check(
+    nestedNavigation.child.presetOpen
+      && nestedNavigation.child.state.screen === "preset-editor"
+      && nestedNavigation.child.state.depth === 2
+      && nestedNavigation.child.state.params.presetId,
+    `nested preset editor route was not recorded: ${JSON.stringify(nestedNavigation.child)}`
+  );
+  check(
+    nestedNavigation.parent.settingsOpen
+      && nestedNavigation.parent.state.screen === "settings"
+      && nestedNavigation.parent.state.depth === 1
+      && nestedNavigation.parent.scrollTop > 0,
+    `child back did not restore the settings context: ${JSON.stringify(nestedNavigation.parent)}`
+  );
+  check(
+    nestedNavigation.root.state.screen === "home"
+      && nestedNavigation.root.state.depth === 0
+      && !nestedNavigation.root.anySheetOpen,
+    `parent back did not restore home: ${JSON.stringify(nestedNavigation.root)}`
+  );
+  check(
+    nestedNavigation.forwardParent.screen === "settings"
+      && nestedNavigation.forwardChild.screen === "preset-editor"
+      && nestedNavigation.forwardChild.params.presetId,
+    `browser forward did not replay the SPA stack: ${JSON.stringify(nestedNavigation)}`
+  );
 
   const editors = await evaluate(`(async () => {
     const result = {};

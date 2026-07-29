@@ -4,7 +4,7 @@
 
 @font-face {
   font-family: "Material Symbols Rounded";
-  src: url("./fonts/material-symbols-rounded.woff2?v=1.1.1-pwa-r28") format("woff2");
+  src: url("./fonts/material-symbols-rounded.woff2?v=1.1.1-pwa-r30") format("woff2");
   font-display: block;
   font-style: normal;
   font-weight: 100 700;
@@ -30,14 +30,14 @@
   --shadow-2: 0 18px 42px rgba(29, 27, 32, 0.18);
   --shadow-3: 0 22px 34px rgba(29, 27, 32, 0.18);
   --ease: cubic-bezier(0.2, 0, 0, 1);
-  --app-wallpaper-image: linear-gradient(transparent, transparent);
+  --app-wallpaper-image: none;
+  --app-wallpaper-opacity: 0.5;
   --app-background:
-    var(--app-wallpaper-image),
     radial-gradient(circle at 16% 6%, color-mix(in srgb, var(--primary) 18%, transparent), transparent 30%),
     linear-gradient(180deg, var(--surface) 0%, var(--surface-container) 100%);
-  --app-background-size: cover, auto, auto;
-  --app-background-position: center, center, center;
-  --app-background-repeat: no-repeat, no-repeat, no-repeat;
+  --app-background-size: auto, auto;
+  --app-background-position: center, center;
+  --app-background-repeat: no-repeat, no-repeat;
   --top-extra: 0px;
   --dock-thickness: 58px;
   --dock-side-gap: 28px;
@@ -108,29 +108,33 @@
 }
 html {
   width: 100%;
+  height: 100%;
   min-height: 100%;
   margin: 0;
   padding: 0;
-  background-color: var(--surface);
-  background-image: var(--app-background);
-  background-size: var(--app-background-size);
-  background-position: var(--app-background-position);
-  background-repeat: var(--app-background-repeat);
+  overflow-x: hidden;
+  overflow-y: auto;
+  background-color: transparent;
+  background-image: none;
 }
 
 body {
-  /* 使用gemini修改  */
-  -webkit-user-select: none; /* Safari */
-  user-select: none; /* 标准语法 */
-  -webkit-touch-callout: none; /* 禁用 iOS 的长按弹出菜单 */
+  position: static;
+  inset: auto;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
   overscroll-behavior-y: none;
-  /* 修改结束 */
   width: 100%;
   min-height: 100vh;
+  min-height: 100dvh;
   min-height: var(--app-height);
+  height: auto;
   margin: 0;
   padding: 0;
-  background: transparent;
+  overflow-x: hidden;
+  background-color: transparent;
+  background-image: none;
   color: var(--on-surface);
   font-family: "Google Sans", Roboto, system-ui, sans-serif;
   isolation: isolate;
@@ -138,16 +142,32 @@ body {
 
 #viewport-background {
   position: fixed;
-  inset: -1px;
+  inset: -1px -1px auto;
   z-index: 0;
   width: auto;
-  height: auto;
-  background: transparent;
+  height: calc(var(--viewport-paint-height) + 2px);
+  background-color: var(--surface);
+  background-image: var(--app-background);
+  background-size: var(--app-background-size);
+  background-position: var(--app-background-position);
+  background-repeat: var(--app-background-repeat);
   pointer-events: none;
   transform: none;
   filter: none;
   contain: none;
   will-change: auto;
+}
+
+#viewport-background::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: var(--app-wallpaper-image);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  opacity: var(--app-wallpaper-opacity);
+  pointer-events: none;
 }
 
 button {
@@ -189,20 +209,42 @@ p {
 
 .phone-frame {
   position: relative;
- /*使用gemini 修改 */
-  z-index: 1;
-  /* 修改结束 */
+  inset: auto;
+  z-index: 2;
   width: min(100vw, 480px);
   min-height: 100vh;
   min-height: var(--app-height);
+  height: auto;
+  max-height: none;
   margin: 0 auto;
   background: transparent;
   box-shadow: 0 0 0 1px rgba(127, 116, 124, 0.14), var(--shadow-2);
   overflow: hidden;
 }
+
+@media (hover: none), (pointer: coarse) {
+  .phone-frame {
+    width: 100vw;
+    max-width: none;
+  }
+}
+
+:root.platform-ios-pwa .phone-frame,
+:root.platform-android-app .phone-frame {
+  width: 100vw;
+  max-width: none;
+}
+
+@media (max-width: 480px) {
+  .phone-frame {
+    box-shadow: none;
+  }
+}
+
 .app {
-  min-height: 100vh;
+  min-height: 100%;
   min-height: var(--app-height);
+  height: auto;
   padding-top: calc(var(--content-inset-top) + var(--top-extra));
 
   padding-left: max(
@@ -218,8 +260,29 @@ p {
   padding-bottom: var(--app-content-bottom-clearance);
   position: relative;
   z-index: 2;
+  overflow: hidden;
 }
- .top-bar {
+
+html.page-scroll-locked,
+html.page-scroll-locked body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+html.viewport-recovery-active,
+html.viewport-recovery-active body {
+  overflow-y: auto;
+  overscroll-behavior: auto;
+}
+
+html.platform-ios-pwa.viewport-recovery-active,
+html.platform-ios-pwa.viewport-recovery-active body,
+html.platform-ios-pwa.viewport-recovery-active .phone-frame,
+html.platform-ios-pwa.viewport-recovery-active .app {
+  min-height: var(--viewport-recovery-height);
+}
+
+.top-bar {
   display: grid;
   grid-template-columns: calc(44px * var(--ui-scale)) 1fr calc(44px * var(--ui-scale));
   align-items: center;
@@ -483,45 +546,9 @@ p {
   place-items: center;
   perspective: 900px;
 }
-/* 原代码 */
-/* .coin-content {
-  display: grid;
-  justify-items: center;
-}
-
-.coin {
-  position: relative;
-  width: calc(188px * var(--ui-scale));
-  height: calc(188px * var(--ui-scale));
-  border-radius: 50%;
-  --coin-start-rotation: 0deg;
-  --coin-end-rotation: 1080deg;
-  background:
-    radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.88), transparent 28%),
-    linear-gradient(145deg, var(--primary-container), color-mix(in srgb, var(--primary) 42%, #ffffff));
-  box-shadow:
-    inset 0 -12px 30px rgba(29, 27, 32, 0.14),
-    inset 0 0 0 10px rgba(255, 255, 255, 0.36),
-    var(--shadow-3);
-  color: var(--primary);
-  transform-style: preserve-3d;
-}
-
-.coin-number {
-  font-size: calc(78px * var(--ui-scale));
-  font-weight: 700;
-  line-height: 1;
-  transform: translateZ(1px);
-}
-
-.coin-pattern {
-  transform: rotateY(180deg) translateZ(1px);
-} */
-/* 使用gemini修改 */
 .coin-content {
   display: grid;
   justify-items: center;
-  /* 【改动】将阴影移到外层容器上。这样硬币翻转时，影子永远在下方，不会跟着 3D 翻转 */
   filter: drop-shadow(0 22px 34px rgba(29, 27, 32, 0.18));
 }
 
@@ -535,13 +562,11 @@ p {
   background:
     radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.88), transparent 28%),
     linear-gradient(145deg, var(--primary-container), color-mix(in srgb, var(--primary) 42%, #ffffff));
-  /* 【改动】去掉了 var(--shadow-3)外部阴影，只保留硬币的内发光/内阴影体现质感 */
   box-shadow:
     inset 0 -12px 30px rgba(29, 27, 32, 0.14),
     inset 0 0 0 10px rgba(255, 255, 255, 0.36);
   color: var(--primary);
   transform-style: preserve-3d;
-  /* 【新增】强制开启 GPU 硬件加速，彻底解决 iOS/Safari 上的闪烁问题 */
   will-change: transform;
 }
 
@@ -549,15 +574,12 @@ p {
   font-size: calc(78px * var(--ui-scale));
   font-weight: 700;
   line-height: 1;
-  /* 【改动】将 Z 轴位移从 1px 改为 2px，拉开正反面物理距离，彻底防止 3D 穿模 */
   transform: translateZ(2px);
 }
 
 .coin-pattern {
-  /* 【改动】同上，Z 轴位移改为 2px */
   transform: rotateY(180deg) translateZ(2px);
 }
-/* 修改结束 */
 
 .coin::after {
   position: absolute;
@@ -567,117 +589,6 @@ p {
   content: "";
 }
 
-/* 原代码 */
-/* .coin.is-flipping {
-  animation-duration: 1450ms;
-  animation-fill-mode: forwards;
-  animation-timing-function: cubic-bezier(0.24, 0.72, 0.18, 1);
-} */
-/* 原代码 */
-/* @keyframes coin-flip-to-pattern {
-  0% {
-    transform: translateY(0) rotateY(0deg) rotateZ(0deg) scale(1);
-  }
-
-  14% {
-    transform: translateY(calc(-16px * var(--ui-scale))) rotateY(190deg) rotateZ(5deg) scale(1.04);
-  }
-
-  32% {
-    transform: translateY(calc(-28px * var(--ui-scale))) rotateY(520deg) rotateZ(-5deg) scale(1.07);
-  }
-
-  54% {
-    transform: translateY(calc(-17px * var(--ui-scale))) rotateY(845deg) rotateZ(4deg) scale(1.04);
-  }
-
-  78% {
-    transform: translateY(calc(2px * var(--ui-scale))) rotateY(1190deg) rotateZ(-2deg) scale(0.985);
-  }
-
-  91% {
-    transform: translateY(calc(-2px * var(--ui-scale))) rotateY(1248deg) rotateZ(1deg) scale(1.012);
-  }
-
-  100% {
-    transform: translateY(0) rotateY(1260deg) rotateZ(0deg) scale(1);
-  }
-}
-
-@keyframes coin-flip-to-number {
-  0% {
-    transform: translateY(0) rotateY(180deg) rotateZ(0deg) scale(1);
-  }
-
-  14% {
-    transform: translateY(calc(-16px * var(--ui-scale))) rotateY(385deg) rotateZ(5deg) scale(1.04);
-  }
-
-  32% {
-    transform: translateY(calc(-28px * var(--ui-scale))) rotateY(700deg) rotateZ(-5deg) scale(1.07);
-  }
-
-  54% {
-    transform: translateY(calc(-17px * var(--ui-scale))) rotateY(930deg) rotateZ(4deg) scale(1.04);
-  }
-
-  78% {
-    transform: translateY(calc(2px * var(--ui-scale))) rotateY(1028deg) rotateZ(-2deg) scale(0.985);
-  }
-
-  91% {
-    transform: translateY(calc(-2px * var(--ui-scale))) rotateY(1072deg) rotateZ(1deg) scale(1.012);
-  }
-
-  100% {
-    transform: translateY(0) rotateY(1080deg) rotateZ(0deg) scale(1);
-  }
-}
-
-@keyframes dice-roll {
-  0% {
-    transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1);
-  }
-
-  18% {
-    transform: rotateX(150deg) rotateY(95deg) rotateZ(12deg) scale(1.06);
-  }
-
-  42% {
-    transform: rotateX(390deg) rotateY(260deg) rotateZ(-16deg) scale(1.1);
-  }
-
-  68% {
-    transform: rotateX(690deg) rotateY(510deg) rotateZ(10deg) scale(1.02);
-  }
-
-  88% {
-    transform: rotateX(830deg) rotateY(660deg) rotateZ(-5deg) scale(0.98);
-  }
-
-  100% {
-    transform: rotateX(900deg) rotateY(720deg) rotateZ(0deg) scale(1);
-  }
-}
-
-@keyframes number-pop {
-  0% {
-    opacity: 0.2;
-    transform: translateY(8px) scale(0.94);
-  }
-
-  65% {
-    opacity: 1;
-    transform: translateY(-2px) scale(1.03);
-  }
-
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-} */
- 
-/* 使用gemini修改 */
 .coin.is-flipping {
   animation-duration: 1450ms;
   animation-fill-mode: forwards;
@@ -715,8 +626,6 @@ p {
     transform: rotateY(1080deg) rotateZ(0deg) scale(1);
   }
 }
-/* 修改结束 */
-
 .coin.is-flipping.flip-to-number {
   animation-name: coin-flip-to-number;
 }
@@ -1246,65 +1155,78 @@ p {
   width: min(100vw, 480px);
   border-radius: 34px 34px 0 0;
   background: color-mix(in srgb, var(--surface) 94%, var(--primary-container));
-  max-height: calc(var(--app-height) - max(calc(28px * var(--ui-scale)), var(--content-inset-top)));
+  max-height: min(85vh, 740px);
   overflow-y: auto;
   padding: 10px 18px var(--sheet-bottom-padding);
   box-shadow: 0 -18px 42px rgba(29, 27, 32, 0.22);
-  transform: translate(50%, 105%);
-  transition: transform 260ms var(--ease);
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  opacity: 1;
+  will-change: transform, opacity;
+  transform: translate3d(50%, 105%, 0);
+  transition:
+    transform 210ms var(--ease),
+    opacity 180ms ease;
   scroll-padding-bottom: max(88px, calc(var(--content-inset-bottom) + 72px));
-  -webkit-overflow-scrolling: touch;
-}
-
-.settings-sheet.is-dragging,
-.editor-sheet.is-dragging {
-  transition: none;
-}
-
-
-/* 旧代码 */
-/* .settings-sheet {
-  max-height: min(82vh, 720px);
-  overflow-y: auto;
-} */
-
-/* 使用gemini修改 */
-.editor-sheet {
-  max-height: min(85vh, 740px);
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-}
-/* 修改结束 */
-
-.settings-sheet {
-  max-height: min(85vh, 740px);
-  overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
 
 .settings-sheet.is-open,
 .editor-sheet.is-open {
-  transform: translate(50%, 0);
+  transform: translate3d(50%, 0, 0);
+}
+
+.settings-sheet.is-navigation-entering,
+.editor-sheet.is-navigation-entering {
+  opacity: 0;
+  transform: translate3d(calc(50% + 28px), 0, 0);
+  transition: none;
+}
+
+.settings-sheet.is-navigation-exiting,
+.editor-sheet.is-navigation-exiting {
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(calc(50% + 36px), 0, 0);
+}
+
+.settings-sheet.is-navigation-leaving,
+.editor-sheet.is-navigation-leaving {
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(calc(50% - 24px), 0, 0);
+}
+
+.settings-sheet.is-dragging,
+.editor-sheet.is-dragging {
+  overflow-y: hidden;
+  transition: none;
 }
 
 .sheet-handle {
-  width: 72px;
-  height: 26px;
-  margin: -2px auto 10px;
+  position: relative;
+  width: 132px;
+  height: 48px;
+  margin: -10px auto 0;
   border-radius: 999px;
+  background: transparent;
   cursor: grab;
   touch-action: none;
 }
 
 .sheet-handle::before {
+  position: absolute;
+  top: 22px;
+  left: 50%;
   display: block;
   width: 42px;
   height: 4px;
-  margin: 11px auto;
+  margin: 0;
   border-radius: 999px;
   background: var(--outline);
   content: "";
   opacity: 0.38;
+  transform: translateX(-50%);
 }
 
 .sheet-handle:active {
@@ -1343,28 +1265,6 @@ p {
   padding: 16px;
   box-shadow: var(--shadow-1);
 }
-
-/* =========原先代码======== */
-
-/* .color-setting-card {
-  gap: 14px;
-  background:
-    radial-gradient(circle at 92% 92%, color-mix(in srgb, var(--primary) 24%, transparent), transparent 30%),
-    linear-gradient(145deg, color-mix(in srgb, var(--secondary) 34%, var(--surface-container)), var(--surface-container));
-}
-
-.palette-panel {
-  display: grid;
-  gap: 18px;
-  border: 1px solid color-mix(in srgb, var(--primary) 12%, transparent);
-  border-radius: 30px;
-  background:
-    radial-gradient(circle at 96% 10%, color-mix(in srgb, var(--primary) 20%, transparent), transparent 30%),
-    color-mix(in srgb, var(--secondary) 22%, var(--surface-container));
-  padding: 16px;
-  box-shadow: inset 0 1px rgba(255, 255, 255, 0.36);
-} */
-
 
 .color-row {
   display: flex;
@@ -1415,6 +1315,18 @@ p {
   text-align: center;
 }
 
+.project-link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+.project-link-button .material-symbols-rounded {
+  font-size: calc(18px * var(--ui-scale));
+}
+
 
 
 .advanced-color-picker,
@@ -1428,45 +1340,20 @@ p {
   display: none;
 }
 
-/* =========原先代码========= */
-
-/* .advanced-color-picker {
-  --picker-color: var(--primary);
-  --hue-color: var(--primary);
-  --picker-x: 54%;
-  --picker-y: 48%;
-  position: relative;
-  place-items: stretch;
-  gap: 10px;
-  overflow: visible;
-  border: 10px solid color-mix(in srgb, var(--secondary) 42%, var(--surface-container));
-  border-radius: 28px;
-  background: color-mix(in srgb, var(--secondary) 32%, var(--surface));
-  padding: 14px;
-  box-shadow: 0 18px 30px rgba(29, 27, 32, 0.18);
-  cursor: pointer;
-} */
-
-
-/* ==========使用gemini修改========= */
-
 .color-setting-card {
   gap: 16px;
-  /* 移除原先花哨的双层渐变背景，统一使用纯净的表面色 */
   background: var(--surface-container);
 }
 
 .palette-panel {
   display: grid;
   gap: 16px;
-  /* 移除内层边框和背景，解决“大界面包小界面”的拥挤感 */
   border: none;
   background: transparent;
   padding: 0;
   box-shadow: none;
 }
 
-/* 调整自定义颜色拾色器为更轻盈的 MD3 悬浮卡片风格 */
 .advanced-color-picker {
   --picker-color: var(--primary);
   --hue-color: var(--primary);
@@ -1476,7 +1363,6 @@ p {
   place-items: stretch;
   gap: 12px;
   overflow: visible;
-  /* 移除极厚的 10px 边框，改为细描边与悬浮阴影 */
   border: 1px solid rgba(127, 116, 124, 0.16);
   border-radius: 24px;
   background: var(--surface-container-high);
@@ -1485,8 +1371,6 @@ p {
   cursor: pointer;
   margin-top: 4px;
 }
-
-/* Gemini修改结束 */
 
 .picker-field {
   position: relative;
@@ -1610,6 +1494,26 @@ p {
   min-width: 0;
   align-items: center;
   gap: 8px;
+}
+
+.setting-row-gap-sm {
+  margin-top: 12px;
+}
+
+.setting-row-gap-md {
+  margin-top: 14px;
+}
+
+.setting-title-compact {
+  font-size: 14px;
+}
+
+.setting-section-title-spaced {
+  margin-bottom: 12px;
+}
+
+.control-gap-xs {
+  margin-top: 8px;
 }
 
 .setting-title-icon {
@@ -1756,11 +1660,6 @@ p {
   color: var(--on-surface-variant);
   font-size: calc(14px * var(--ui-scale));
   font-weight: 700;
-}
-
-.editor-sheet {
-  max-height: min(82vh, 720px);
-  overflow-y: auto;
 }
 
 .editor-label {
@@ -2100,17 +1999,6 @@ p {
     transform: rotateX(720deg) rotateY(720deg) rotateZ(0deg) scale(1);
   }
 }
-/* ===== 底部弹窗高度：设置和转盘同高，随机数单独矮高度 ===== */
-
-/* 基础：所有底部弹窗只保留普通上滑/下滑样式，不做两段式 */
-.settings-sheet,
-.editor-sheet {
-  height: auto !important;
-  overflow-y: auto !important;
-  transition: transform 260ms var(--ease) !important;
-  -webkit-overflow-scrolling: touch;
-}
-
 /* 设置界面：和转盘编辑界面同高 */
 #settingsSheet {
   max-height: min(calc(var(--app-height) - var(--content-inset-top) - 28px), 720px) !important;
@@ -2140,22 +2028,12 @@ p {
   max-height: min(calc(var(--app-height) - var(--content-inset-top) - 96px), 640px) !important;
 }
 
-/* ===== 弹窗打开时禁止背景跟着滚动 ===== */
 body.sheet-open {
-  overflow: hidden !important;
-  overscroll-behavior: none !important;
-  touch-action: none;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: auto;
 }
 
-/* 弹窗自己允许上下滑 */
-.settings-sheet,
-.editor-sheet {
-  overscroll-behavior: contain !important;
-  touch-action: pan-y !important;
-  -webkit-overflow-scrolling: touch !important;
-}
-
-/* 弹窗里的按钮、输入框仍然正常点击 */
 .settings-sheet button,
 .editor-sheet button,
 .settings-sheet input,
@@ -2167,71 +2045,15 @@ body.sheet-open {
   touch-action: manipulation;
 }
 
-/* 拾色器这种需要拖动的区域，保留原来的特殊触控 */
 .picker-field,
 .picker-hue-range,
 .range-input {
-  touch-action: none !important;
-}
-
-/* ===== 小白条：视觉不变，触摸区域变大 ===== */
-.sheet-handle {
-  position: relative !important;
-  width: 132px !important;
-  height: 48px !important;
-  margin: -10px auto 0 !important;
-  background: transparent !important;
-  cursor: grab;
-  touch-action: none !important;
-}
-
-/* 这是真正看见的小白条，尺寸仍然小 */
-.sheet-handle::before {
-  position: absolute !important;
-  left: 50% !important;
-  top: 22px !important;
-  display: block !important;
-  width: 42px !important;
-  height: 4px !important;
-  margin: 0 !important;
-  border-radius: 999px !important;
-  background: var(--outline) !important;
-  content: "" !important;
-  opacity: 0.38 !important;
-  transform: translateX(-50%) !important;
+  touch-action: none;
 }
 
 .top-stats.is-empty {
   visibility: hidden !important;
   pointer-events: none !important;
-}
-
-body.sheet-open {
-  overflow: hidden !important;
-  overscroll-behavior: none !important;
-  touch-action: auto !important;
-}
-
-.settings-sheet,
-.editor-sheet {
-  overscroll-behavior-y: contain !important;
-  touch-action: pan-y !important;
-  will-change: transform;
-  transform: translate3d(50%, 105%, 0);
-}
-
-.settings-sheet.is-open,
-.editor-sheet.is-open {
-  transform: translate3d(50%, 0, 0);
-}
-
-.settings-sheet.is-dragging,
-.editor-sheet.is-dragging {
-  overflow-y: hidden !important;
-}
-
-.sheet-handle {
-  touch-action: none !important;
 }
 
 .dark-mode-picker {
@@ -2437,194 +2259,14 @@ body.sheet-open {
     inset 0 -8px 18px rgba(0, 0, 0, 0.22);
 }
 
-/* Final viewport ownership: the background fills the viewport; content alone consumes insets. */
-html {
-  height: 100% !important;
-  min-height: 100% !important;
-  overflow-x: hidden !important;
-  overflow-y: auto !important;
-  background-color: transparent !important;
-  background-image: none !important;
-}
-
-#viewport-background {
-  position: fixed !important;
-  inset: -1px -1px auto !important;
-  z-index: 0 !important;
-  width: auto !important;
-  height: calc(var(--viewport-paint-height) + 2px) !important;
-  background-color: var(--surface) !important;
-  background-image: var(--app-background) !important;
-  background-size: var(--app-background-size) !important;
-  background-position: var(--app-background-position) !important;
-  background-repeat: var(--app-background-repeat) !important;
-  pointer-events: none !important;
-  transform: none !important;
-  filter: none !important;
-  contain: none !important;
-  will-change: auto !important;
-}
-
-body {
-  position: static !important;
-  inset: auto !important;
-  min-height: 100vh !important;
-  min-height: 100dvh !important;
-  min-height: var(--app-height) !important;
-  height: auto !important;
-  margin: 0 !important;
-  overflow-x: hidden !important;
-  background-color: transparent !important;
-  background-image: none !important;
-}
-
-html.page-scroll-locked,
-html.page-scroll-locked body {
-  overflow: hidden !important;
-  overscroll-behavior: none !important;
-}
-
-html.viewport-recovery-active,
-html.viewport-recovery-active body {
-  overflow-y: auto !important;
-  overscroll-behavior: auto !important;
-}
-
-html.platform-ios-pwa.viewport-recovery-active {
-  height: var(--viewport-recovery-height) !important;
-  min-height: var(--viewport-recovery-height) !important;
-}
-
-html.platform-ios-pwa.viewport-recovery-active body,
-html.platform-ios-pwa.viewport-recovery-active .phone-frame,
-html.platform-ios-pwa.viewport-recovery-active .app {
-  min-height: var(--viewport-recovery-height) !important;
-}
-
-.phone-frame {
-  position: relative !important;
-  inset: auto !important;
-  left: auto !important;
-  right: auto !important;
-  bottom: auto !important;
-  z-index: 2 !important;
-  width: min(100vw, 480px) !important;
-  min-height: 100vh !important;
-  min-height: var(--app-height) !important;
-  height: auto !important;
-  max-height: none !important;
-  margin: 0 auto !important;
-  background: transparent !important;
-  box-shadow: 0 0 0 1px rgba(127, 116, 124, 0.14), var(--shadow-2) !important;
-  overflow: hidden !important;
-  transform: none !important;
-}
-
-.app {
-  min-height: 100% !important;
-  min-height: var(--app-height) !important;
-  height: auto !important;
-  background: transparent !important;
-  overflow: hidden !important;
-  padding-bottom: var(--app-content-bottom-clearance) !important;
-}
-
-@media (hover: none), (pointer: coarse) {
-  .phone-frame {
-    width: 100vw !important;
-    max-width: none !important;
-  }
-}
-
 :root.platform-ios-pwa body,
 :root.platform-android-app body {
-  padding: 0 !important;
+  padding: 0;
 }
 
-:root.platform-ios-pwa .phone-frame,
-:root.platform-android-app .phone-frame {
-  width: 100vw !important;
-  max-width: none !important;
-}
-
-@media (display-mode: standalone) {
-  body {
-    padding: 0 !important;
+@media (prefers-reduced-motion: reduce) {
+  .settings-sheet,
+  .editor-sheet {
+    transition-duration: 1ms;
   }
-
-  .phone-frame {
-    width: 100vw !important;
-    max-width: none !important;
-  }
-}
-
-@media (max-width: 480px) {
-  .phone-frame {
-    box-shadow: none !important;
-  }
-}
-
-.floating-dock {
-  position: fixed !important;
-  left: var(--dock-inline-start) !important;
-  right: var(--dock-inline-end) !important;
-  bottom: var(--dock-bottom-offset) !important;
-  width: auto !important;
-  height: var(--bottom-nav-height) !important;
-  max-width: 448px !important;
-  margin-right: auto !important;
-  margin-left: auto !important;
-  transform: none !important;
-  padding: 0 !important;
-  pointer-events: none !important;
-}
-
-.floating-dock-surface {
-  width: 100% !important;
-  height: 100% !important;
-  padding: 6px !important;
-  pointer-events: auto !important;
-}
-
-.floating-dock-content {
-  width: 100% !important;
-  height: 100% !important;
-}
-
-.dock-item {
-  min-height: 0 !important;
-  height: 100% !important;
-}
-
-.dock-indicator {
-  top: 0 !important;
-  bottom: 0 !important;
-}
-
-.page-actions {
-  position: fixed !important;
-  bottom: var(--page-actions-bottom) !important;
-}
-
-.settings-sheet,
-.editor-sheet {
-  overscroll-behavior-y: none !important;
-  touch-action: pan-y !important;
-  transform: translate3d(50%, 105%, 0) !important;
-}
-
-.settings-sheet.is-open,
-.editor-sheet.is-open {
-  transform: translate3d(50%, 0, 0) !important;
-}
-
-.settings-sheet.is-dragging,
-.editor-sheet.is-dragging {
-  transition: none !important;
-}
-
-.settings-sheet.is-history-closing,
-.editor-sheet.is-history-closing {
-  display: none !important;
-  transition: none !important;
 }

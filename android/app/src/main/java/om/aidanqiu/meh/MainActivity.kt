@@ -55,6 +55,7 @@ class MainActivity : AppCompatActivity() {
     private val updateInFlight = AtomicBoolean(false)
     private var updateDialog: AlertDialog? = null
     private var pageInitialized = false
+    private val systemBackInFlight = AtomicBoolean(false)
     @Volatile
     private var latestInsets = InsetsSnapshot.EMPTY
 
@@ -194,10 +195,8 @@ class MainActivity : AppCompatActivity() {
         // Configure edge-to-edge before the first content frame. The WebView owns the whole
         // window; insets only protect interactive web content and never shrink the native view.
         WindowCompat.enableEdgeToEdge(window)
-        window.statusBarColor = Color.TRANSPARENT
-        window.navigationBarColor = Color.TRANSPARENT
+        configureTransparentSystemBars()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            window.navigationBarDividerColor = Color.TRANSPARENT
             window.attributes = window.attributes.apply {
                 layoutInDisplayCutoutMode =
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -206,6 +205,14 @@ class MainActivity : AppCompatActivity() {
                         WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
                     }
             }
+        }
+    }
+
+    private fun configureTransparentSystemBars() {
+        window.statusBarColor = Color.TRANSPARENT
+        window.navigationBarColor = Color.TRANSPARENT
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.navigationBarDividerColor = Color.TRANSPARENT
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
@@ -218,14 +225,7 @@ class MainActivity : AppCompatActivity() {
         val script = """
             (() => {
               const insets = JSON.parse(${JSONObject.quote(payload)});
-              const root = document.documentElement;
-              root.classList.remove('platform-ios-pwa', 'platform-android-app', 'platform-browser');
-              root.classList.add('platform-android-app');
-              root.dataset.runtime = 'platform-android-app';
-              for (const side of ['top', 'right', 'bottom', 'left']) {
-                root.style.setProperty(`--android-inset-${'$'}{side}`, `${'$'}{Number(insets[side]) || 0}px`);
-              }
-              window.dispatchEvent(new CustomEvent('meh:native-insets', { detail: insets }));
+              window.MehPlatform?.applyAndroidInsets(insets);
             })();
         """.trimIndent()
         target.post { target.evaluateJavascript(script, null) }
@@ -281,27 +281,54 @@ class MainActivity : AppCompatActivity() {
             finish()
             return
         }
+        if (!systemBackInFlight.compareAndSet(false, true)) {
+            Log.i(TAG, "System back ignored while the previous request is still resolving")
+            return
+        }
 
         Log.i(TAG, "System back received")
         webView.evaluateJavascript(
-            "Boolean(window.MehAppBack && window.MehAppBack.handleBack())"
+            """
+                (() => {
+                  try {
+                    return window.mehNavigation?.canGoBack() === true;
+                  } catch (_) {
+                    return false;
+                  }
+                })()
+            """.trimIndent()
         ) { result ->
-            if (result == "true") {
-                Log.i(TAG, "System back handled by web overlay/router")
+            if (!isJavascriptTrue(result)) {
+                systemBackInFlight.set(false)
+                Log.i(TAG, "System back reached SPA home; exiting Activity (result=$result)")
+                finish()
                 return@evaluateJavascript
             }
 
-            val canGoBack = webView.canGoBack()
-            Log.i(TAG, "System back: WebView.canGoBack=$canGoBack")
-            if (canGoBack) {
-                Log.i(TAG, "System back handled by WebView history")
-                webView.goBack()
-            } else {
-                Log.i(TAG, "System back reached home; exiting Activity")
-                finish()
+            webView.evaluateJavascript(
+                """
+                    (() => {
+                      try {
+                        return window.mehNavigation?.back() === true;
+                      } catch (_) {
+                        return false;
+                      }
+                    })()
+                """.trimIndent()
+            ) { backResult ->
+                systemBackInFlight.set(false)
+                if (isJavascriptTrue(backResult)) {
+                    Log.i(TAG, "System back delegated to the SPA navigation stack")
+                } else {
+                    Log.w(TAG, "SPA declined back after reporting a child screen; exiting Activity")
+                    finish()
+                }
             }
         }
     }
+
+    private fun isJavascriptTrue(result: String?): Boolean =
+        result?.trim()?.trim('"')?.equals("true", ignoreCase = true) == true
 
     private inner class AndroidBridge {
         @JavascriptInterface
@@ -319,6 +346,13 @@ class MainActivity : AppCompatActivity() {
         }
 
         @JavascriptInterface
+        fun openProjectPage() {
+            runOnUiThread {
+                openGitHubPage(GITHUB_PROJECT_URL, "GitHub project", R.string.project_open_failed)
+            }
+        }
+
+        @JavascriptInterface
         fun setSystemBarColor(color: String, darkBackground: Boolean) {
             runOnUiThread { applySystemBarColor(color, darkBackground) }
         }
@@ -330,14 +364,7 @@ class MainActivity : AppCompatActivity() {
         } catch (_: IllegalArgumentException) {
             DEFAULT_SURFACE_COLOR.toColorInt()
         }
-        window.statusBarColor = Color.TRANSPARENT
-        window.navigationBarColor = Color.TRANSPARENT
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            window.navigationBarDividerColor = Color.TRANSPARENT
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            window.isNavigationBarContrastEnforced = false
-        }
+        configureTransparentSystemBars()
         window.decorView.setBackgroundColor(color)
         if (::rootContainer.isInitialized) rootContainer.setBackgroundColor(color)
         if (::webView.isInitialized) webView.setBackgroundColor(color)
@@ -479,14 +506,22 @@ class MainActivity : AppCompatActivity() {
 
     private fun openReleasePage(releaseUrl: String) {
         val safeUrl = validateReleaseUrl(releaseUrl) ?: GITHUB_RELEASES_URL
+        openGitHubPage(safeUrl, "GitHub Release")
+    }
+
+    private fun openGitHubPage(
+        url: String,
+        destination: String,
+        failureMessage: Int = R.string.update_open_failed
+    ) {
         try {
-            val intent = Intent(Intent.ACTION_VIEW, safeUrl.toUri())
+            val intent = Intent(Intent.ACTION_VIEW, url.toUri())
             if (intent.resolveActivity(packageManager) == null) throw ActivityNotFoundException()
             startActivity(intent)
-            Log.i(TAG, "Opened GitHub Release in external browser")
+            Log.i(TAG, "Opened $destination in external browser")
         } catch (_: ActivityNotFoundException) {
-            Toast.makeText(this, R.string.update_open_failed, Toast.LENGTH_SHORT).show()
-            Log.w(TAG, "No Activity can open the GitHub Release URL")
+            Toast.makeText(this, failureMessage, Toast.LENGTH_SHORT).show()
+            Log.w(TAG, "No Activity can open the $destination URL")
         }
     }
 
@@ -583,6 +618,8 @@ class MainActivity : AppCompatActivity() {
         private const val GITHUB_REPOSITORY = "Meh"
         private const val GITHUB_LATEST_RELEASE_API =
             "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPOSITORY/releases/latest"
+        private const val GITHUB_PROJECT_URL =
+            "https://github.com/$GITHUB_OWNER/$GITHUB_REPOSITORY"
         private const val GITHUB_RELEASES_URL =
             "https://github.com/$GITHUB_OWNER/$GITHUB_REPOSITORY/releases"
         private const val UPDATE_PREFERENCES = "meh_update_preferences"

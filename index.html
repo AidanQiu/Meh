@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta id="themeColorMeta" name="theme-color" content="#d6e3e1" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="meh-build" content="1.1.1-pwa-r28" />
+    <meta name="meh-build" content="1.1.1-pwa-r30" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta id="appleWebAppTitle" name="apple-mobile-web-app-title" content="随便吧" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -37,7 +37,8 @@
       }
     </style>
     <title>随便吧</title>
-    <link id="appManifest" rel="manifest" href="./manifest-zh.webmanifest?v=1.1.1-pwa-r28" />
+    <link id="appManifest" rel="manifest" href="./manifest-zh.webmanifest?v=1.1.1-pwa-r30" />
+    <script src="./platform.js?v=1.1.1-pwa-r30"></script>
     <script>
       (() => {
         const root = document.documentElement;
@@ -55,29 +56,7 @@
           // Keep the browser-derived language when storage is unavailable or invalid.
         }
 
-        const isAndroidApp = Boolean(window.MehAndroid?.getSafeAreaInsets);
-        const isStandalone = window.matchMedia?.("(display-mode: standalone)").matches || navigator.standalone === true;
-        const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent)
-          || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-        const platformClass = isAndroidApp
-          ? "platform-android-app"
-          : isIos && isStandalone
-            ? "platform-ios-pwa"
-            : "platform-browser";
-        root.classList.remove("platform-ios-pwa", "platform-android-app", "platform-browser");
-        root.classList.add(platformClass);
-        root.dataset.runtime = platformClass;
-
-        if (isAndroidApp) {
-          try {
-            const nativeInsets = JSON.parse(window.MehAndroid.getSafeAreaInsets());
-            for (const side of ["top", "right", "bottom", "left"]) {
-              root.style.setProperty(`--android-inset-${side}`, `${Number(nativeInsets[side]) || 0}px`);
-            }
-          } catch (error) {
-            console.warn("[Meh] Native safe-area bootstrap failed:", error);
-          }
-        }
+        const platformClass = window.MehPlatform.current;
 
         const normalizeHex = (value, fallback) => /^#[0-9a-f]{6}$/i.test(String(value)) ? String(value) : fallback;
         const mixHex = (from, to, amount) => {
@@ -122,18 +101,18 @@
     <link
       rel="icon"
       type="image/x-icon"
-      href="./favicon.ico?v=1.1.1-pwa-r28"
+      href="./favicon.ico?v=1.1.1-pwa-r30"
     />
     <link
       rel="shortcut icon"
       type="image/x-icon"
-      href="./favicon.ico?v=1.1.1-pwa-r28"
+      href="./favicon.ico?v=1.1.1-pwa-r30"
     />
     <link
       rel="apple-touch-icon"
-      href="./icons/meh_icon.png?v=1.1.1-pwa-r28"
+      href="./icons/meh_icon.png?v=1.1.1-pwa-r30"
     />
-    <link rel="stylesheet" href="./style.css?v=1.1.1-pwa-r28" />
+    <link rel="stylesheet" href="./style.css?v=1.1.1-pwa-r30" />
   </head>
   <body>
     <div id="viewport-background" aria-hidden="true"></div>
@@ -206,51 +185,6 @@
         </button>
       </div>
 
-<!--=========原本段落=========-->
-
-      <!-- <section class="setting-card color-setting-card">
-        <div class="setting-title" data-i18n="themeColor">主题颜色</div>
-        <div class="palette-panel">
-          <div class="color-row">
-            <div>
-              <span class="setting-title" data-i18n="primaryThemeColor">首选主题色（背景）</span>
-              <span class="setting-copy">Surface / Background</span>
-            </div>
-          </div>
-          <div class="swatch-grid" id="primarySwatches"></div>
-          <div class="advanced-color-picker" id="primaryColorPicker" data-color-picker="primary" hidden>
-            <span class="picker-field" aria-hidden="true">
-              <span class="picker-dot"></span>
-            </span>
-            <input class="picker-hue-range" type="range" min="0" max="360" value="0" aria-label="Primary hue" />
-            <span class="picker-hue" aria-hidden="true">
-              <span class="picker-hue-thumb"></span>
-            </span>
-            <input class="color-input" id="primaryThemeColorInput" type="hidden" value="#6b9c94" />
-          </div>
-
-          <div class="color-row">
-            <div>
-              <span class="setting-title" data-i18n="secondaryThemeColor">次选主题色（字体/按钮）</span>
-              <span class="setting-copy">Text / Buttons</span>
-            </div>
-          </div>
-          <div class="swatch-grid" id="secondarySwatches"></div>
-          <div class="advanced-color-picker" id="secondaryColorPicker" data-color-picker="secondary" hidden>
-            <span class="picker-field" aria-hidden="true">
-              <span class="picker-dot"></span>
-            </span>
-            <input class="picker-hue-range" type="range" min="0" max="360" value="0" aria-label="Secondary hue" />
-            <span class="picker-hue" aria-hidden="true">
-              <span class="picker-hue-thumb"></span>
-            </span>
-            <input class="color-input" id="secondaryThemeColorInput" type="hidden" value="#6750a4" />
-          </div>
-        </div> 
-      </section>-->
-
-<!--========= 使用gemini=========修改 -->
-
       <section class="setting-card color-setting-card">
         <div class="setting-section-title">
           <span class="material-symbols-rounded setting-title-icon" aria-hidden="true">palette</span>
@@ -272,7 +206,7 @@
             <input class="color-input" id="primaryThemeColorInput" type="hidden" value="#6b9c94" />
           </div>
 
-          <div class="color-row" style="margin-top: 12px;">
+          <div class="color-row setting-row-gap-sm">
             <span class="setting-title" data-i18n="secondaryThemeColor">次选主题色（字体/按钮）</span>
           </div>
           <div class="swatch-grid" id="secondarySwatches"></div>
@@ -288,8 +222,6 @@
           </div>
         </div>
       </section>
-
-<!-- =====使用gemini修改结束====== -->
 
       <section class="setting-card">
         <div class="dark-mode-picker">
@@ -317,9 +249,8 @@
         </select>
       </section>
 
-<!-- =====新增加的显示控件 =========-->
       <section class="setting-card">
-        <div class="setting-section-title" style="margin-bottom: 12px;">
+        <div class="setting-section-title setting-section-title-spaced">
           <span class="material-symbols-rounded setting-title-icon" aria-hidden="true">tune</span>
           <span class="setting-title" data-i18n="personalization">个性化</span>
         </div>
@@ -330,32 +261,31 @@
         </div>
         <input class="range-input" id="uiScaleRange" type="range" min="0.85" max="1.25" step="0.01" value="1" />
 
-        <div class="setting-row" style="margin-top: 14px;">
+        <div class="setting-row setting-row-gap-md">
           <label class="setting-title" for="topHeightRange" data-i18n="topHeight">顶部高度</label>
           <span class="setting-value" id="topHeightValue">0</span>
         </div>
         <input class="range-input" id="topHeightRange" type="range" min="0" max="56" step="1" value="0" />
 
-        <div class="setting-row" style="margin-top: 14px;">
+        <div class="setting-row setting-row-gap-md">
           <label class="setting-title" for="dockThicknessRange" data-i18n="dockThickness">竖向厚度</label>
           <span class="setting-value" id="dockThicknessValue">58</span>
         </div>
         <input class="range-input" id="dockThicknessRange" type="range" min="46" max="76" step="1" value="58" />
 
-        <div class="setting-row" style="margin-top: 14px;">
+        <div class="setting-row setting-row-gap-md">
           <label class="setting-title" for="dockSideGapRange" data-i18n="dockSideGap">左右边距</label>
           <span class="setting-value" id="dockSideGapValue">28</span>
         </div>
         <input class="range-input" id="dockSideGapRange" type="range" min="12" max="64" step="1" value="28" />
 
-        <div class="setting-row" style="margin-top: 14px;">
+        <div class="setting-row setting-row-gap-md">
           <label class="setting-title" for="dockBottomGapRange" data-i18n="dockBottomGap">离底部距离</label>
           <span class="setting-value" id="dockBottomGapValue">18</span>
         </div>
         <input class="range-input" id="dockBottomGapRange" type="range" min="0" max="40" step="1" value="18" />
       </section>
 
-<!-- =====新增加的显示控件 =========-->
       <section class="setting-card">
         <div class="setting-row wallpaper-title-row">
           <div class="setting-section-title">
@@ -372,12 +302,12 @@
         <div class="preset-wallpaper-grid" id="presetWallpaperGrid"></div>
         <input class="file-input" id="backgroundImageInput" type="file" accept="image/*" multiple />
         
-        <div class="setting-row" style="margin-top: 12px;">
-          <span class="setting-title" style="font-size: 14px;" data-i18n="backgroundOpacity">背景图透明度</span>
-          <span class="setting-value" id="bgOpacityValue">1.00</span>
+        <div class="setting-row setting-row-gap-sm">
+          <span class="setting-title setting-title-compact" data-i18n="backgroundOpacity">背景图透明度</span>
+          <span class="setting-value" id="bgOpacityValue">0.50</span>
         </div>
-        <input class="range-input" id="bgOpacityRange" type="range" min="0" max="1" step="0.01" value="1" />
-        <button class="small-pill-button full-width" id="clearBackgroundButton" type="button" data-i18n="clear" style="margin-top: 8px;">清除</button>
+        <input class="range-input" id="bgOpacityRange" type="range" min="0" max="1" step="0.01" value="0.5" />
+        <button class="small-pill-button full-width control-gap-xs" id="clearBackgroundButton" type="button" data-i18n="clear">清除</button>
       </section>
 
 
@@ -413,11 +343,21 @@
         </div>
         <div class="version-details">
           <span><span data-i18n="webVersion">Web 版本</span>：1.1.1</span>
-          <span><span data-i18n="buildVersion">构建</span>：<span id="pwaBuildValue">1.1.1-pwa-r28</span></span>
+          <span><span data-i18n="buildVersion">构建</span>：<span id="pwaBuildValue">1.1.1-pwa-r30</span></span>
           <span id="androidVersionDetail" hidden>Android：<span id="androidVersionValue"></span></span>
         </div>
         <button class="small-pill-button full-width" id="checkUpdateButton" type="button" data-i18n="checkUpdate">检查更新</button>
         <p class="update-status" id="pwaUpdateStatus" role="status" aria-live="polite"></p>
+        <a
+          class="small-pill-button full-width project-link-button"
+          id="githubProjectLink"
+          href="https://github.com/AidanQiu/Meh"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <span class="material-symbols-rounded" aria-hidden="true">code</span>
+          <span data-i18n="viewGithubProject">查看 GitHub 项目</span>
+        </a>
       </section>
     </aside>
 
@@ -498,7 +438,8 @@
       <button class="save-preset-button" id="saveNumberSettingsButton" type="button" data-i18n="settings">设置</button>
     </aside>
 
-    <script src="./pwa-update.js?v=1.1.1-pwa-r28" defer></script>
-    <script src="./app.js?v=1.1.1-pwa-r28" defer></script>
+    <script src="./navigation-controller.js?v=1.1.1-pwa-r30" defer></script>
+    <script src="./pwa-update.js?v=1.1.1-pwa-r30" defer></script>
+    <script src="./app.js?v=1.1.1-pwa-r30" defer></script>
   </body>
 </html>

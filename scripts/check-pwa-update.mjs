@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { inflateSync } from "node:zlib";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const androidRoot = join(root, "android", "app", "src", "main", "assets", "www");
+const androidRoot = join(root, "android", "app", "build", "generated", "webAssets", "www");
 const read = (path) => readFileSync(join(root, path), "utf8");
 const failures = [];
 const check = (condition, message) => {
@@ -78,7 +78,7 @@ const app = read("app.js");
 const updater = read("pwa-update.js");
 const worker = read("service-worker.js");
 const syncScript = read("scripts/sync-web-assets.ps1");
-const currentBuild = "1.1.1-pwa-r28";
+const currentBuild = "1.1.1-pwa-r30";
 const iconPath = `./icons/meh_icon.png?v=${currentBuild}`;
 const expectedIcons = ["icon_monochrome.svg", "meh_background.svg", "meh_foreground.svg", "meh_icon.png"];
 
@@ -201,7 +201,7 @@ const walk = (directory) => readdirSync(join(root, directory), { withFileTypes: 
   return entry.isDirectory() ? walk(path) : [path.replaceAll("\\", "/")];
 });
 const sharedFiles = [
-  "index.html", "app.js", "style.css", "pwa-update.js", "service-worker.js", "version.json",
+  "index.html", "platform.js", "navigation-controller.js", "app.js", "style.css", "pwa-update.js", "service-worker.js", "version.json",
   "manifest.webmanifest", "manifest-meh.webmanifest", "manifest-zh.webmanifest", "favicon.ico",
   ...expectedIcons.map((name) => `icons/${name}`),
   ...walk("fonts"),
@@ -226,6 +226,8 @@ for (const file of ["app.js", "pwa-update.js", "service-worker.js", "scripts/che
 }
 
 const gradle = read("android/app/build.gradle.kts");
+check(gradle.includes('layout.buildDirectory.dir("generated/webAssets")'), "Android web assets must be generated under the build directory");
+check(gradle.includes("assets.srcDir(generatedWebAssets)"), "Android main source set does not include generated web assets");
 check(gradle.includes("versionCode = 3"), "Android versionCode must be 3");
 check(gradle.includes('versionName = "1.1.2"'), "Android versionName must be 1.1.2");
 

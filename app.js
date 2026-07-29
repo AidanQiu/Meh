@@ -123,6 +123,7 @@ const i18n = {
     webVersion: "Web 版本",
     buildVersion: "构建",
     checkUpdate: "检查更新",
+    viewGithubProject: "查看 GitHub 项目",
     updateChecking: "正在检查…",
     updateInstalling: "正在更新…",
     updateLatest: "已是最新版本",
@@ -214,6 +215,7 @@ const i18n = {
     webVersion: "Web version",
     buildVersion: "Build",
     checkUpdate: "Check for updates",
+    viewGithubProject: "View project on GitHub",
     updateChecking: "Checking…",
     updateInstalling: "Updating…",
     updateLatest: "Up to date",
@@ -305,6 +307,7 @@ const i18n = {
     webVersion: "Web バージョン",
     buildVersion: "ビルド",
     checkUpdate: "更新を確認",
+    viewGithubProject: "GitHub でプロジェクトを見る",
     updateChecking: "確認中…",
     updateInstalling: "更新中…",
     updateLatest: "最新バージョンです",
@@ -396,6 +399,7 @@ const i18n = {
     webVersion: "Web нұсқасы",
     buildVersion: "Құрастырылым",
     checkUpdate: "Жаңартуды тексеру",
+    viewGithubProject: "GitHub жобасын ашу",
     updateChecking: "Тексерілуде…",
     updateInstalling: "Жаңартылуда…",
     updateLatest: "Соңғы нұсқа орнатылған",
@@ -474,7 +478,6 @@ const defaultNumberSettings = {
 const defaultState = {
   page: "coin",
 };
- // 新增加设置项与控件绑定
 function detectInitialLanguage() {
   const supportedLanguages = ["zh", "en", "ja", "kk"];
   const browserLanguages = navigator.languages || [navigator.language || "en"];
@@ -487,8 +490,7 @@ const defaultAppSettings = {
   primaryThemeColor: "#6b9c94",
   secondaryThemeColor: "#6750a4",
   uiScale: 1,
-  // The real safe-area inset already clears the status bar. Extra spacing is
-  // purely user-controlled and must not add a second blank strip by default.
+  // The real safe-area inset already clears the status bar; this is user spacing only.
   topHeight: 0,
   dockThickness: 58,
   dockSideGap: 28,
@@ -500,7 +502,6 @@ const defaultAppSettings = {
   language: detectInitialLanguage(),
   systemBarLayoutVersion: 6,
 };
-// 新增加设置项与控件绑定
 const primarySwatches = ["#e8e3e8", "#c9b0f6", "#94e8bd", "#87c7f4", "#f9aaa5", "#55beb4", "#ffbd4a",  "#ffffff", "#2d7434"];
 const secondarySwatches = ["#4f6670", "#6750a4", "#0b7f86", "#0b6ecb", "#bf4d00", "#2d7434", "#ad1f4f", "#000000",  "#6b9c94"];
 const languageNames = {
@@ -509,11 +510,6 @@ const languageNames = {
   ja: "日本語",
   kk: "Қазақша",
 };
-function getDarkModeName(mode) {
-  if (mode === "light") return t("lightMode");
-  if (mode === "dark") return t("darkModeOnly");
-  return t("autoMode");
-}
 const WALLPAPER_DB_NAME = "meh-wallpapers-db";
 const WALLPAPER_STORE_NAME = "wallpapers";
 const MAX_WALLPAPERS = 16;
@@ -571,6 +567,13 @@ let diceFaceTimer = null;
 let diceFaceTimers = [];
 let wheelSpinTimer = null;
 let sheetCloseTimer = null;
+let renderedNavigationState = {
+  mehApp: true,
+  screen: "home",
+  depth: 0,
+  params: {},
+};
+const navigationScrollPositions = new Map();
 let pageScrollLock = {
   active: false,
   y: 0,
@@ -603,7 +606,6 @@ const els = {
   secondarySwatches: document.querySelector("#secondarySwatches"),
   uiScaleRange: document.querySelector("#uiScaleRange"),
   uiScaleValue: document.querySelector("#uiScaleValue"),
-  // 新增加设置项与控件绑定
   topHeightRange: document.querySelector("#topHeightRange"),
   topHeightValue: document.querySelector("#topHeightValue"),
   dockThicknessRange: document.querySelector("#dockThicknessRange"),
@@ -612,7 +614,6 @@ const els = {
   dockSideGapValue: document.querySelector("#dockSideGapValue"),
   dockBottomGapRange: document.querySelector("#dockBottomGapRange"),
   dockBottomGapValue: document.querySelector("#dockBottomGapValue"),
-// 新增加设置项与控件绑定
   presetWallpaperGrid: document.querySelector("#presetWallpaperGrid"),
   backgroundImageInput: document.querySelector("#backgroundImageInput"),
   clearBackgroundButton: document.querySelector("#clearBackgroundButton"),
@@ -625,10 +626,8 @@ const els = {
   darkModeMenuButton: document.querySelector("#darkModeMenuButton"),
   darkModeMenuText: document.querySelector("#darkModeMenuText"),
   darkModeMenu: document.querySelector("#darkModeMenu"),
-  // 使用gemini修改
   bgOpacityRange: document.querySelector("#bgOpacityRange"),
   bgOpacityValue: document.querySelector("#bgOpacityValue"),
-  // 修改结束
   pageActions: document.querySelector("#pageActions"),
   resetButton: document.querySelector("#resetButton"),
   continueButton: document.querySelector("#continueButton"),
@@ -647,6 +646,7 @@ const els = {
   saveNumberSettingsButton: document.querySelector("#saveNumberSettingsButton"),
   checkUpdateButton: document.querySelector("#checkUpdateButton"),
   pwaUpdateStatus: document.querySelector("#pwaUpdateStatus"),
+  githubProjectLink: document.querySelector("#githubProjectLink"),
 };
 
 let layoutDiagnosticTimer = 0;
@@ -670,8 +670,11 @@ async function init() {
   requestPersistentStorage();
   syncPwaAppHeight();
 
-  const isStandalone = window.matchMedia?.("(display-mode: standalone)").matches || navigator.standalone === true;
-  const runtime = window.MehAndroid ? "Android WebView" : isStandalone ? "PWA standalone" : "browser";
+  const runtime = window.MehPlatform.androidApp
+    ? "Android WebView"
+    : window.MehPlatform.standalone
+      ? "PWA standalone"
+      : "browser";
   console.info(`[Meh] Runtime environment: ${runtime}`);
 
   numberState.settings = loadNumberSettings();
@@ -684,6 +687,7 @@ async function init() {
   bindEvents();
   applyI18n();
   renderPage();
+  configureNavigation();
   hydrateOfflineIcons();
   scheduleLayoutDiagnostics("initial-render");
 }
@@ -714,10 +718,10 @@ function bindEvents() {
 
   els.settingsButton.addEventListener("click", openSettings);
   els.featureButton.addEventListener("click", handleFeatureButton);
-  els.closeSettingsButton.addEventListener("click", closeAllSheets);
-  els.closeWheelEditorButton.addEventListener("click", closeAllSheets);
-  els.closeNumberSettingsButton.addEventListener("click", closeAllSheets);
-  els.scrim.addEventListener("click", closeAllSheets);
+  els.closeSettingsButton.addEventListener("click", () => window.mehNavigation.back());
+  els.closeWheelEditorButton.addEventListener("click", () => window.mehNavigation.back());
+  els.closeNumberSettingsButton.addEventListener("click", () => window.mehNavigation.back());
+  els.scrim.addEventListener("click", () => window.mehNavigation.back());
   bindSheetHandleGestures();
   bindDockDragGesture();
 
@@ -744,6 +748,11 @@ function bindEvents() {
       return;
     }
     await window.MehPwaUpdate?.checkForUpdates({ manual: true, force: true });
+  });
+  els.githubProjectLink?.addEventListener("click", (event) => {
+    if (!window.MehAndroid?.openProjectPage) return;
+    event.preventDefault();
+    window.MehAndroid.openProjectPage();
   });
   window.MehAndroidUpdateResult = (status) => {
     if (els.checkUpdateButton) els.checkUpdateButton.disabled = false;
@@ -824,7 +833,7 @@ async function requestPersistentStorage() {
 }
 
 function isIosPwaRuntime() {
-  return els.root.classList.contains("platform-ios-pwa");
+  return window.MehPlatform.is(window.MehPlatform.RUNTIME.IOS_PWA);
 }
 
 function isKeyboardEditable(element) {
@@ -1205,8 +1214,8 @@ function classifyViewportOwnership({
 
 function logStandaloneStartupDiagnostics() {
   const standaloneInfo = {
-    navigatorStandalone: window.navigator.standalone,
-    displayModeStandalone: window.matchMedia("(display-mode: standalone)").matches,
+    navigatorStandalone: window.MehPlatform.standalone,
+    displayModeStandalone: window.MehPlatform.standalone,
     displayModeFullscreen: window.matchMedia("(display-mode: fullscreen)").matches,
     innerWidth: window.innerWidth,
     innerHeight: window.innerHeight,
@@ -1531,8 +1540,8 @@ function logLayoutDiagnostics(reason = "manual", force = false) {
   const bottomSurfaceRect = bottomSurface?.getBoundingClientRect();
   const viewportOwnership = classifyViewportOwnership({
     standaloneInfo: {
-      navigatorStandalone: window.navigator.standalone,
-      displayModeStandalone: Boolean(window.matchMedia?.("(display-mode: standalone)").matches),
+      navigatorStandalone: window.MehPlatform.standalone,
+      displayModeStandalone: window.MehPlatform.standalone,
       innerHeight: window.innerHeight,
       screenHeight: window.screen.height,
       documentClientHeight: document.documentElement.clientHeight,
@@ -1578,8 +1587,8 @@ function logLayoutDiagnostics(reason = "manual", force = false) {
   const payload = {
     reason,
     runtime: els.root.dataset.runtime || "unknown",
-    displayModeStandalone: Boolean(window.matchMedia?.("(display-mode: standalone)").matches),
-    navigatorStandalone: navigator.standalone === true,
+    displayModeStandalone: window.MehPlatform.standalone,
+    navigatorStandalone: window.MehPlatform.standalone,
     screenHeight: window.screen.height,
     innerHeight: window.innerHeight,
     documentClientHeight: document.documentElement.clientHeight,
@@ -1737,10 +1746,9 @@ function bindSheetHandleGestures() {
 
       closeRequested = true;
       shouldTrack = false;
-      sheet.scrollTop = 0;
       sheet.classList.remove("is-dragging");
       sheet.style.transform = "";
-      closeAllSheets();
+      window.mehNavigation.back();
     };
 
     const finishDrag = () => {
@@ -2439,8 +2447,9 @@ function getWheelResultText() {
 }
 
 function openWheelEditor() {
-  renderWheelEditor();
-  openSheet(els.wheelEditorSheet);
+  window.mehNavigation.open("preset-editor", {
+    presetId: wheelState.selectedPresetId,
+  });
 }
 
 function renderWheelEditor() {
@@ -2831,8 +2840,7 @@ function resetNumberHistory() {
 }
 
 function openNumberSettings() {
-  renderNumberSettingsPanel();
-  openSheet(els.numberSettingsSheet);
+  window.mehNavigation.open("number-settings");
 }
 
 function renderNumberSettingsPanel() {
@@ -2853,7 +2861,7 @@ function saveNumberSettingsFromPanel() {
   saveNumberSettings();
   numberState.historyExpanded = false;
   if (state.page === "number") renderNumberPage();
-  closeAllSheets();
+  window.mehNavigation.back();
 }
 
 function loadNumberSettings() {
@@ -3029,31 +3037,6 @@ function renderSwatchGroup(container, colors, activeColor, onPick, onAdd) {
   container.querySelector(".swatch-add-button").addEventListener("click", onAdd);
   hydrateOfflineIcons(container);
 }
-// 原代码
-// function initCustomColorPickers() {
-//   document.querySelectorAll(".advanced-color-picker").forEach((picker) => {
-//     const kind = picker.dataset.colorPicker;
-//     const field = picker.querySelector(".picker-field");
-//     const hueRange = picker.querySelector(".picker-hue-range");
-
-//     field.addEventListener("pointerdown", (event) => {
-//       field.setPointerCapture(event.pointerId);
-//       updateCustomColorFromField(kind, field, event);
-//     });
-
-//     field.addEventListener("pointermove", (event) => {
-//       if (event.buttons !== 1) return;
-//       updateCustomColorFromField(kind, field, event);
-//     });
-  //     hueRange.addEventListener("input", () => {
-  //       customPickerState[kind].hue = Number(hueRange.value);
-  //       setThemeColor(kind, hsvToHex(customPickerState[kind].hue, customPickerState[kind].saturation, customPickerState[kind].value));
-  //     });
-  //   });
-  // }
-
-
-// ==============使用gemini修改==============
 function initCustomColorPickers() {
   document.querySelectorAll(".advanced-color-picker").forEach((picker) => {
     const kind = picker.dataset.colorPicker;
@@ -3061,7 +3044,7 @@ function initCustomColorPickers() {
     const hueRange = picker.querySelector(".picker-hue-range");
 
     let isDragging = false;
-    let animationFrameId = null; // 动画帧锁
+    let animationFrameId = null;
 
     field.addEventListener("pointerdown", (event) => {
       field.setPointerCapture(event.pointerId);
@@ -3071,7 +3054,6 @@ function initCustomColorPickers() {
 
     field.addEventListener("pointermove", (event) => {
       if (!isDragging) return;
-      // 节流处理：限制极高频的回报率，避免主线程卡死
       if (animationFrameId) cancelAnimationFrame(animationFrameId);
       animationFrameId = requestAnimationFrame(() => {
         updateCustomColorFromField(kind, field, event, false);
@@ -3083,10 +3065,10 @@ function initCustomColorPickers() {
         field.releasePointerCapture(event.pointerId);
         isDragging = false;
         if (animationFrameId) cancelAnimationFrame(animationFrameId);
-        updateCustomColorFromField(kind, field, event, true); 
+        updateCustomColorFromField(kind, field, event, true);
       }
     };
-    
+
     field.addEventListener("pointerup", stopDrag);
     field.addEventListener("pointercancel", stopDrag);
 
@@ -3096,39 +3078,12 @@ function initCustomColorPickers() {
     });
   });
 }
-// ===============修改结束==================
-
-
 
 function toggleCustomColorPicker(kind) {
   document.querySelectorAll(".advanced-color-picker").forEach((picker) => {
     picker.hidden = picker.dataset.colorPicker === kind ? !picker.hidden : true;
   });
 }
-// 原代码
-// function updateCustomColorFromField(kind, field, event) {
-//   const rect = field.getBoundingClientRect();
-//   const saturation = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
-//   const value = 1 - Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
-
-//   customPickerState[kind].saturation = saturation;
-//   customPickerState[kind].value = value;
-//   setThemeColor(kind, hsvToHex(customPickerState[kind].hue, saturation, value));
-// }
-
-// function setThemeColor(kind, color) {
-//   const normalized = normalizeHexColor(color, kind === "primary" ? defaultAppSettings.primaryThemeColor : defaultAppSettings.secondaryThemeColor);
-
-//   if (kind === "primary") {
-//     appSettings.primaryThemeColor = normalized;
-//     els.primaryThemeColorInput.value = normalized;
-//   } else {
-//     appSettings.secondaryThemeColor = normalized;
-//     els.secondaryThemeColorInput.value = normalized;
-//   }
-
-// 使用gemini进行修改
-
 function updateCustomColorFromField(kind, field, event, isFinal = false) {
   const rect = field.getBoundingClientRect();
   const saturation = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
@@ -3151,16 +3106,13 @@ function setThemeColor(kind, color, isFinal = true) {
   }
 
   applyThemeColor(appSettings.primaryThemeColor, appSettings.secondaryThemeColor);
-  syncColorPickerPreviews(); 
+  syncColorPickerPreviews();
 
-  // 性能优化核心：只有在松手（isFinal 为 true）时才触发高耗能的网格重绘和数据磁盘写入
   if (isFinal) {
     renderColorSwatches();
     saveAppSettings();
   }
 }
-// 修改结束
-
 
 function applyThemeColor(primaryColor, secondaryColor) {
   const background = normalizeHexColor(primaryColor, defaultAppSettings.primaryThemeColor);
@@ -3200,7 +3152,7 @@ function applyThemeColor(primaryColor, secondaryColor) {
   els.root.style.setProperty("--dock-bg", isDark ? "rgba(28, 27, 31, 0.88)" : mixHex(background, "#ffffff", 0.56));
 
   const statusColor = surface;
-  const isIosPwa = els.root.classList.contains("platform-ios-pwa");
+  const isIosPwa = isIosPwaRuntime();
   if (isIosPwa) {
     document.querySelectorAll("meta[name='theme-color']").forEach((meta) => meta.remove());
   } else {
@@ -3294,20 +3246,6 @@ function applyLayoutSettings() {
   els.root.style.setProperty("--dock-thickness", `${dockThickness}px`);
   els.root.style.setProperty("--dock-side-gap", `${dockSideGap}px`);
   els.root.style.setProperty("--dock-bottom-gap", `${dockBottomGap}px`);
-  // The positioner owns the user's exact physical edge distance. Safe-area
-  // padding belongs to the inner surface so it protects buttons without
-  // silently increasing computed bottom.
-  if (els.dock) {
-    els.dock.style.setProperty("left", `max(${dockSideGap}px, var(--content-inset-left))`, "important");
-    els.dock.style.setProperty("right", `max(${dockSideGap}px, var(--content-inset-right))`, "important");
-    els.dock.style.setProperty("bottom", `${dockBottomGap}px`, "important");
-    els.dock.style.setProperty("width", "auto", "important");
-    els.dock.style.setProperty("max-width", "448px", "important");
-    els.dock.style.setProperty("margin-inline", "auto", "important");
-  }
-  if (els.pageActions) {
-    els.pageActions.style.setProperty("bottom", "var(--page-actions-bottom)", "important");
-  }
 
   if (els.topHeightRange) els.topHeightRange.value = topHeight;
   if (els.topHeightValue) els.topHeightValue.textContent = topHeight;
@@ -3334,22 +3272,7 @@ function clampNumber(value, min, max, fallback) {
 function applyBackgroundImage(dataUrl, opacity = defaultAppSettings.backgroundOpacity) {
   const parsedOpacity = Number(opacity);
   const safeOpacity = Number.isFinite(parsedOpacity) ? Math.max(0, Math.min(1, parsedOpacity)) : defaultAppSettings.backgroundOpacity;
-  const transparentLayer = "linear-gradient(transparent, transparent)";
-  let wallpaperLayer = transparentLayer;
-
-  if (dataUrl && safeOpacity > 0) {
-    const imageUrl = `url(${JSON.stringify(String(dataUrl))})`;
-    const webkitCrossFade = `-webkit-cross-fade(transparent, ${imageUrl}, ${safeOpacity})`;
-    const standardCrossFade = `cross-fade(transparent, ${imageUrl} ${Math.round(safeOpacity * 100)}%)`;
-    if (window.CSS?.supports?.("background-image", webkitCrossFade)) {
-      wallpaperLayer = webkitCrossFade;
-    } else if (window.CSS?.supports?.("background-image", standardCrossFade)) {
-      wallpaperLayer = standardCrossFade;
-    } else {
-      wallpaperLayer = imageUrl;
-      console.warn("[Meh] This browser cannot blend wallpaper opacity on the root canvas; using the full-opacity image fallback.");
-    }
-  }
+  const wallpaperLayer = dataUrl ? `url(${JSON.stringify(String(dataUrl))})` : "none";
 
   els.root.style.setProperty("--app-wallpaper-image", wallpaperLayer);
   els.root.style.setProperty("--app-wallpaper-opacity", safeOpacity);
@@ -3732,46 +3655,6 @@ function createWallpaperId() {
   if (window.crypto?.randomUUID) return crypto.randomUUID();
   return `wallpaper-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
-function setDarkMode(mode) {
-  appSettings.darkMode = ["light", "dark", "auto"].includes(mode) ? mode : "auto";
-
-  if (els.darkModeSelect) {
-    els.darkModeSelect.value = appSettings.darkMode;
-  }
-
-  updateDarkModeMenu();
-  applyThemeColor(appSettings.primaryThemeColor, appSettings.secondaryThemeColor);
-  refreshThemeSensitivePage();
-  saveAppSettings();
-}
-
-function updateDarkModeMenu() {
-  if (!els.darkModeMenu || !els.darkModeMenuText) return;
-
-  const mode = ["light", "dark", "auto"].includes(appSettings.darkMode)
-    ? appSettings.darkMode
-    : "auto";
-
-  els.darkModeMenuText.textContent = getDarkModeName(mode);
-
-  els.darkModeMenu.querySelectorAll("[data-dark-option]").forEach((button) => {
-    const isActive = button.dataset.darkOption === mode;
-    button.classList.toggle("is-active", isActive);
-    button.setAttribute("aria-selected", String(isActive));
-  });
-}
-
-function getDarkModeName(mode) {
-  if (mode === "light") return t("lightMode");
-  if (mode === "dark") return t("darkModeOnly");
-  return t("autoMode");
-}
-
-function closeDarkModeMenu() {
-  if (!els.darkModeMenu || !els.darkModeMenuButton) return;
-  els.darkModeMenu.hidden = true;
-  els.darkModeMenuButton.setAttribute("aria-expanded", "false");
-}
 
 function setLanguage(lang) {
   appSettings.language = i18n[lang] ? lang : defaultAppSettings.language;
@@ -3853,11 +3736,7 @@ function closeLanguageMenu() {
   els.languageMenuButton.setAttribute("aria-expanded", "false");
 }
 function openSettings() {
-  openSheet(els.settingsSheet);
-}
-
-function closeSettings() {
-  closeAllSheets();
+  window.mehNavigation.open("settings");
 }
 
 function lockPageScroll() {
@@ -3885,29 +3764,49 @@ function unlockPageScroll() {
   scheduleViewportRecovery("sheet-unlock");
 }
 
-function openSheet(sheet) {
-  if (!sheet) return;
-  const alreadyHasOpenSheet = Boolean(document.querySelector(".settings-sheet.is-open, .editor-sheet.is-open"));
-  window.clearTimeout(sheetCloseTimer);
-  lockPageScroll();
-  els.scrim.hidden = false;
-  document.body.classList.add("sheet-open");
-
-  sheet.classList.remove("is-history-closing");
-  sheet.style.transform = "";
-  sheet.classList.add("is-open");
-  sheet.setAttribute("aria-hidden", "false");
-  if (!alreadyHasOpenSheet) {
-    history.pushState({ ...(history.state || {}), mehOverlay: sheet.id }, "", location.href);
-  }
-  console.info(`[Meh] Route opened: ${sheet.id}`);
+function configureNavigation() {
+  window.mehNavigation.setRenderer(renderNavigationState);
 }
 
-function closeAllSheets(options = {}) {
-  if (!options.fromHistory && history.state?.mehOverlay) {
-    history.back();
+function navigationStateKey(route) {
+  return `${route.screen}:${JSON.stringify(route.params || {})}`;
+}
+
+function getNavigationSheet(screen) {
+  if (screen === "settings") return els.settingsSheet;
+  if (screen === "preset-editor") return els.wheelEditorSheet;
+  if (screen === "number-settings") return els.numberSettingsSheet;
+  return null;
+}
+
+function isValidNavigationState(route) {
+  if (route.screen !== "preset-editor") return true;
+  const presetId = String(route.params?.presetId || "");
+  return Boolean(presetId && wheelState.presets.some((preset) => preset.id === presetId));
+}
+
+function prepareNavigationScreen(route) {
+  if (route.screen === "preset-editor") {
+    const presetId = String(route.params?.presetId || "");
+    if (presetId !== wheelState.selectedPresetId) applyWheelPreset(presetId);
+    renderWheelEditor();
+  }
+  if (route.screen === "number-settings") renderNumberSettingsPanel();
+}
+
+function renderNavigationState(route, context = {}) {
+  if (!isValidNavigationState(route)) {
+    console.warn("[Meh] Invalid navigation state; restoring home", route);
+    window.mehNavigation.replace("home");
     return;
   }
+
+  const previousRoute = context.previousState || renderedNavigationState;
+  const previousSheet = getNavigationSheet(previousRoute?.screen);
+  if (previousSheet) {
+    navigationScrollPositions.set(navigationStateKey(previousRoute), previousSheet.scrollTop);
+  }
+
   window.clearTimeout(sheetCloseTimer);
   closeLanguageMenu();
 
@@ -3922,35 +3821,89 @@ function closeAllSheets(options = {}) {
     focusedEditable.blur();
   }
 
+  const targetSheet = getNavigationSheet(route.screen);
+  const direction = context.direction || "none";
+  const immediate = context.action === "restore" || direction === "none";
+
   [els.settingsSheet, els.wheelEditorSheet, els.numberSettingsSheet].forEach((sheet) => {
-    if (!sheet) return;
-    if (options.immediate) sheet.classList.add("is-history-closing");
-    sheet.classList.remove("is-open", "is-expanded", "is-dragging");
+    const isAnimatedClosingSheet = sheet === previousSheet
+      && sheet !== targetSheet
+      && ["back", "forward"].includes(direction)
+      && !immediate;
+    if (!sheet || sheet === targetSheet || isAnimatedClosingSheet) return;
+    sheet.classList.remove(
+      "is-open",
+      "is-expanded",
+      "is-dragging",
+      "is-navigation-entering",
+      "is-navigation-exiting",
+      "is-navigation-leaving"
+    );
     sheet.setAttribute("aria-hidden", "true");
     sheet.style.transform = "";
-    if (options.immediate) {
-      window.requestAnimationFrame(() => {
-        window.requestAnimationFrame(() => sheet.classList.remove("is-history-closing"));
-      });
-    }
   });
 
-  if (els.scrim) {
-    els.scrim.hidden = true;
+  if (!targetSheet) {
+    const closingSheet = previousSheet;
+    if (closingSheet && direction === "back" && !immediate) {
+      closingSheet.classList.remove("is-navigation-leaving");
+      closingSheet.classList.add("is-navigation-exiting");
+      closingSheet.setAttribute("aria-hidden", "true");
+      sheetCloseTimer = window.setTimeout(() => {
+        closingSheet.classList.remove("is-open", "is-navigation-exiting", "is-navigation-leaving");
+        closingSheet.style.transform = "";
+        if (els.scrim) els.scrim.hidden = true;
+        document.body.classList.remove("sheet-open");
+        unlockPageScroll();
+        scheduleViewportRecovery("history-pop");
+      }, 210);
+    } else {
+      if (closingSheet) closingSheet.classList.remove("is-open", "is-navigation-exiting", "is-navigation-leaving");
+      if (els.scrim) els.scrim.hidden = true;
+      document.body.classList.remove("sheet-open");
+      unlockPageScroll();
+      if (context.action === "pop") scheduleViewportRecovery("history-pop");
+    }
+    renderedNavigationState = route;
+    console.info("[Meh] Navigation restored: home (depth 0)");
+    return;
   }
 
-  document.body.classList.remove("sheet-open");
-  unlockPageScroll();
-  console.info("[Meh] Route restored to main page");
+  prepareNavigationScreen(route);
+  lockPageScroll();
+  if (els.scrim) els.scrim.hidden = false;
+  document.body.classList.add("sheet-open");
+  targetSheet.classList.remove("is-navigation-exiting", "is-navigation-leaving");
+  targetSheet.style.transform = "";
+  if (direction === "forward" && !immediate) {
+    targetSheet.classList.add("is-navigation-entering");
+    targetSheet.classList.add("is-open");
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => targetSheet.classList.remove("is-navigation-entering"));
+    });
+  } else {
+    targetSheet.classList.remove("is-navigation-entering");
+    targetSheet.classList.add("is-open");
+  }
+  targetSheet.setAttribute("aria-hidden", "false");
+  targetSheet.scrollTop = navigationScrollPositions.get(navigationStateKey(route)) || 0;
+  if (previousSheet && previousSheet !== targetSheet && !immediate) {
+    const exitClass = direction === "back"
+      ? "is-navigation-exiting"
+      : "is-navigation-leaving";
+    previousSheet.classList.remove("is-navigation-exiting", "is-navigation-leaving");
+    previousSheet.classList.add(exitClass);
+    previousSheet.setAttribute("aria-hidden", "true");
+    sheetCloseTimer = window.setTimeout(() => {
+      previousSheet.classList.remove("is-open", exitClass);
+      previousSheet.style.transform = "";
+    }, 210);
+  }
+  renderedNavigationState = route;
+  console.info(`[Meh] Navigation rendered: ${route.screen} (depth ${route.depth})`);
 }
 
-window.addEventListener("popstate", () => {
-  closeAllSheets({ fromHistory: true, immediate: true });
-  scheduleViewportRecovery("history-pop");
-});
-
-window.MehAppBack = {
-  handleBack() {
+window.mehNavigation.registerBackHandler("page-local-state", () => {
     if (els.languageMenu && !els.languageMenu.hidden) {
       closeLanguageMenu();
       console.info("[Meh] Back handled by language menu");
@@ -3979,14 +3932,8 @@ window.MehAppBack = {
       console.info("[Meh] Back handled by number history");
       return true;
     }
-    if (document.querySelector(".settings-sheet.is-open, .editor-sheet.is-open")) {
-      closeAllSheets();
-      console.info("[Meh] Back handled by open sheet");
-      return true;
-    }
     return false;
-  },
-};
+}, 100);
 function bindDarkModeMenu() {
   if (!els.darkModeMenuButton || !els.darkModeMenu) return;
 
@@ -4092,19 +4039,6 @@ function loadAppSettings() {
 function saveAppSettings() {
   safeWriteStorage(APP_SETTINGS_KEY, appSettings);
 }
-// 原代码
-// function normalizeAppSettings(settings) {
-//   return {
-//     primaryThemeColor: normalizeHexColor(settings.primaryThemeColor || settings.themeColor, defaultAppSettings.primaryThemeColor),
-//     secondaryThemeColor: normalizeHexColor(settings.secondaryThemeColor || settings.themeColor, defaultAppSettings.secondaryThemeColor),
-//     uiScale: Math.max(0.85, Math.min(1.25, Number(settings.uiScale) || defaultAppSettings.uiScale)),
-//     backgroundImage: typeof settings.backgroundImage === "string" ? settings.backgroundImage : "",
-//     language: i18n[settings.language] ? settings.language : defaultAppSettings.language,
-//   };
-// }
-
-
-// ==============使用gemini修改============
 function normalizeAppSettings(settings) {
   return {
     primaryThemeColor: normalizeHexColor(settings.primaryThemeColor || settings.themeColor, defaultAppSettings.primaryThemeColor),
@@ -4114,7 +4048,6 @@ function normalizeAppSettings(settings) {
     activeWallpaperId: typeof settings.activeWallpaperId === "string" ? settings.activeWallpaperId : "",
     backgroundOpacity: Number.isFinite(Number(settings.backgroundOpacity)) ? Math.max(0, Math.min(1, Number(settings.backgroundOpacity))) : defaultAppSettings.backgroundOpacity,
     language: i18n[settings.language] ? settings.language : defaultAppSettings.language,
-    //以下是新增加的 
     topHeight: clampNumber(settings.topHeight, 0, 56, defaultAppSettings.topHeight),
     dockThickness: clampNumber(settings.dockThickness, 46, 76, defaultAppSettings.dockThickness),
     dockSideGap: clampNumber(settings.dockSideGap, 12, 64, defaultAppSettings.dockSideGap),
@@ -4123,8 +4056,6 @@ function normalizeAppSettings(settings) {
     systemBarLayoutVersion: 6,
   };
 }
-//==================修改结束 ===============
-
 
 // 轻量校正，避免手动改 localStorage 后页面进入不存在的配置。
 function normalizeState(nextState) {
@@ -4296,13 +4227,4 @@ function truncateLabel(value) {
 
 function createId() {
   return `preset-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
 }
